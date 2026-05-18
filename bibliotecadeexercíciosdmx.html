@@ -270,6 +270,7 @@
                             {isAdmin && isExerciseIncomplete(ex.youtubeUrl) && (
                                 <div className="bg-amber-500 text-black text-[10px] font-black px-2.5 py-1 rounded-lg uppercase border border-white/10 shadow-lg">INCOMPLETO</div>
                             )}
+                            {/* FLAG DE AUDITORIA DE NUVEM */}
                             {isAdmin && ex.hasCloudVideo === false && !isExerciseIncomplete(ex.youtubeUrl) && (
                                 <div className="bg-red-600 text-white text-[9px] font-black px-2 py-1 rounded-lg uppercase border border-red-500/50 shadow-lg flex items-center gap-1 mt-1">
                                     <Icon name="x" className="w-3 h-3" /> FALTANDO NUVEM
@@ -1446,7 +1447,7 @@
                         </div>
                     )}
 
-                    <header className="relative z-[100] max-w-7xl mx-auto w-full flex flex-col gap-5 mb-8 pt-2">
+                    <header className="relative z-[100] max-w-[1600px] mx-auto w-full flex flex-col gap-5 mb-8 pt-2">
                         {/* ANDAR 1: Logo e Menu do Usuário */}
                         <div className="flex items-center justify-between w-full">
                             <div className="flex items-center gap-3 sm:gap-4 shrink-0">
@@ -1569,41 +1570,39 @@
 
                         {/* ANDAR 3: Painel de Controle Admin (Novo Layout Desacoplado) */}
                         {isAdmin && (
-                            <div className="flex flex-wrap items-center gap-3 w-full bg-zinc-950 p-4 rounded-[2rem] border border-white/5 shadow-2xl animate-fade-in mt-2">
+                            <div className="grid grid-cols-2 md:flex md:flex-wrap items-center gap-2 sm:gap-3 w-full bg-zinc-950 p-3 sm:p-4 rounded-[2rem] border border-white/5 shadow-2xl animate-fade-in mt-2">
                                 <div className="hidden lg:flex items-center gap-2 mr-2 px-2">
                                     <Icon name="settings" className="w-5 h-5 text-zinc-600" />
                                     <span className="text-[10px] font-black uppercase text-zinc-600 tracking-widest">Painel Admin</span>
                                 </div>
                                 
-                                <button onClick={() => openAdminTab('single')} className="bg-red-600 hover:bg-red-700 text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg shadow-red-900/20">
+                                <button onClick={() => openAdminTab('single')} className="col-span-2 md:col-span-1 bg-red-600 hover:bg-red-700 text-white w-full md:w-auto px-5 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-900/20">
                                     <Icon name="pluscircle" className="w-4 h-4" /> Novo Registro
                                 </button>
 
-                                <button onClick={() => openAdminTab('users')} className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 border ${pendingUsersCount > 0 ? 'bg-amber-500/20 text-amber-500 border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.2)] animate-pulse' : 'bg-zinc-900 text-zinc-500 border-white/5 hover:text-white hover:border-white/20'}`}>
+                                <button onClick={() => openAdminTab('users')} className={`w-full md:w-auto px-2 sm:px-5 py-3.5 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border ${pendingUsersCount > 0 ? 'bg-amber-500/20 text-amber-500 border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.2)] animate-pulse' : 'bg-zinc-900 text-zinc-500 border-white/5 hover:text-white hover:border-white/20'}`}>
                                     <Icon name="users" className="w-4 h-4" /> Alunos
                                     {pendingUsersCount > 0 && <span className="bg-amber-500 text-black px-2 py-0.5 rounded-lg">{pendingUsersCount}</span>}
                                 </button>
 
-                                <button onClick={() => openAdminTab('requests')} className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 border ${pendingRequestsCount > 0 ? 'bg-blue-500/20 text-blue-400 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.2)]' : 'bg-zinc-900 text-zinc-500 border-white/5 hover:text-white hover:border-white/20'}`}>
+                                <button onClick={() => openAdminTab('requests')} className={`w-full md:w-auto px-2 sm:px-5 py-3.5 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border ${pendingRequestsCount > 0 ? 'bg-blue-500/20 text-blue-400 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.2)]' : 'bg-zinc-900 text-zinc-500 border-white/5 hover:text-white hover:border-white/20'}`}>
                                     <Icon name="listtodo" className="w-4 h-4" /> Pedidos
                                     {pendingRequestsCount > 0 && <span className="bg-blue-500 text-white px-2 py-0.5 rounded-lg">{pendingRequestsCount}</span>}
                                 </button>
 
-                                <button onClick={() => openAdminTab('authorized')} className="bg-zinc-900 hover:bg-white/10 text-zinc-500 hover:text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border border-white/5 flex items-center gap-2">
+                                <button onClick={() => openAdminTab('authorized')} className="w-full md:w-auto bg-zinc-900 hover:bg-white/10 text-zinc-500 hover:text-white px-2 sm:px-5 py-3.5 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border border-white/5 flex items-center justify-center gap-2">
                                     Autorizar E-mails
                                 </button>
 
-                                <div className="hidden sm:block w-px h-8 bg-white/10 mx-1"></div>
-
-                                <button onClick={() => openAdminTab('batch')} className="bg-zinc-900 hover:bg-white/10 text-zinc-500 hover:text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border border-white/5 flex items-center gap-2">
+                                <button onClick={() => openAdminTab('batch')} className="w-full md:w-auto bg-zinc-900 hover:bg-white/10 text-zinc-500 hover:text-white px-2 sm:px-5 py-3.5 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border border-white/5 flex items-center justify-center gap-2">
                                     Lote
                                 </button>
 
-                                <button onClick={() => openAdminTab('audit')} className="bg-zinc-900 hover:bg-white/10 text-zinc-500 hover:text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border border-white/5 flex items-center gap-2">
+                                <button onClick={() => openAdminTab('audit')} className="w-full md:w-auto bg-zinc-900 hover:bg-white/10 text-zinc-500 hover:text-white px-2 sm:px-5 py-3.5 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border border-white/5 flex items-center justify-center gap-2">
                                     Auditoria
                                 </button>
 
-                                <button onClick={() => openAdminTab('settings')} className="bg-zinc-900 hover:bg-white/10 text-zinc-500 hover:text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border border-white/5 flex items-center gap-2">
+                                <button onClick={() => openAdminTab('settings')} className="w-full md:w-auto bg-zinc-900 hover:bg-white/10 text-zinc-500 hover:text-white px-2 sm:px-5 py-3.5 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border border-white/5 flex items-center justify-center gap-2">
                                     Ajustes
                                 </button>
                             </div>
@@ -1611,7 +1610,7 @@
                     </header>
 
                     {isAdmin && stats && (
-                        <div className="max-w-7xl mx-auto w-full mb-8 grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6 z-10 relative animate-fade-in">
+                        <div className="max-w-[1600px] mx-auto w-full mb-8 grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6 z-10 relative animate-fade-in">
                             <div className="bg-zinc-950 border border-white/5 py-4 px-2 rounded-[2rem] flex flex-col items-center justify-center shadow-xl">
                                 <span className="text-[9px] sm:text-[10px] text-zinc-500 font-black uppercase tracking-widest mb-1 text-center">Total de Cadastros</span>
                                 <span className="text-2xl sm:text-3xl font-black text-white">{stats.total}</span>
@@ -1632,7 +1631,7 @@
                         </div>
                     )}
 
-                    <div className="max-w-7xl mx-auto w-full mb-10 flex items-center gap-2 z-10">
+                    <div className="max-w-[1600px] mx-auto w-full mb-10 flex items-center gap-2 z-10">
                         <button className="hidden sm:flex nav-arrow shrink-0" onClick={() => scroll('left')}><Icon name="left" className="w-4 h-4" /></button>
                         <div ref={scrollRef} className="category-scroll-container no-scrollbar">
                             {categories.map(cat => (
@@ -1642,7 +1641,7 @@
                         <button className="hidden sm:flex nav-arrow shrink-0" onClick={() => scroll('right')}><Icon name="right" className="w-4 h-4" /></button>
                     </div>
 
-                    <main className="max-w-7xl mx-auto w-full flex-1">
+                    <main className="max-w-[1600px] mx-auto w-full flex-1">
                         {loading ? (
                             <div className="flex flex-col items-center justify-center py-40 opacity-30 relative">
                                 <Icon name="loader" className="w-12 h-12 animate-spin text-red-600 mb-4" />
@@ -1753,8 +1752,8 @@
                                             <div className="bg-blue-500/20 text-blue-400 font-black text-2xl px-4 py-2 rounded-xl">{exerciseRequests.length}</div>
                                         </div>
                                         
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-left border-collapse">
+                                        <div className="overflow-x-auto pb-4">
+                                            <table className="w-full min-w-[700px] text-left border-collapse">
                                                 <thead>
                                                     <tr className="border-b border-white/10">
                                                         <th className="py-3 px-4 text-[9px] font-black uppercase text-zinc-500 tracking-widest">Pedido</th>
@@ -1770,7 +1769,7 @@
                                                         <tr key={r.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                                                             <td className="py-4 px-4 w-1/3">
                                                                 <p className="text-sm font-bold text-white mb-1">{r.exerciseName}</p>
-                                                                {r.details && <p className="text-[10px] text-zinc-400 line-clamp-2 italic">"{r.details}"</p>}
+                                                                {r.details && <p className="text-[10px] text-zinc-400 whitespace-normal break-words italic leading-relaxed mt-1">"{r.details}"</p>}
                                                             </td>
                                                             <td className="py-4 px-4">
                                                                 <p className="text-[11px] font-bold text-zinc-300">{r.userName}</p>
@@ -1806,23 +1805,23 @@
                                             <p className="text-zinc-400 text-xs mb-4 leading-relaxed">
                                                 Insira o e-mail de alunos que te pagaram de forma manual. Quando eles se cadastrarem com este mesmo e-mail, o sistema **irá aprová-los de forma instantânea**, eliminando a necessidade de validação posterior.
                                             </p>
-                                            <form onSubmit={handleAddAuthEmail} className="flex gap-3">
+                                            <form onSubmit={handleAddAuthEmail} className="flex flex-col sm:flex-row gap-3">
                                                 <input 
                                                     required 
                                                     type="email" 
                                                     placeholder="aluno@email.com" 
-                                                    className="flex-1 p-4 rounded-2xl text-sm" 
+                                                    className="w-full sm:flex-1 p-4 rounded-2xl text-sm" 
                                                     value={newAuthEmail} 
                                                     onChange={e => setNewAuthEmail(e.target.value)} 
                                                 />
-                                                <button type="submit" className="bg-amber-500 text-black font-black uppercase text-[10px] tracking-widest px-6 rounded-2xl hover:bg-amber-400 transition-all">
+                                                <button type="submit" className="w-full sm:w-auto bg-amber-500 text-black font-black uppercase text-[10px] tracking-widest px-6 py-4 sm:py-0 rounded-2xl hover:bg-amber-400 transition-all">
                                                     Autorizar E-mail
                                                 </button>
                                             </form>
                                         </div>
 
-                                        <div className="overflow-x-auto mt-4">
-                                            <table className="w-full text-left border-collapse">
+                                        <div className="overflow-x-auto mt-4 pb-4">
+                                            <table className="w-full min-w-[700px] text-left border-collapse">
                                                 <thead>
                                                     <tr className="border-b border-white/10">
                                                         <th className="py-3 px-4 text-[9px] font-black uppercase text-zinc-500 tracking-widest">E-mail Pré-Autorizado</th>
@@ -1921,7 +1920,7 @@
                                             </form>
                                         </div>
                                     </div>
-                                ) : (
+                                ) : adminTab === 'users' ? (
                                     <div className="flex flex-col gap-4 animate-fade-in">
                                         <div className="flex items-center justify-between bg-emerald-950/20 border border-emerald-500/20 p-6 rounded-[2rem] mb-4">
                                             <div>
@@ -1931,8 +1930,8 @@
                                             <div className="bg-emerald-500/20 text-emerald-400 font-black text-2xl px-4 py-2 rounded-xl">{appUsers.length}</div>
                                         </div>
                                         
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-left border-collapse">
+                                        <div className="overflow-x-auto pb-4">
+                                            <table className="w-full min-w-[700px] text-left border-collapse">
                                                 <thead>
                                                     <tr className="border-b border-white/10">
                                                         <th className="py-3 px-4 text-[9px] font-black uppercase text-zinc-500 tracking-widest">Aluno</th>
@@ -1973,7 +1972,7 @@
                                             </table>
                                         </div>
                                     </div>
-                                )}
+                                ) : null}
                             </div>
                         </div>
                     )}
