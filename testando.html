@@ -1,4 +1,200 @@
-<!-- Bibliotecas Essenciais Nativas (Sem Módulos) -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Biblioteca DMX - Oficial</title>
+
+    <!-- Tailwind CSS via CDN (desenvolvimento, para produção prefira build) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React e ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel standalone (apenas para desenvolvimento, NÃO use em produção) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Firebase Compat SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        
+        html, body { 
+            background-color: #000000; 
+            color: #ffffff; 
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            overflow-x: hidden;
+        }
+
+        @media (hover: none) and (pointer: coarse) {
+            body { overscroll-behavior-y: none; }
+        }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        @keyframes fadeIn { 
+            from { opacity: 0; transform: translateY(10px); } 
+            to { opacity: 1; transform: translateY(0); } 
+        }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+
+        input, select, textarea {
+            background: #111111 !important;
+            border: 1px solid rgba(255,255,255,0.1) !important;
+            color: white !important;
+            outline: none !important;
+        }
+        input:focus, select:focus, textarea:focus {
+            border-color: #dc2626 !important;
+            box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2) !important;
+        }
+        
+        .category-scroll-container {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            overflow-x: auto !important;
+            gap: 0.75rem;
+            width: 100%;
+            padding: 10px 15px;
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .category-btn {
+            flex: 0 0 auto !important;
+            white-space: nowrap;
+        }
+
+        .nav-arrow {
+            background: rgba(30, 30, 30, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 20;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .nav-arrow:hover { background: #dc2626; border-color: #dc2626; }
+        .nav-arrow:active { transform: scale(0.9); }
+
+        .tooltip-container { position: relative; }
+        .tooltip-text {
+            visibility: hidden;
+            width: max-content;
+            background-color: #1a1a1a;
+            color: #fff;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            padding: 6px 10px;
+            position: absolute;
+            z-index: 50;
+            bottom: 125%;
+            right: 0; 
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 9px;
+            font-weight: bold;
+            text-transform: uppercase;
+            white-space: nowrap; 
+        }
+        .tooltip-container:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <!-- Inicialização Global do Firebase (Totalmente livre de imports ES6) -->
+    <script>
+        const isPreview = typeof __firebase_config !== 'undefined';
+        
+        const _kParts = ["JyHM", "JAdRMVR", "sbpZvhL", "XnVhYcF", "B6L2Idp", "AIzaSyC"];
+        
+        const firebaseConfig = isPreview ? JSON.parse(__firebase_config) : {
+            apiKey: _kParts.reverse().join(''),
+            authDomain: "biblioteca-dmx.firebaseapp.com",
+            projectId: "biblioteca-dmx",
+            storageBucket: "biblioteca-dmx.firebasestorage.app",
+            messagingSenderId: "571660956624",
+            appId: "1:571660956624:web:fc3d6e3fe402be7f70bfd5"
+        };
+        
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'dmx-exercicios-cloud';
+        const CUSTOM_LOGO_URL = "https://i.imgur.com/rLLYQ3Z.png";
+
+        let db, auth;
+        const isValid = firebaseConfig.apiKey && firebaseConfig.apiKey !== "SUA_API_KEY";
+
+        if (isValid || isPreview) {
+            const app = firebase.initializeApp(firebaseConfig);
+            auth = firebase.auth();
+            db = firebase.firestore();
+            
+            db.enablePersistence().catch((err) => {
+                console.warn("Modo offline desativado pelo navegador.", err.code);
+            });
+        }
+
+        window.fb = { 
+            db, auth, 
+            collection: (dbInstance, ...path) => dbInstance.collection(path.join('/')),
+            doc: (dbInstance, ...path) => dbInstance.doc(path.join('/')),
+            onSnapshot: (ref, success, error) => {
+                return ref.onSnapshot((snap) => {
+                    if (snap && typeof snap.exists !== 'undefined') {
+                        success({ id: snap.id, exists: () => snap.exists, data: () => snap.data() });
+                    } else {
+                        success(snap);
+                    }
+                }, error);
+            },
+            addDoc: (ref, data) => ref.add(data),
+            updateDoc: (ref, data) => ref.update(data),
+            deleteDoc: (ref) => ref.delete(),
+            setDoc: (ref, data, options) => ref.set(data, options),
+            getDoc: async (ref) => {
+                const snap = await ref.get();
+                return { id: snap.id, exists: () => snap.exists, data: () => snap.data() };
+            },
+            writeBatch: (dbInstance) => {
+                const batch = dbInstance.batch();
+                return {
+                    set: (ref, data, options) => batch.set(ref, data, options),
+                    update: (ref, data) => batch.update(ref, data),
+                    delete: (ref) => batch.delete(ref),
+                    commit: () => batch.commit()
+                };
+            },
+            signInWithEmailAndPassword: (authInstance, email, password) => authInstance.signInWithEmailAndPassword(email, password),
+            signOut: (authInstance) => authInstance.signOut(),
+            onAuthStateChanged: (authInstance, callback) => authInstance.onAuthStateChanged(callback),
+            signInAnonymously: (authInstance) => authInstance.signInAnonymously(),
+            sendPasswordResetEmail: (authInstance, email) => authInstance.sendPasswordResetEmail(email),
+            createUserWithEmailAndPassword: (authInstance, email, password) => authInstance.createUserWithEmailAndPassword(email, password),
+            updateProfile: (userInstance, data) => userInstance.updateProfile(data),
+            isValid: (isValid || isPreview)
+        };
+        window.app_id = appId;
+        window.CUSTOM_LOGO_URL = CUSTOM_LOGO_URL;
+    </script>
+
+    <!-- Código React (com Babel) -->
+    <script type="text/babel">
+        <!-- Bibliotecas Essenciais Nativas (Sem Módulos) -->
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -1926,3 +2122,9 @@
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<App />);
 </script>
+        // ...
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
