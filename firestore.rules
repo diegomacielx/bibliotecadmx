@@ -1,0 +1,110 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    function isAdminEmail() {
+      return isSignedIn() && userEmail() == 'diego.maciel.965@gmail.com';
+    }
+
+    function userProfilePath(appId, uid) {
+      return /databases/$(database)/documents/artifacts/$(appId)/public/data/app_users/$(uid);
+    }
+
+    function authorizedPath(appId, email) {
+      return /databases/$(database)/documents/artifacts/$(appId)/public/data/authorized_emails/$(email);
+    }
+
+    function isPreAuthorized(appId) {
+      return exists(authorizedPath(appId, userEmail()));
+    }
+
+    function authorizedIsActive(appId) {
+      let doc = get(authorizedPath(appId, userEmail()));
+      return !('accessStatus' in doc.data) || doc.data.accessStatus == 'active';
+    }
+
+    function isApprovedUser(appId) {
+      return isSignedIn()
+        && exists(userProfilePath(appId, request.auth.uid))
+        && get(userProfilePath(appId, request.auth.uid)).data.status == 'approved';
+    }
+
+    match /artifacts/{appId}/public/data/app_users/{uid} {
+      allow read: if isSignedIn() && (request.auth.uid == uid || isAdminEmail());
+
+      allow create: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.email.lower() == userEmail()
+        && request.resource.data.uid == uid
+        && request.resource.data.status in ['pending', 'approved']
+        && (
+          (request.resource.data.status == 'pending' && !isPreAuthorized(appId))
+          || (request.resource.data.status == 'approved' && isPreAuthorized(appId) && authorizedIsActive(appId))
+        );
+
+      allow update: if isAdminEmail()
+        || (
+          isSignedIn()
+          && request.auth.uid == uid
+          && resource.data.status == 'pending'
+          && request.resource.data.status == 'approved'
+          && isPreAuthorized(appId)
+          && authorizedIsActive(appId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'accessSyncedAt'])
+        )
+        || (
+          isSignedIn()
+          && request.auth.uid == uid
+          && (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+            || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nickname'])
+            || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'nickname'])
+          )
+        );
+
+      allow delete: if isAdminEmail();
+    }
+
+    match /artifacts/{appId}/public/data/authorized_emails/{email} {
+      allow get: if isSignedIn() && email.lower() == userEmail();
+      allow list: if isAdminEmail();
+      allow write: if false;
+    }
+
+    match /artifacts/{appId}/public/data/payment_events/{eventId} {
+      allow read, write: if false;
+    }
+
+    match /artifacts/{appId}/public/data/settings/integrations {
+      allow read, write: if isAdminEmail();
+    }
+
+    match /artifacts/{appId}/public/data/exercises/{docId} {
+      allow read: if isAdminEmail() || isApprovedUser(appId);
+      allow write: if isAdminEmail();
+    }
+
+    match /artifacts/{appId}/public/data/exercise_requests/{docId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdminEmail();
+    }
+
+    match /artifacts/{appId}/public/data/notifications/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdminEmail();
+    }
+
+    match /artifacts/{appId}/users/{uid}/settings/{docId} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
+    }
+  }
+}

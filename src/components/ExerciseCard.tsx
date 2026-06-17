@@ -1,0 +1,603 @@
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import type { Exercise, ExerciseForm, AdminTab } from '../types';
+import {
+  getDbPath,
+  getYouTubeId,
+  isYouTubeShort,
+} from '../lib/utils';
+import { deleteDoc, fbDoc, db } from '../lib/firebase';
+import { useAmbientGlow } from '../hooks/useMousePosition';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useTilt3D } from '../hooks/useTilt3D';
+import { useExerciseCover } from '../hooks/useExerciseCover';
+import { getSpring, staggerItem } from '../lib/motion';
+import { getCoverObjectPosition, formatCoverFocusYInput } from '../lib/coverFocus';
+import { Skeleton } from './Skeleton';
+import { Icon } from './Icon';
+import { YouTubePlayer, preloadYouTubePlayerApi } from './YouTubePlayer';
+
+const LONG_PRESS_MS = 500;
+const MOVE_CANCEL_PX = 14;
+
+interface ExerciseCardProps {
+  ex: Exercise;
+  index: number;
+  isAdmin: boolean;
+  isExerciseIncomplete: (url: string) => boolean;
+  handleDownloadCheck: (e: React.MouseEvent, ex: Exercise, quality: string) => void;
+  showToast: (msg: string, type?: 'success' | 'error') => void;
+  setForm: (form: ExerciseForm) => void;
+  setEditingId: (id: string | null) => void;
+  setAdminTab: (tab: AdminTab) => void;
+  setShowAdminPanel: (show: boolean) => void;
+  copyLink: (url: string, firestoreId: string) => void;
+  copiedId: string | null;
+  onWatch: (ex: Exercise) => void;
+  selectionMode?: boolean;
+  isInPlaylist?: boolean;
+  onTogglePlaylist?: (ex: Exercise) => void;
+  isFavorite?: boolean;
+  onToggleFavorite?: (ex: Exercise) => void;
+  onCompare?: (ex: Exercise) => void;
+  isComparePick?: boolean;
+  playlistSequence?: number;
+}
+
+function isTouchUi() {
+  return window.matchMedia('(hover: none)').matches;
+}
+
+function resolveActionAtPoint(clientX: number, clientY: number) {
+  const el = document.elementFromPoint(clientX, clientY);
+  const btn = el?.closest('[data-card-action]') as HTMLElement | null;
+  return btn?.dataset.cardAction ?? null;
+}
+
+export function ExerciseCard({
+  ex,
+  index,
+  isAdmin,
+  isExerciseIncomplete,
+  handleDownloadCheck,
+  showToast,
+  setForm,
+  setEditingId,
+  setAdminTab,
+  setShowAdminPanel,
+  copyLink,
+  copiedId,
+  onWatch,
+  selectionMode = false,
+  isInPlaylist = false,
+  onTogglePlaylist,
+  isFavorite = false,
+  onToggleFavorite,
+  onCompare,
+  isComparePick = false,
+  playlistSequence,
+}: ExerciseCardProps) {
+  const [showPreview, setShowPreview] = useState(false);
+  const [downloadOpen, setDownloadOpen] = useState(false);
+  const [touchActionsOpen, setTouchActionsOpen] = useState(false);
+  const [touchHoveredAction, setTouchHoveredAction] = useState<string | null>(null);
+  const downloadRef = useRef<HTMLDivElement>(null);
+  const coverRef = useRef<HTMLDivElement>(null);
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+  const longPressTriggeredRef = useRef(false);
+  const touchActionsOpenRef = useRef(false);
+  const { imgSrc, imgLoaded, handleLoad, handleError } = useExerciseCover(ex);
+  const handleGlow = useAmbientGlow<HTMLDivElement>();
+  const reducedMotion = useReducedMotion();
+  const tilt = useTilt3D(6, !reducedMotion);
+  const ytId = getYouTubeId(ex.youtubeUrl);
+  const canPreview = !!ytId && !reducedMotion;
+  const coverObjectPosition = getCoverObjectPosition(ex);
+
+  touchActionsOpenRef.current = touchActionsOpen;
+
+  const clearLongPressTimer = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  const closeTouchActions = useCallback(() => {
+    clearLongPressTimer();
+    setTouchActionsOpen(false);
+    setTouchHoveredAction(null);
+    longPressTriggeredRef.current = false;
+    pointerStartRef.current = null;
+  }, [clearLongPressTimer]);
+
+  useEffect(() => {
+    if (!downloadOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (downloadRef.current && !downloadRef.current.contains(e.target as Node)) {
+        setDownloadOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [downloadOpen]);
+
+  useEffect(() => {
+    if (!touchActionsOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (coverRef.current?.contains(e.target as Node)) return;
+      closeTouchActions();
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [touchActionsOpen, closeTouchActions]);
+
+  const handleMouseEnter = useCallback(() => {
+    void preloadYouTubePlayerApi();
+    if (!canPreview || isTouchUi()) return;
+    previewTimerRef.current = setTimeout(() => setShowPreview(true), 450);
+  }, [canPreview]);
+
+  const handleMouseLeave = useCallback(() => {
+    if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+    setShowPreview(false);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+      clearLongPressTimer();
+    },
+    [clearLongPressTimer]
+  );
+
+  const handleDelete = async (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (confirm('Excluir exercício?')) {
+      await deleteDoc(fbDoc(db, ...getDbPath(), ex.firestoreId));
+    }
+  };
+
+  const handleEdit = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setForm({
+      id: String(ex.id),
+      name: ex.name,
+      category: ex.category,
+      muscleGroups: Array.isArray(ex.muscleGroups) ? ex.muscleGroups.join(', ') : '',
+      keywords: Array.isArray(ex.keywords) ? ex.keywords.join(', ') : '',
+      youtubeUrl: ex.youtubeUrl || '',
+      thumbnail: ex.thumbnail || '',
+      hasCloudVideo: ex.hasCloudVideo,
+      coverFocusY: formatCoverFocusYInput(ex.coverFocusY),
+    });
+    setEditingId(ex.firestoreId);
+    setAdminTab('single');
+    setShowAdminPanel(true);
+  };
+
+  const runCardAction = useCallback(
+    (action: string) => {
+      closeTouchActions();
+      switch (action) {
+        case 'favorite':
+          onToggleFavorite?.(ex);
+          break;
+        case 'compare':
+          onCompare?.(ex);
+          break;
+        case 'copy':
+          copyLink(ex.youtubeUrl, ex.firestoreId);
+          break;
+        case 'download':
+          setDownloadOpen(true);
+          break;
+        case 'edit':
+          handleEdit();
+          break;
+        case 'delete':
+          void handleDelete();
+          break;
+        case 'playlist':
+          onTogglePlaylist?.(ex);
+          break;
+        default:
+          break;
+      }
+    },
+    [closeTouchActions, onToggleFavorite, onCompare, copyLink, ex, onTogglePlaylist]
+  );
+
+  const handleCoverClick = (e: React.MouseEvent) => {
+    if (isTouchUi()) return;
+    if (downloadOpen || touchActionsOpen) return;
+    if (selectionMode && onTogglePlaylist) {
+      e.stopPropagation();
+      onTogglePlaylist(ex);
+      return;
+    }
+    if (e.shiftKey && onCompare) {
+      e.stopPropagation();
+      onCompare(ex);
+      return;
+    }
+    onWatch(ex);
+  };
+
+  const handleCoverPointerDown = (e: React.PointerEvent) => {
+    if (!isTouchUi() || e.button !== 0) return;
+    if (downloadOpen) return;
+
+    pointerStartRef.current = { x: e.clientX, y: e.clientY };
+    longPressTriggeredRef.current = false;
+    clearLongPressTimer();
+
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTriggeredRef.current = true;
+      setTouchActionsOpen(true);
+      setTouchHoveredAction(resolveActionAtPoint(e.clientX, e.clientY));
+      if (navigator.vibrate) navigator.vibrate(12);
+    }, LONG_PRESS_MS);
+
+    coverRef.current?.setPointerCapture(e.pointerId);
+  };
+
+  const handleCoverPointerMove = (e: React.PointerEvent) => {
+    if (!isTouchUi()) return;
+
+    if (!touchActionsOpenRef.current && pointerStartRef.current) {
+      const dx = e.clientX - pointerStartRef.current.x;
+      const dy = e.clientY - pointerStartRef.current.y;
+      if (Math.hypot(dx, dy) > MOVE_CANCEL_PX) {
+        clearLongPressTimer();
+      }
+      return;
+    }
+
+    if (touchActionsOpenRef.current) {
+      e.preventDefault();
+      setTouchHoveredAction(resolveActionAtPoint(e.clientX, e.clientY));
+    }
+  };
+
+  const handleCoverPointerUp = (e: React.PointerEvent) => {
+    if (!isTouchUi()) return;
+
+    clearLongPressTimer();
+
+    if (touchActionsOpenRef.current) {
+      e.preventDefault();
+      const action = resolveActionAtPoint(e.clientX, e.clientY);
+      if (action) {
+        runCardAction(action);
+      } else {
+        closeTouchActions();
+      }
+    } else if (!longPressTriggeredRef.current && pointerStartRef.current) {
+      const dx = e.clientX - pointerStartRef.current.x;
+      const dy = e.clientY - pointerStartRef.current.y;
+      if (Math.hypot(dx, dy) <= MOVE_CANCEL_PX && !downloadOpen) {
+        if (selectionMode && onTogglePlaylist) {
+          onTogglePlaylist(ex);
+        } else {
+          onWatch(ex);
+        }
+      }
+    }
+
+    pointerStartRef.current = null;
+    longPressTriggeredRef.current = false;
+
+    try {
+      coverRef.current?.releasePointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleCoverPointerCancel = () => {
+    clearLongPressTimer();
+    if (touchActionsOpenRef.current) {
+      closeTouchActions();
+    }
+    pointerStartRef.current = null;
+    longPressTriggeredRef.current = false;
+  };
+
+  const actionBtnClass = (action: string, extra = '') =>
+    `card-action-btn cursor-pointer ${extra} ${
+      touchHoveredAction === action ? 'card-action-btn--touch-target' : ''
+    }`.trim();
+
+  return (
+    <motion.div
+      ref={tilt.ref}
+      variants={staggerItem}
+      custom={index}
+      layout={!reducedMotion}
+      onMouseMove={(e) => {
+        if (isTouchUi()) return;
+        handleGlow(e);
+        tilt.onMouseMove(e);
+      }}
+      onMouseLeave={() => {
+        if (isTouchUi()) return;
+        tilt.onMouseLeave();
+        handleMouseLeave();
+      }}
+      onMouseEnter={handleMouseEnter}
+      style={
+        reducedMotion || isTouchUi()
+          ? undefined
+          : {
+              rotateX: tilt.rotateX,
+              rotateY: tilt.rotateY,
+              transformPerspective: 900,
+            }
+      }
+      className={`exercise-card cinematic-card card-grid-item card-3d group relative rounded-cinema-lg border shadow-cinematic hover:shadow-cinematic-red ease-cinematic duration-cinematic ${
+        isAdmin ? 'exercise-card--admin' : ''
+      } ${downloadOpen || touchActionsOpen ? 'card-actions-pinned z-[50]' : 'z-10'} ${
+        touchActionsOpen ? 'card-touch-actions-open' : ''
+      } ${
+        isComparePick
+          ? 'border-red-500 ring-2 ring-red-500/40'
+          : isInPlaylist
+            ? 'border-emerald-500/50 ring-1 ring-emerald-500/30'
+            : 'border-white/5 hover:border-white/10'
+      }`}
+      whileHover={
+        reducedMotion || isTouchUi() ? undefined : { y: -4, transition: getSpring(reducedMotion) }
+      }
+    >
+      <div className="card-shimmer" aria-hidden="true" />
+
+      <div
+        ref={coverRef}
+        className="exercise-card-cover aspect-card-poster relative cursor-pointer touch-manipulation select-none"
+        onClick={handleCoverClick}
+        onPointerDown={handleCoverPointerDown}
+        onPointerMove={handleCoverPointerMove}
+        onPointerUp={handleCoverPointerUp}
+        onPointerCancel={handleCoverPointerCancel}
+        onContextMenu={(e) => e.preventDefault()}
+        role="button"
+        tabIndex={0}
+        aria-label={`Abrir vídeo: ${ex.name}`}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onWatch(ex);
+          }
+        }}
+      >
+        {touchActionsOpen && (
+          <div className="card-touch-overlay absolute inset-0 z-[55] pointer-events-none" aria-hidden="true" />
+        )}
+
+        <div className="card-media absolute inset-0 overflow-hidden">
+          {!imgLoaded && (
+            <div className="absolute inset-0 z-0">
+              <Skeleton className="w-full h-full rounded-none" />
+            </div>
+          )}
+
+          <motion.img
+            src={imgSrc}
+            loading="lazy"
+            decoding="async"
+            onLoad={handleLoad}
+            onError={handleError}
+            className={`w-full h-full object-cover relative z-10 transition-opacity duration-300 ${
+              imgLoaded ? 'opacity-100' : 'opacity-0'
+            } ${touchActionsOpen ? 'scale-[0.98]' : ''}`}
+            style={{ objectPosition: coverObjectPosition }}
+            alt={`Capa do exercício ${ex.name}`}
+            whileHover={reducedMotion || showPreview || isTouchUi() ? undefined : { scale: 1.04 }}
+            transition={getSpring(reducedMotion)}
+          />
+
+          {showPreview && ytId && !isTouchUi() && (
+            <div className="card-preview-player absolute inset-0 z-[15] pointer-events-none">
+              <YouTubePlayer
+                videoId={ytId}
+                title={ex.name}
+                autoplay
+                mute
+                controls={false}
+                preferMaxQuality
+                isShort={isYouTubeShort(ex.youtubeUrl)}
+                className="absolute inset-0 w-full h-full"
+              />
+            </div>
+          )}
+
+          <div className="card-cover-vignette" aria-hidden="true" />
+
+          {!showPreview && !touchActionsOpen && (
+            <div
+              className="card-play-overlay absolute inset-0 z-[25] flex items-center justify-center pointer-events-none"
+              aria-hidden="true"
+            >
+              <div className="card-play-ring">
+                <Icon name="play" className="w-5 h-5 text-white ml-0.5" />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="card-top-bar absolute inset-x-0 top-0 z-[60] flex flex-col items-center gap-1.5 px-4 pt-3.5">
+          <div className="card-id-row flex items-center justify-center gap-1.5 flex-wrap">
+            {!selectionMode && (
+              <span className="card-id-badge" title={`Exercício #${ex.id}`}>
+                #{ex.id}
+              </span>
+            )}
+            {isAdmin && isExerciseIncomplete(ex.youtubeUrl) && (
+              <span className="card-status-badge card-status-badge--warn">Incompleto</span>
+            )}
+            {playlistSequence != null && (
+              <span className="card-playlist-order" title={`${playlistSequence}º na sequência`}>
+                {playlistSequence}
+              </span>
+            )}
+          </div>
+
+          <div className="card-action-strip">
+            {selectionMode && onTogglePlaylist ? (
+              <button
+                type="button"
+                data-card-action="playlist"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTogglePlaylist(ex);
+                }}
+                className={actionBtnClass('playlist', isInPlaylist ? 'card-action-btn--active' : '')}
+                aria-label={isInPlaylist ? 'Remover do treino' : 'Adicionar ao treino'}
+              >
+                <Icon name={isInPlaylist ? 'check' : 'plus'} className="w-3.5 h-3.5" />
+              </button>
+            ) : (
+              <>
+                {onToggleFavorite && (
+                  <button
+                    type="button"
+                    data-card-action="favorite"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!isTouchUi()) onToggleFavorite(ex);
+                    }}
+                    className={actionBtnClass('favorite', isFavorite ? 'card-action-btn--active' : '')}
+                    title={isFavorite ? 'Remover dos favoritos' : 'Favoritar'}
+                  >
+                    <Icon name="heart" className="w-3.5 h-3.5" fill={isFavorite ? 'currentColor' : 'none'} />
+                  </button>
+                )}
+
+                {onCompare && (
+                  <button
+                    type="button"
+                    data-card-action="compare"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!isTouchUi()) onCompare(ex);
+                    }}
+                    className={actionBtnClass('compare', isComparePick ? 'card-action-btn--active' : '')}
+                    title="Comparar execuções"
+                  >
+                    <Icon name="compare" className="w-3.5 h-3.5" />
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  data-card-action="copy"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!isTouchUi()) copyLink(ex.youtubeUrl, ex.firestoreId);
+                  }}
+                  className={actionBtnClass(
+                    'copy',
+                    copiedId === ex.firestoreId ? 'card-action-btn--success' : ''
+                  )}
+                  title="Copiar link"
+                  aria-label="Copiar link"
+                >
+                  <Icon name={copiedId === ex.firestoreId ? 'check' : 'copy'} className="w-3.5 h-3.5" />
+                </button>
+
+                <div ref={downloadRef} className="relative">
+                  <button
+                    type="button"
+                    data-card-action="download"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!isTouchUi()) setDownloadOpen((v) => !v);
+                    }}
+                    className={actionBtnClass('download', downloadOpen ? 'card-action-btn--active' : '')}
+                    title="Baixar vídeo"
+                    aria-label="Baixar vídeo"
+                    aria-expanded={downloadOpen}
+                  >
+                    <Icon name="download" className="w-3.5 h-3.5" />
+                  </button>
+
+                  <AnimatePresence>
+                    {downloadOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.96, y: -4 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.96, y: -4 }}
+                        transition={getSpring(reducedMotion)}
+                        className="card-download-menu dropdown-panel"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {['4K', '1080p', '720p', '480p'].map((quality) => (
+                          <button
+                            key={quality}
+                            type="button"
+                            className="card-download-option"
+                            onClick={(e) => {
+                              if (quality === '4K') {
+                                handleDownloadCheck(e, ex, quality);
+                              } else {
+                                e.stopPropagation();
+                                showToast(`"${ex.name}" em ${quality} estará disponível em breve!`);
+                              }
+                              setDownloadOpen(false);
+                              closeTouchActions();
+                            }}
+                          >
+                            {quality}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {isAdmin && (
+                  <>
+                    <button
+                      type="button"
+                      data-card-action="edit"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!isTouchUi()) handleEdit(e);
+                      }}
+                      className={actionBtnClass('edit')}
+                      title="Editar"
+                    >
+                      <Icon name="pencil" className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      data-card-action="delete"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!isTouchUi()) void handleDelete(e);
+                      }}
+                      className={actionBtnClass('delete', 'card-action-btn--danger')}
+                      title="Excluir"
+                    >
+                      <Icon name="trash" className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="card-meta-footer">
+          <p className="card-meta-category">{ex.category}</p>
+          <h3 className="card-meta-title" title={ex.name}>
+            {ex.name}
+          </h3>
+        </div>
+      </div>
+    </motion.div>
+  );
+}

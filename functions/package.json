@@ -1,0 +1,20 @@
+{
+  "name": "biblioteca-dmx-functions",
+  "private": true,
+  "main": "lib/index.js",
+  "engines": {
+    "node": "20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.6.0",
+    "firebase-functions": "^6.6.0",
+    "stripe": "^18.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
