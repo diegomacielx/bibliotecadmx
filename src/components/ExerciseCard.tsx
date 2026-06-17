@@ -17,9 +17,6 @@ import { Skeleton } from './Skeleton';
 import { Icon } from './Icon';
 import { YouTubePlayer, preloadYouTubePlayerApi } from './YouTubePlayer';
 
-const LONG_PRESS_MS = 500;
-const MOVE_CANCEL_PX = 14;
-
 interface ExerciseCardProps {
   ex: Exercise;
   index: number;
@@ -48,12 +45,6 @@ function isTouchUi() {
   return window.matchMedia('(hover: none)').matches;
 }
 
-function resolveActionAtPoint(clientX: number, clientY: number) {
-  const el = document.elementFromPoint(clientX, clientY);
-  const btn = el?.closest('[data-card-action]') as HTMLElement | null;
-  return btn?.dataset.cardAction ?? null;
-}
-
 export function ExerciseCard({
   ex,
   index,
@@ -79,15 +70,10 @@ export function ExerciseCard({
 }: ExerciseCardProps) {
   const [showPreview, setShowPreview] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
-  const [touchActionsOpen, setTouchActionsOpen] = useState(false);
-  const [touchHoveredAction, setTouchHoveredAction] = useState<string | null>(null);
+  const [mobileExpanded, setMobileExpanded] = useState(false);
   const downloadRef = useRef<HTMLDivElement>(null);
   const coverRef = useRef<HTMLDivElement>(null);
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
-  const longPressTriggeredRef = useRef(false);
-  const touchActionsOpenRef = useRef(false);
   const { imgSrc, imgLoaded, handleLoad, handleError } = useExerciseCover(ex);
   const handleGlow = useAmbientGlow<HTMLDivElement>();
   const reducedMotion = useReducedMotion();
@@ -95,23 +81,6 @@ export function ExerciseCard({
   const ytId = getYouTubeId(ex.youtubeUrl);
   const canPreview = !!ytId && !reducedMotion;
   const coverObjectPosition = getCoverObjectPosition(ex);
-
-  touchActionsOpenRef.current = touchActionsOpen;
-
-  const clearLongPressTimer = useCallback(() => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-  }, []);
-
-  const closeTouchActions = useCallback(() => {
-    clearLongPressTimer();
-    setTouchActionsOpen(false);
-    setTouchHoveredAction(null);
-    longPressTriggeredRef.current = false;
-    pointerStartRef.current = null;
-  }, [clearLongPressTimer]);
 
   useEffect(() => {
     if (!downloadOpen) return;
@@ -125,14 +94,14 @@ export function ExerciseCard({
   }, [downloadOpen]);
 
   useEffect(() => {
-    if (!touchActionsOpen) return;
+    if (!mobileExpanded) return;
     const onPointerDown = (e: PointerEvent) => {
       if (coverRef.current?.contains(e.target as Node)) return;
-      closeTouchActions();
+      setMobileExpanded(false);
     };
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [touchActionsOpen, closeTouchActions]);
+  }, [mobileExpanded]);
 
   const handleMouseEnter = useCallback(() => {
     void preloadYouTubePlayerApi();
@@ -148,9 +117,8 @@ export function ExerciseCard({
   useEffect(
     () => () => {
       if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
-      clearLongPressTimer();
     },
-    [clearLongPressTimer]
+    []
   );
 
   const handleDelete = async (e?: React.MouseEvent) => {
@@ -178,41 +146,21 @@ export function ExerciseCard({
     setShowAdminPanel(true);
   };
 
-  const runCardAction = useCallback(
-    (action: string) => {
-      closeTouchActions();
-      switch (action) {
-        case 'favorite':
-          onToggleFavorite?.(ex);
-          break;
-        case 'compare':
-          onCompare?.(ex);
-          break;
-        case 'copy':
-          copyLink(ex.youtubeUrl, ex.firestoreId);
-          break;
-        case 'download':
-          setDownloadOpen(true);
-          break;
-        case 'edit':
-          handleEdit();
-          break;
-        case 'delete':
-          void handleDelete();
-          break;
-        case 'playlist':
-          onTogglePlaylist?.(ex);
-          break;
-        default:
-          break;
-      }
-    },
-    [closeTouchActions, onToggleFavorite, onCompare, copyLink, ex, onTogglePlaylist]
-  );
-
   const handleCoverClick = (e: React.MouseEvent) => {
-    if (isTouchUi()) return;
-    if (downloadOpen || touchActionsOpen) return;
+    if (downloadOpen) return;
+
+    if (isTouchUi()) {
+      if ((e.target as HTMLElement).closest('[data-card-play-trigger]')) return;
+      if (selectionMode && onTogglePlaylist) {
+        e.stopPropagation();
+        onTogglePlaylist(ex);
+        return;
+      }
+      e.stopPropagation();
+      setMobileExpanded(true);
+      return;
+    }
+
     if (selectionMode && onTogglePlaylist) {
       e.stopPropagation();
       onTogglePlaylist(ex);
@@ -226,90 +174,13 @@ export function ExerciseCard({
     onWatch(ex);
   };
 
-  const handleCoverPointerDown = (e: React.PointerEvent) => {
-    if (!isTouchUi() || e.button !== 0) return;
-    if (downloadOpen) return;
-
-    pointerStartRef.current = { x: e.clientX, y: e.clientY };
-    longPressTriggeredRef.current = false;
-    clearLongPressTimer();
-
-    longPressTimerRef.current = setTimeout(() => {
-      longPressTriggeredRef.current = true;
-      setTouchActionsOpen(true);
-      setTouchHoveredAction(resolveActionAtPoint(e.clientX, e.clientY));
-      if (navigator.vibrate) navigator.vibrate(12);
-    }, LONG_PRESS_MS);
-
-    coverRef.current?.setPointerCapture(e.pointerId);
+  const handlePlayClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setMobileExpanded(false);
+    onWatch(ex);
   };
 
-  const handleCoverPointerMove = (e: React.PointerEvent) => {
-    if (!isTouchUi()) return;
-
-    if (!touchActionsOpenRef.current && pointerStartRef.current) {
-      const dx = e.clientX - pointerStartRef.current.x;
-      const dy = e.clientY - pointerStartRef.current.y;
-      if (Math.hypot(dx, dy) > MOVE_CANCEL_PX) {
-        clearLongPressTimer();
-      }
-      return;
-    }
-
-    if (touchActionsOpenRef.current) {
-      e.preventDefault();
-      setTouchHoveredAction(resolveActionAtPoint(e.clientX, e.clientY));
-    }
-  };
-
-  const handleCoverPointerUp = (e: React.PointerEvent) => {
-    if (!isTouchUi()) return;
-
-    clearLongPressTimer();
-
-    if (touchActionsOpenRef.current) {
-      e.preventDefault();
-      const action = resolveActionAtPoint(e.clientX, e.clientY);
-      if (action) {
-        runCardAction(action);
-      } else {
-        closeTouchActions();
-      }
-    } else if (!longPressTriggeredRef.current && pointerStartRef.current) {
-      const dx = e.clientX - pointerStartRef.current.x;
-      const dy = e.clientY - pointerStartRef.current.y;
-      if (Math.hypot(dx, dy) <= MOVE_CANCEL_PX && !downloadOpen) {
-        if (selectionMode && onTogglePlaylist) {
-          onTogglePlaylist(ex);
-        } else {
-          onWatch(ex);
-        }
-      }
-    }
-
-    pointerStartRef.current = null;
-    longPressTriggeredRef.current = false;
-
-    try {
-      coverRef.current?.releasePointerCapture(e.pointerId);
-    } catch {
-      /* ignore */
-    }
-  };
-
-  const handleCoverPointerCancel = () => {
-    clearLongPressTimer();
-    if (touchActionsOpenRef.current) {
-      closeTouchActions();
-    }
-    pointerStartRef.current = null;
-    longPressTriggeredRef.current = false;
-  };
-
-  const actionBtnClass = (action: string, extra = '') =>
-    `card-action-btn cursor-pointer ${extra} ${
-      touchHoveredAction === action ? 'card-action-btn--touch-target' : ''
-    }`.trim();
+  const actionBtnClass = (extra = '') => `card-action-btn cursor-pointer ${extra}`.trim();
 
   return (
     <motion.div
@@ -339,8 +210,8 @@ export function ExerciseCard({
       }
       className={`exercise-card cinematic-card card-grid-item card-3d group relative rounded-cinema-lg border shadow-cinematic hover:shadow-cinematic-red ease-cinematic duration-cinematic ${
         isAdmin ? 'exercise-card--admin' : ''
-      } ${downloadOpen || touchActionsOpen ? 'card-actions-pinned z-[50]' : 'z-10'} ${
-        touchActionsOpen ? 'card-touch-actions-open' : ''
+      } ${downloadOpen || mobileExpanded ? 'card-actions-pinned z-[50]' : 'z-10'} ${
+        mobileExpanded ? 'card-mobile-expanded' : ''
       } ${
         isComparePick
           ? 'border-red-500 ring-2 ring-red-500/40'
@@ -358,25 +229,22 @@ export function ExerciseCard({
         ref={coverRef}
         className="exercise-card-cover aspect-card-poster relative cursor-pointer touch-manipulation select-none"
         onClick={handleCoverClick}
-        onPointerDown={handleCoverPointerDown}
-        onPointerMove={handleCoverPointerMove}
-        onPointerUp={handleCoverPointerUp}
-        onPointerCancel={handleCoverPointerCancel}
         onContextMenu={(e) => e.preventDefault()}
         role="button"
         tabIndex={0}
         aria-label={`Abrir vídeo: ${ex.name}`}
+        aria-expanded={isTouchUi() ? mobileExpanded : undefined}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
-            onWatch(ex);
+            if (isTouchUi()) {
+              setMobileExpanded(true);
+            } else {
+              onWatch(ex);
+            }
           }
         }}
       >
-        {touchActionsOpen && (
-          <div className="card-touch-overlay absolute inset-0 z-[55] pointer-events-none" aria-hidden="true" />
-        )}
-
         <div className="card-media absolute inset-0 overflow-hidden">
           {!imgLoaded && (
             <div className="absolute inset-0 z-0">
@@ -388,11 +256,12 @@ export function ExerciseCard({
             src={imgSrc}
             loading="lazy"
             decoding="async"
+            draggable={false}
             onLoad={handleLoad}
             onError={handleError}
-            className={`w-full h-full object-cover relative z-10 transition-opacity duration-300 ${
+            className={`card-cover-img w-full h-full object-cover relative z-10 transition-opacity duration-300 ${
               imgLoaded ? 'opacity-100' : 'opacity-0'
-            } ${touchActionsOpen ? 'scale-[0.98]' : ''}`}
+            } ${mobileExpanded ? 'scale-[0.98]' : ''}`}
             style={{ objectPosition: coverObjectPosition }}
             alt={`Capa do exercício ${ex.name}`}
             whileHover={reducedMotion || showPreview || isTouchUi() ? undefined : { scale: 1.04 }}
@@ -416,15 +285,29 @@ export function ExerciseCard({
 
           <div className="card-cover-vignette" aria-hidden="true" />
 
-          {!showPreview && !touchActionsOpen && (
-            <div
-              className="card-play-overlay absolute inset-0 z-[25] flex items-center justify-center pointer-events-none"
-              aria-hidden="true"
-            >
-              <div className="card-play-ring">
-                <Icon name="play" className="w-5 h-5 text-white ml-0.5" />
+          {!showPreview && (!isTouchUi() || mobileExpanded) && (
+            isTouchUi() ? (
+              <button
+                type="button"
+                data-card-play-trigger
+                className="card-play-trigger absolute inset-0 z-[25] flex items-center justify-center"
+                onClick={handlePlayClick}
+                aria-label={`Reproduzir ${ex.name}`}
+              >
+                <div className="card-play-ring">
+                  <Icon name="play" className="w-5 h-5 text-white ml-0.5" />
+                </div>
+              </button>
+            ) : (
+              <div
+                className="card-play-overlay absolute inset-0 z-[25] flex items-center justify-center pointer-events-none"
+                aria-hidden="true"
+              >
+                <div className="card-play-ring">
+                  <Icon name="play" className="w-5 h-5 text-white ml-0.5" />
+                </div>
               </div>
-            </div>
+            )
           )}
         </div>
 
@@ -454,7 +337,7 @@ export function ExerciseCard({
                   e.stopPropagation();
                   onTogglePlaylist(ex);
                 }}
-                className={actionBtnClass('playlist', isInPlaylist ? 'card-action-btn--active' : '')}
+                className={actionBtnClass(isInPlaylist ? 'card-action-btn--active' : '')}
                 aria-label={isInPlaylist ? 'Remover do treino' : 'Adicionar ao treino'}
               >
                 <Icon name={isInPlaylist ? 'check' : 'plus'} className="w-3.5 h-3.5" />
@@ -467,9 +350,9 @@ export function ExerciseCard({
                     data-card-action="favorite"
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (!isTouchUi()) onToggleFavorite(ex);
+                      onToggleFavorite(ex);
                     }}
-                    className={actionBtnClass('favorite', isFavorite ? 'card-action-btn--active' : '')}
+                    className={actionBtnClass(isFavorite ? 'card-action-btn--active' : '')}
                     title={isFavorite ? 'Remover dos favoritos' : 'Favoritar'}
                   >
                     <Icon name="heart" className="w-3.5 h-3.5" fill={isFavorite ? 'currentColor' : 'none'} />
@@ -482,9 +365,9 @@ export function ExerciseCard({
                     data-card-action="compare"
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (!isTouchUi()) onCompare(ex);
+                      onCompare(ex);
                     }}
-                    className={actionBtnClass('compare', isComparePick ? 'card-action-btn--active' : '')}
+                    className={actionBtnClass(isComparePick ? 'card-action-btn--active' : '')}
                     title="Comparar execuções"
                   >
                     <Icon name="compare" className="w-3.5 h-3.5" />
@@ -496,10 +379,9 @@ export function ExerciseCard({
                   data-card-action="copy"
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (!isTouchUi()) copyLink(ex.youtubeUrl, ex.firestoreId);
+                    copyLink(ex.youtubeUrl, ex.firestoreId);
                   }}
                   className={actionBtnClass(
-                    'copy',
                     copiedId === ex.firestoreId ? 'card-action-btn--success' : ''
                   )}
                   title="Copiar link"
@@ -514,9 +396,9 @@ export function ExerciseCard({
                     data-card-action="download"
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (!isTouchUi()) setDownloadOpen((v) => !v);
+                      setDownloadOpen((v) => !v);
                     }}
-                    className={actionBtnClass('download', downloadOpen ? 'card-action-btn--active' : '')}
+                    className={actionBtnClass(downloadOpen ? 'card-action-btn--active' : '')}
                     title="Baixar vídeo"
                     aria-label="Baixar vídeo"
                     aria-expanded={downloadOpen}
@@ -547,7 +429,6 @@ export function ExerciseCard({
                                 showToast(`"${ex.name}" em ${quality} estará disponível em breve!`);
                               }
                               setDownloadOpen(false);
-                              closeTouchActions();
                             }}
                           >
                             {quality}
@@ -565,9 +446,9 @@ export function ExerciseCard({
                       data-card-action="edit"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (!isTouchUi()) handleEdit(e);
+                        handleEdit(e);
                       }}
-                      className={actionBtnClass('edit')}
+                      className={actionBtnClass('')}
                       title="Editar"
                     >
                       <Icon name="pencil" className="w-3.5 h-3.5" />
@@ -577,9 +458,9 @@ export function ExerciseCard({
                       data-card-action="delete"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (!isTouchUi()) void handleDelete(e);
+                        void handleDelete(e);
                       }}
-                      className={actionBtnClass('delete', 'card-action-btn--danger')}
+                      className={actionBtnClass('card-action-btn--danger')}
                       title="Excluir"
                     >
                       <Icon name="trash" className="w-3.5 h-3.5" />

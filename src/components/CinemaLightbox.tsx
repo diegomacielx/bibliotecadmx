@@ -7,6 +7,7 @@ import {
   resolveVideoOrientation,
 } from '../lib/utils';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useMobileUi } from '../hooks/useMediaQuery';
 import { YouTubePlayer, type YouTubePlayerHandle } from './YouTubePlayer';
 import { Icon } from './Icon';
 import { MuscleGroupList } from './MuscleGroupList';
@@ -265,6 +266,7 @@ function ComparePanel({
   onSyncPlay,
   onPlayerReady,
   isShort,
+  mobileLayout = false,
 }: {
   ex: Exercise;
   label: string;
@@ -272,6 +274,7 @@ function ComparePanel({
   onSyncPlay: () => void;
   onPlayerReady: () => void;
   isShort: boolean;
+  mobileLayout?: boolean;
 }) {
   const ytId = getYouTubeId(ex.youtubeUrl);
   const orientation = resolveVideoOrientation(ex.youtubeUrl, {
@@ -279,12 +282,14 @@ function ComparePanel({
     aspectRatio: ex.aspectRatio,
   });
   const isVertical = orientation === 'vertical';
-  const videoSizeStyle: CSSProperties = isVertical
-    ? { height: 'min(70vh, 720px)', aspectRatio: '9 / 16' }
-    : { height: 'min(50vh, 480px)', aspectRatio: '16 / 9' };
+  const videoSizeStyle: CSSProperties | undefined = mobileLayout
+    ? undefined
+    : isVertical
+      ? { height: 'min(70vh, 720px)', aspectRatio: '9 / 16' }
+      : { height: 'min(50vh, 480px)', aspectRatio: '16 / 9' };
 
   return (
-    <div className="compare-panel flex flex-col gap-2 min-w-0">
+    <div className="compare-panel flex flex-col gap-2 min-w-0 flex-1">
       <div className="flex items-center justify-between gap-2">
         <p className="compare-panel-label">{label}</p>
         <button
@@ -298,7 +303,13 @@ function ComparePanel({
       </div>
       <p className="lightbox-title text-xs truncate">{ex.name}</p>
       <div
-        className="relative shrink-0 w-full overflow-hidden rounded-xl bg-canvas-sunken ring-1 ring-white/10"
+        className={`compare-panel-video relative shrink-0 w-full overflow-hidden rounded-xl bg-canvas-sunken ring-1 ring-white/10 ${
+          mobileLayout
+            ? isVertical
+              ? 'compare-panel-video--mobile-vertical'
+              : 'compare-panel-video--mobile'
+            : ''
+        }`}
         style={videoSizeStyle}
       >
         {ytId ? (
@@ -347,6 +358,7 @@ export function CinemaLightbox({
   isAdmin = false,
 }: CinemaLightboxProps) {
   const reducedMotion = useReducedMotion();
+  const isMobileLayout = useMobileUi();
   const isMdUp = useMdUp();
   const isCompare = !!compareEx;
   const playerRef = useRef<YouTubePlayerHandle>(null);
@@ -383,9 +395,22 @@ export function CinemaLightbox({
     if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
     hideTimerRef.current = setTimeout(() => {
       setControlsVisible(false);
-      setSidebarVisible(false);
+      if (!isMobileLayout) setSidebarVisible(false);
     }, CONTROLS_HIDE_MS);
-  }, []);
+  }, [isMobileLayout]);
+
+  useEffect(() => {
+    if (!isMobileLayout) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isMobileLayout]);
+
+  useEffect(() => {
+    if (isMobileLayout) setSidebarVisible(true);
+  }, [isMobileLayout, ex.firestoreId]);
 
   useEffect(() => {
     compareReadyRef.current = { primary: false, secondary: false };
@@ -482,10 +507,6 @@ export function CinemaLightbox({
         exit: { opacity: 0, y: -36 },
       };
 
-  const videoSizeStyle: CSSProperties = isVertical
-    ? { height: VIDEO_H, aspectRatio: '9 / 16' }
-    : { height: VIDEO_H, aspectRatio: '16 / 9' };
-
   const handleBackdropWheel = useCallback((e: WheelEvent<HTMLDivElement>) => {
     e.preventDefault();
     window.scrollBy({ top: e.deltaY, left: e.deltaX, behavior: 'auto' });
@@ -503,26 +524,57 @@ export function CinemaLightbox({
     resetHideTimer();
   };
 
+  const videoSizeStyle: CSSProperties = isMobileLayout
+    ? {}
+    : isVertical
+      ? { height: VIDEO_H, aspectRatio: '9 / 16' }
+      : { height: VIDEO_H, aspectRatio: '16 / 9' };
+
+  const showSidebar = isMobileLayout || sidebarVisible;
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.1, ease: [0.22, 1, 0.36, 1] }}
-      className="cinema-lightbox fixed inset-0 z-[200] flex items-center justify-center p-2 sm:p-4 overflow-hidden pointer-events-none"
+      className={`cinema-lightbox fixed inset-0 z-[200] flex overflow-hidden ${
+        isMobileLayout
+          ? 'cinema-lightbox--mobile pointer-events-auto flex-col p-0'
+          : 'pointer-events-none items-center justify-center p-2 sm:p-4'
+      }`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="cinema-lightbox-title"
-      onMouseMove={resetHideTimer}
-      onWheel={resetHideTimer}
-      onScroll={resetHideTimer}
+      onMouseMove={isMobileLayout ? undefined : resetHideTimer}
+      onWheel={isMobileLayout ? undefined : resetHideTimer}
+      onScroll={isMobileLayout ? undefined : resetHideTimer}
     >
-      <motion.div
-        className="absolute inset-0 cinema-backdrop pointer-events-auto"
-        onClick={onClose}
-        onWheel={handleBackdropWheel}
-        aria-hidden="true"
-      />
+      {!isMobileLayout && (
+        <motion.div
+          className="absolute inset-0 cinema-backdrop pointer-events-auto"
+          onClick={onClose}
+          onWheel={handleBackdropWheel}
+          aria-hidden="true"
+        />
+      )}
+
+      {isMobileLayout && (
+        <div className="cinema-lightbox-mobile-bar shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="cinema-lightbox-mobile-close"
+            aria-label="Fechar"
+          >
+            <Icon name="x" className="w-4 h-4" strokeWidth={2} />
+            <span>Fechar</span>
+          </button>
+          <p id="cinema-lightbox-title" className="cinema-lightbox-mobile-title truncate">
+            {isCompare && compareEx ? 'Comparador' : ex.name}
+          </p>
+        </div>
+      )}
 
       <motion.div
         initial={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.985, y: 6 }}
@@ -530,33 +582,45 @@ export function CinemaLightbox({
         exit={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.99, y: 4 }}
         transition={spring}
         className={`cinema-lightbox-panel pointer-events-auto relative z-10 mx-auto flex flex-col md:flex-row md:items-stretch w-fit max-w-[calc(100vw-1rem)] max-h-[94vh] overflow-hidden rounded-cinema ${
-          isCompare ? 'compare-lightbox-panel' : ''
-        }`}
+          isMobileLayout ? 'cinema-lightbox-panel--mobile' : ''
+        } ${isCompare ? 'compare-lightbox-panel' : ''}`}
       >
         {isCompare && compareEx ? (
-          <div className="flex flex-col lg:flex-row gap-4 p-4 cinema-lightbox-compare-inner">
-            <ComparePanel
-              ex={ex}
-              label="Exercício A"
-              playerRef={playerRef}
-              onSyncPlay={syncCompare}
-              onPlayerReady={handleComparePrimaryReady}
-              isShort={isShort}
-            />
-            <ComparePanel
-              ex={compareEx}
-              label="Exercício B"
-              playerRef={comparePlayerRef}
-              onSyncPlay={syncCompare}
-              onPlayerReady={handleCompareSecondaryReady}
-              isShort={isYouTubeShort(compareEx.youtubeUrl)}
-            />
+          <div
+            className={
+              isMobileLayout
+                ? 'cinema-lightbox-compare-layout'
+                : 'flex flex-col lg:flex-row gap-4 p-4 cinema-lightbox-compare-inner w-full'
+            }
+          >
+            <div className={isMobileLayout ? 'cinema-compare-videos-row' : 'contents'}>
+              <ComparePanel
+                ex={ex}
+                label="Exercício A"
+                playerRef={playerRef}
+                onSyncPlay={syncCompare}
+                onPlayerReady={handleComparePrimaryReady}
+                isShort={isShort}
+                mobileLayout={isMobileLayout}
+              />
+              <ComparePanel
+                ex={compareEx}
+                label="Exercício B"
+                playerRef={comparePlayerRef}
+                onSyncPlay={syncCompare}
+                onPlayerReady={handleCompareSecondaryReady}
+                isShort={isYouTubeShort(compareEx.youtubeUrl)}
+                mobileLayout={isMobileLayout}
+              />
+            </div>
           </div>
         ) : (
           <div
             ref={videoAreaRef}
-            className="cinema-video-stage relative shrink-0 w-full md:w-auto overflow-hidden cinema-video-area"
-            style={videoSizeStyle}
+            className={`cinema-video-stage relative shrink-0 w-full md:w-auto overflow-hidden cinema-video-area ${
+              isMobileLayout ? 'cinema-video-area--mobile' : ''
+            } ${isVertical && isMobileLayout ? 'cinema-video-area--mobile-vertical' : ''}`}
+            style={isMobileLayout ? undefined : videoSizeStyle}
           >
             {ytId ? (
               <YouTubePlayer
@@ -642,20 +706,24 @@ export function CinemaLightbox({
         )}
 
         <AnimatePresence mode="sync">
-          {sidebarVisible && (
+          {showSidebar && (
             <motion.aside
-              {...sidebarMotion}
-              transition={sidebarTransition}
-              className="cinema-lightbox-sidebar relative flex flex-col w-full md:w-[min(360px,32vw)] shrink-0 self-stretch p-5 md:p-6 min-h-full overflow-y-auto no-scrollbar"
+              {...(isMobileLayout ? {} : sidebarMotion)}
+              transition={isMobileLayout ? { duration: 0 } : sidebarTransition}
+              className={`cinema-lightbox-sidebar relative flex flex-col w-full md:w-[min(360px,32vw)] shrink-0 self-stretch p-5 md:p-6 min-h-full overflow-y-auto no-scrollbar ${
+                isMobileLayout ? 'cinema-lightbox-sidebar--mobile' : ''
+              } ${isCompare && isMobileLayout ? 'cinema-lightbox-sidebar--compare-mobile' : ''}`}
             >
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Fechar"
-                className="lightbox-close-mobile absolute top-3.5 right-3.5 z-10 p-1.5 rounded-full md:hidden"
-              >
-                <Icon name="x" className="w-4 h-4" strokeWidth={1.75} />
-              </button>
+              {!isMobileLayout && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label="Fechar"
+                  className="lightbox-close-mobile absolute top-3.5 right-3.5 z-10 p-1.5 rounded-full md:hidden"
+                >
+                  <Icon name="x" className="w-4 h-4" strokeWidth={1.75} />
+                </button>
+              )}
 
               {isCompare && compareEx ? (
                 <div className="flex flex-col min-h-full pb-10">
@@ -694,7 +762,7 @@ export function CinemaLightbox({
                     />
                   </div>
                   </div>
-                  <p className="cinema-shortcuts-hint cinema-shortcuts-hint--sidebar mt-4 text-center shrink-0">
+                  <p className="cinema-shortcuts-hint cinema-shortcuts-hint--sidebar mt-4 text-center shrink-0 hidden md:block">
                     Pressione <kbd>Esc</kbd> para fechar
                   </p>
                 </div>
@@ -716,7 +784,7 @@ export function CinemaLightbox({
                     isAdmin={isAdmin}
                   />
                   <AnimatePresence>
-                    {controlsVisible && (
+                    {!isMobileLayout && controlsVisible && (
                       <motion.p
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
