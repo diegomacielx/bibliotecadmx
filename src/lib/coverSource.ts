@@ -1,0 +1,89 @@
+import { CUSTOM_LOGO_URL } from './constants';
+import { getCachedCoverUrl } from './coverCache';
+import {
+  GITHUB_COVER_BASE,
+  getExerciseAssetIds,
+  getExerciseCoverUrl,
+  hasValidYouTubeUrl,
+} from './utils';
+
+export type CoverSourceKind = 'github' | 'youtube' | 'imgur' | 'logo' | 'external' | 'none';
+
+/** URL aponta para capa oficial no repositório GitHub (dmx/main) */
+export function isOfficialGitHubCoverUrl(url: string | null | undefined): boolean {
+  if (!url?.trim()) return false;
+  const normalized = url.trim().toLowerCase();
+  const base = GITHUB_COVER_BASE.toLowerCase();
+  if (normalized.startsWith(base)) return true;
+  return /raw\.githubusercontent\.com\/diegomacielx\/dmx\//i.test(normalized);
+}
+
+export function classifyCoverUrl(url: string | null | undefined): CoverSourceKind {
+  if (!url?.trim()) return 'none';
+  const u = url.trim().toLowerCase();
+
+  if (u.includes('imgur.com/rllyq3z') || u === CUSTOM_LOGO_URL.toLowerCase()) return 'logo';
+  if (u.includes('imgur.com')) return 'imgur';
+  if (isOfficialGitHubCoverUrl(url)) return 'github';
+  if (
+    u.includes('youtube.com/vi/') ||
+    u.includes('ytimg.com/vi/') ||
+    u.includes('img.youtube.com')
+  ) {
+    return 'youtube';
+  }
+  return 'external';
+}
+
+/** URLs candidatas oficiais no GitHub para o ID do exercício */
+export function getOfficialGitHubCoverCandidates(ex: { id: string }): string[] {
+  const urls: string[] = [];
+  for (const assetId of getExerciseAssetIds(ex.id)) {
+    for (const ext of ['png', 'PNG'] as const) {
+      urls.push(getExerciseCoverUrl(assetId, ext));
+    }
+    for (const ext of ['jpg', 'JPG'] as const) {
+      urls.push(getExerciseCoverUrl(assetId, ext));
+    }
+  }
+  return [...new Set(urls)];
+}
+
+/** Thumbnail ou cache do navegador apontam para fonte externa (YouTube, Imgur, etc.) */
+export function isUsingExternalCoverSource(ex: {
+  firestoreId?: string;
+  thumbnail?: string;
+}): boolean {
+  const thumb = ex.thumbnail?.trim();
+  if (thumb) {
+    const kind = classifyCoverUrl(thumb);
+    if (kind !== 'none' && kind !== 'github') return true;
+  }
+
+  const cached = ex.firestoreId ? getCachedCoverUrl(ex.firestoreId) : null;
+  if (cached) {
+    const kind = classifyCoverUrl(cached);
+    if (kind !== 'none' && kind !== 'github') return true;
+  }
+
+  return false;
+}
+
+/**
+ * Exercício precisa de capa 4K no GitHub quando:
+ * - usa fonte externa (YouTube/imgur/cache) OU
+ * - arquivo oficial não existe no repositório
+ */
+export function exerciseNeedsGitHubCover(
+  ex: { firestoreId?: string; id: string; thumbnail?: string; youtubeUrl?: string },
+  githubFileExists: boolean
+): boolean {
+  if (!hasValidYouTubeUrl(ex.youtubeUrl)) return false;
+  if (isUsingExternalCoverSource(ex)) return true;
+  return !githubFileExists;
+}
+
+/** Só YouTube válido entra na auditoria de capas */
+export function isEligibleForCoverAudit(ex: { youtubeUrl?: string }): boolean {
+  return hasValidYouTubeUrl(ex.youtubeUrl);
+}

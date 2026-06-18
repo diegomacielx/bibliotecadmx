@@ -7,6 +7,8 @@ export interface Exercise {
   youtubeUrl: string;
   thumbnail?: string;
   keywords?: string[];
+  /** Equipamentos do exercício — usado pelo filtro avançado */
+  equipment?: string[];
   hasCloudVideo?: boolean | null;
   /** "vertical" | "horizontal" — orientação do vídeo no lightbox */
   videoOrientation?: string;
@@ -14,6 +16,10 @@ export interface Exercise {
   aspectRatio?: string;
   /** 0–100: foco vertical da capa (0=topo, 50=centro). Opcional no Firestore. */
   coverFocusY?: number;
+  /** 0–100: foco horizontal da capa (50=centro). Opcional no Firestore. */
+  coverFocusX?: number;
+  /** 0.75–1.6: zoom da capa (1=original). Opcional no Firestore. */
+  coverZoom?: number;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -26,9 +32,15 @@ export interface ExerciseForm {
   youtubeUrl: string;
   thumbnail: string;
   keywords: string;
+  /** IDs de equipamento selecionados no admin */
+  equipment: string[];
   hasCloudVideo?: boolean | null;
   /** Vazio = automático; 0–100 = foco manual da capa */
   coverFocusY: string;
+  coverFocusX: string;
+  /** Percentual 75–160; vazio = automático (100%) */
+  coverZoom: string;
+  coverFramingManual: boolean;
 }
 
 export interface UserProfile {
@@ -83,11 +95,28 @@ export interface AccessIntegrationSettings {
   stripePriceIds?: string[];
 }
 
+export interface HeroSpotlightSettings {
+  /** daily = sorteio diário · exercise = exercício fixo · campaign = outdoor / propaganda */
+  mode?: 'daily' | 'exercise' | 'campaign';
+  exerciseFirestoreId?: string;
+  imageUrl?: string;
+  title?: string;
+  subtitle?: string;
+  categoryLabel?: string;
+  ctaLabel?: string;
+  /** Link ao clicar (YouTube, landing, afiliado…) */
+  linkUrl?: string;
+  coverFocusX?: number;
+  coverFocusY?: number;
+  coverZoom?: number;
+}
+
 export interface AppSettings {
   webhookUrl?: string;
   access?: AccessIntegrationSettings;
   /** Região das Cloud Functions (ex.: us-central1) — só exibição no admin */
   functionsRegion?: string;
+  heroSpotlight?: HeroSpotlightSettings;
 }
 
 export type ToastType = 'success' | 'error';
@@ -100,4 +129,10 @@ export interface ToastState {
 
 export type AuthMode = 'login' | 'register' | 'forgot';
 export type AdminTab = 'single' | 'batch' | 'requests' | 'authorized' | 'audit' | 'users' | 'settings';
-export type AdminFilter = 'all' | 'completed' | 'incomplete' | 'missing_cloud' | 'upados_cloud';
+export type AdminFilter =
+  | 'all'
+  | 'completed'
+  | 'incomplete'
+  | 'missing_cloud'
+  | 'upados_cloud'
+  | 'missing_cover';

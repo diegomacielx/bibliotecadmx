@@ -47,14 +47,18 @@ export function useMousePosition(enabled = true): MousePosition {
   return position;
 }
 
-/** Atualiza --mouse-x / --mouse-y no elemento alvo (percentual local) */
+/** Atualiza --mouse-x / --mouse-y e parallax local no elemento */
 export function useAmbientGlow<T extends HTMLElement>() {
   return useCallback((e: React.MouseEvent<T>) => {
     const el = e.currentTarget;
     const rect = el.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
+    const px = (e.clientX - rect.left) / rect.width - 0.5;
+    const py = (e.clientY - rect.top) / rect.height - 0.5;
     el.style.setProperty('--mouse-x', `${x}%`);
     el.style.setProperty('--mouse-y', `${y}%`);
+    el.style.setProperty('--parallax-x', String(px));
+    el.style.setProperty('--parallax-y', String(py));
   }, []);
 }

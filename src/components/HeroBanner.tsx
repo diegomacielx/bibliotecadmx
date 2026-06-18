@@ -1,24 +1,48 @@
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import type { Exercise } from '../types';
 import { useExerciseCover } from '../hooks/useExerciseCover';
-import { getCoverObjectPosition } from '../lib/coverFocus';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useTouchLayout } from '../hooks/useMediaQuery';
 import { Icon } from './Icon';
 import { HeroBannerMobile } from './HeroBannerMobile';
+import { ExerciseCoverImage } from './ExerciseCoverImage';
+import type { HeroDisplayContent } from '../lib/heroSpotlight';
 
 interface HeroBannerProps {
-  ex: Exercise;
+  hero: HeroDisplayContent;
   onWatch: (ex: Exercise) => void;
-  fromFavorites?: boolean;
+  onCampaignClick?: (linkUrl: string) => void;
 }
 
-function HeroBannerDesktop({ ex, onWatch, fromFavorites }: HeroBannerProps) {
+function HeroBannerDesktop({ hero, onWatch, onCampaignClick }: HeroBannerProps) {
   const sectionRef = useRef<HTMLElement>(null);
-  const { imgSrc, handleLoad, handleError } = useExerciseCover(ex);
   const reducedMotion = useReducedMotion();
   const enableScrollFx = !reducedMotion;
+  const isCampaign = hero.mode === 'campaign';
+
+  const coverSource = useMemo(
+    () =>
+      hero.exercise
+        ? {
+            firestoreId: hero.exercise.firestoreId,
+            id: hero.exercise.id,
+            thumbnail: hero.exercise.thumbnail,
+            youtubeUrl: hero.exercise.youtubeUrl,
+          }
+        : {
+            firestoreId: 'hero-campaign',
+            id: 'hero',
+            thumbnail: hero.imageUrl,
+            youtubeUrl: '',
+          },
+    [hero.exercise, hero.imageUrl]
+  );
+
+  const { imgSrc, imgLoaded, placeholderSrc, webpSrc, handleLoad, handleError } =
+    useExerciseCover(coverSource);
+
+  const displaySrc = isCampaign && hero.imageUrl ? hero.imageUrl : imgSrc;
 
   const { scrollYProgress } = useScroll({
     target: sectionRef,
@@ -38,6 +62,14 @@ function HeroBannerDesktop({ ex, onWatch, fromFavorites }: HeroBannerProps) {
         transition: { duration: 0.5, ease: [0.4, 0, 0.2, 1] as const },
       };
 
+  const handleCoverClick = () => {
+    if (isCampaign && hero.linkUrl) {
+      onCampaignClick?.(hero.linkUrl);
+      return;
+    }
+    if (hero.exercise) onWatch(hero.exercise);
+  };
+
   return (
     <section ref={sectionRef} className="hero-scroll-section w-full mb-fluid-lg px-0">
       <div className="relative grid grid-cols-1 lg:grid-cols-12 gap-fluid-md lg:gap-fluid-lg items-center min-h-[280px] lg:min-h-[380px]">
@@ -48,23 +80,23 @@ function HeroBannerDesktop({ ex, onWatch, fromFavorites }: HeroBannerProps) {
         >
           <p className="hero-featured-label mb-3">
             <span className="hero-featured-label-main">
-              {fromFavorites ? 'Seu treino do dia' : 'Destaque do dia'}
+              {isCampaign ? 'Outdoor' : 'Destaque do dia'}
             </span>
             <span className="hero-featured-label-sep" aria-hidden="true">
               ·
             </span>
-            <span className="hero-featured-label-category">{ex.category}</span>
+            <span className="hero-featured-label-category">{hero.categoryLabel}</span>
           </p>
 
-          <p className="text-2xs font-medium text-zinc-500 mb-2 tabular-nums">#{ex.id}</p>
+          {hero.exerciseId && <p className="hero-exercise-id mb-3">#{hero.exerciseId}</p>}
 
-          <h1 className="font-display text-3xl md:text-4xl xl:text-5xl font-semibold tracking-cinematic leading-title text-white mb-6">
-            {ex.name}
-          </h1>
+          <h1 className="hero-title mb-6">{hero.title}</h1>
+
+          {hero.subtitle && <p className="hero-subtitle mb-4 text-white/70">{hero.subtitle}</p>}
 
           <motion.button
             type="button"
-            onClick={() => onWatch(ex)}
+            onClick={handleCoverClick}
             whileHover={reducedMotion ? undefined : { scale: 1.02 }}
             whileTap={reducedMotion ? undefined : { scale: 0.98 }}
             className="hero-cta group self-start"
@@ -72,32 +104,39 @@ function HeroBannerDesktop({ ex, onWatch, fromFavorites }: HeroBannerProps) {
             <span className="hero-cta-icon">
               <Icon name="play" className="w-4 h-4 ml-0.5" strokeWidth={2} />
             </span>
-            Assistir execução
+            {hero.ctaLabel}
           </motion.button>
         </motion.div>
 
         <div className="lg:col-span-7 xl:col-span-7 order-1 lg:order-2 relative w-full">
           <button
             type="button"
-            onClick={() => onWatch(ex)}
-            aria-label={`Assistir ${ex.name}`}
-            className="cinematic-card hero-cover-wrap relative w-full aspect-hero rounded-cinema-lg overflow-hidden group cursor-pointer border border-white/5 shadow-cinematic-lg hover:border-white/10 hover:shadow-cinematic-red ease-cinematic duration-cinematic"
+            onClick={handleCoverClick}
+            aria-label={isCampaign ? hero.title : `Assistir ${hero.title}`}
+            className="cinematic-card hero-cover-wrap card-catalog-cover relative w-full aspect-hero rounded-cinema-lg overflow-hidden group cursor-pointer border border-white/5 shadow-cinematic-lg hover:border-white/10 hover:shadow-cinematic-red ease-cinematic duration-cinematic"
           >
-            <motion.img
-              src={imgSrc}
-              alt={ex.name}
-              loading="eager"
-              decoding="async"
-              draggable={false}
-              onLoad={handleLoad}
-              onError={handleError}
+            <motion.div
               style={{
-                objectPosition: getCoverObjectPosition(ex),
                 ...(enableScrollFx ? { scale: imageScale, x: imageX } : {}),
               }}
-              className="absolute inset-0 w-full h-full object-cover ease-cinematic duration-cinematic origin-center pointer-events-none select-none"
-            />
+              className="absolute inset-0 ease-cinematic duration-cinematic origin-center pointer-events-none select-none"
+            >
+              <ExerciseCoverImage
+                imgSrc={displaySrc}
+                imgLoaded={isCampaign ? true : imgLoaded}
+                placeholderSrc={isCampaign ? null : placeholderSrc}
+                webpSrc={isCampaign ? null : webpSrc}
+                alt={hero.title}
+                frameSource={hero.frameSource}
+                loading="eager"
+                useBlurUp={!isCampaign && !reducedMotion}
+                onLoad={handleLoad}
+                onError={handleError}
+                imgClassName="card-cover-img"
+              />
+            </motion.div>
 
+            <div className="card-cover-grain" aria-hidden="true" />
             <div className="absolute inset-0 bg-gradient-to-tr from-black/70 via-black/20 to-transparent pointer-events-none" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
 

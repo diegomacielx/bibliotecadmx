@@ -46,7 +46,7 @@ export function AccessIntegrationsSection({
   const access = appSettings.access || {};
 
   return (
-    <form onSubmit={onSave} className="admin-panel-section admin-access-form">
+    <form onSubmit={onSave} className="admin-access-form">
       <div className="admin-access-block">
         <h3 className="admin-access-title">Acesso pago (Kiwify / Stripe)</h3>
         <p className="admin-lead">

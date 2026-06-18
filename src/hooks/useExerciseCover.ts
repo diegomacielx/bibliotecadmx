@@ -8,6 +8,7 @@ import {
   clearSessionCoverUrl,
 } from '../lib/coverImageStore';
 import { getCachedCoverUrl } from '../lib/coverCache';
+import { getCoverPlaceholderUrl, getCoverWebpCompanion, shouldUseCoverBlurUp } from '../lib/coverImage';
 
 interface CoverSource {
   firestoreId: string;
@@ -44,6 +45,12 @@ export function useExerciseCover(ex: CoverSource) {
   const initial = resolveInitial();
   const [imgSrc, setImgSrc] = useState(initial.src);
   const [imgLoaded, setImgLoaded] = useState(initial.loaded);
+  const [isCoverInstant, setIsCoverInstant] = useState(
+    isSessionCoverReady(ex.firestoreId) ||
+      (initial.loaded && getCachedCoverUrl(ex.firestoreId) === initial.src)
+  );
+  const placeholderSrc = getCoverPlaceholderUrl(ex);
+  const webpSrc = getCoverWebpCompanion(imgSrc);
 
   useEffect(() => {
     const sessionUrl = getSessionCoverUrl(ex.firestoreId);
@@ -54,6 +61,7 @@ export function useExerciseCover(ex: CoverSource) {
       fallbackIndexRef.current = idx >= 0 ? idx : 0;
       setImgSrc(sessionUrl);
       setImgLoaded(true);
+      setIsCoverInstant(true);
       return;
     }
 
@@ -61,19 +69,23 @@ export function useExerciseCover(ex: CoverSource) {
       const idx = fallbacksRef.current.indexOf(sessionUrl);
       fallbackIndexRef.current = idx >= 0 ? idx : 0;
       setImgSrc(sessionUrl);
-      setImgLoaded(isSessionCoverReady(ex.firestoreId) || getCachedCoverUrl(ex.firestoreId) === sessionUrl);
+      const cachedHit = getCachedCoverUrl(ex.firestoreId) === sessionUrl;
+      setImgLoaded(isSessionCoverReady(ex.firestoreId) || cachedHit);
+      setIsCoverInstant(isSessionCoverReady(ex.firestoreId) || cachedHit);
       return;
     }
 
     fallbackIndexRef.current = 0;
     setImgSrc(fallbacksRef.current[0] || CUSTOM_LOGO_URL);
     setImgLoaded(false);
+    setIsCoverInstant(false);
   }, [ex.firestoreId, ex.id, ex.thumbnail, ex.youtubeUrl]);
 
   const handleLoad = useCallback(
     (e: React.SyntheticEvent<HTMLImageElement>) => {
       const url = e.currentTarget.currentSrc || e.currentTarget.src;
       setImgLoaded(true);
+      setIsCoverInstant(true);
       if (url && !url.includes('imgur.com/rLLYQ3Z')) {
         setSessionCoverUrl(ex.firestoreId, url);
       }
@@ -95,5 +107,15 @@ export function useExerciseCover(ex: CoverSource) {
     setImgSrc(CUSTOM_LOGO_URL);
   }, [ex.firestoreId, imgSrc]);
 
-  return { imgSrc, imgLoaded, handleLoad, handleError };
+  return {
+    imgSrc,
+    imgLoaded,
+    isCoverInstant,
+    placeholderSrc,
+    webpSrc,
+    handleLoad,
+    handleError,
+    shouldUseCoverBlurUp: (reducedMotion: boolean) =>
+      shouldUseCoverBlurUp(placeholderSrc, imgSrc, imgLoaded, reducedMotion),
+  };
 }

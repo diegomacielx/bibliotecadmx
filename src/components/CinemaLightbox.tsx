@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef, useCallback, type CSSProperties, type WheelEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Exercise } from '../types';
 import {
@@ -7,10 +8,12 @@ import {
   openYouTubeWatch,
   resolveVideoOrientation,
 } from '../lib/utils';
+import { isTypingTarget } from '../lib/keyboard';
+import { prefetchExerciseNeighbors } from '../lib/exercisePrefetch';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useTouchLayout } from '../hooks/useMediaQuery';
 import { useExerciseCover } from '../hooks/useExerciseCover';
-import { getCoverObjectPosition } from '../lib/coverFocus';
+import { getCoverFrameStyle } from '../lib/coverFocus';
 import { YouTubePlayer, type YouTubePlayerHandle } from './YouTubePlayer';
 import { Icon } from './Icon';
 import { MuscleGroupList } from './MuscleGroupList';
@@ -21,8 +24,7 @@ interface CinemaLightboxProps {
   onClose: () => void;
   copyLink: (url: string, firestoreId: string) => void;
   copiedId: string | null;
-  onDownload: (ex: Exercise, quality: string) => void;
-  onDownloadUnavailable?: (ex: Exercise, quality: string) => void;
+  onDownload: (ex: Exercise) => void;
   playlist?: Exercise[];
   playlistIndex?: number;
   onPlaylistNext?: () => void;
@@ -39,7 +41,6 @@ interface CinemaLightboxProps {
 }
 
 const VIDEO_H = 'min(92vh, 900px)';
-const DOWNLOAD_QUALITIES = ['4K', '1080p', '720p', '480p'] as const;
 const CONTROLS_HIDE_MS = 3200;
 const SIDEBAR_SLIDE_EASE = [0.32, 0.72, 0, 1] as const;
 
@@ -64,7 +65,6 @@ function ExerciseDetails({
   onCopy,
   onClose,
   onDownload,
-  onDownloadUnavailable,
   isFavorite,
   onToggleFavorite,
   compact,
@@ -74,27 +74,22 @@ function ExerciseDetails({
   isCopied: boolean;
   onCopy: () => void;
   onClose: () => void;
-  onDownload: (quality: string) => void;
-  onDownloadUnavailable?: (quality: string) => void;
+  onDownload: () => void;
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
   compact?: boolean;
   isAdmin?: boolean;
 }) {
-  const [showDownloadMenu, setShowDownloadMenu] = useState(false);
-
   return (
     <div className="flex flex-col">
       <div className="space-y-4">
-        <div className="space-y-1.5 pr-6">
+        <div className="space-y-1.5 pr-6 min-w-0">
           <p className="lightbox-kicker">
             #{ex.id} · {ex.category}
           </p>
           <h2
-            id="cinema-lightbox-title"
-            className={`lightbox-title font-display font-semibold tracking-cinematic leading-snug ${
-              compact ? 'text-sm' : 'text-lg md:text-xl'
-            }`}
+            id={compact ? undefined : 'cinema-lightbox-title'}
+            className={`lightbox-title ${compact ? 'lightbox-title--compact lightbox-title--wrap' : ''}`}
           >
             {ex.name}
           </h2>
@@ -123,57 +118,14 @@ function ExerciseDetails({
 
       <div className="lightbox-actions flex flex-col gap-2 pt-4 mt-4">
         {!compact && (
-          <>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <button
-                  type="button"
-                  onClick={() => onDownload('4K')}
-                  className="lightbox-btn lightbox-btn--primary w-full"
-                >
-                  <Icon name="download" className="w-3.5 h-3.5" strokeWidth={1.75} />
-                  Baixar 4K
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowDownloadMenu((v) => !v)}
-                className="lightbox-btn lightbox-btn--ghost px-3"
-                aria-expanded={showDownloadMenu}
-                title="Outras qualidades"
-              >
-                <Icon name="chevrondown" className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <AnimatePresence>
-              {showDownloadMenu && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="grid grid-cols-3 gap-1.5 pb-1">
-                    {DOWNLOAD_QUALITIES.slice(1).map((quality) => (
-                      <button
-                        key={quality}
-                        type="button"
-                        onClick={() => {
-                          setShowDownloadMenu(false);
-                          if (onDownloadUnavailable) onDownloadUnavailable(quality);
-                          else onDownload(quality);
-                        }}
-                        className="lightbox-btn lightbox-btn--ghost lightbox-btn--quality"
-                      >
-                        {quality}
-                      </button>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </>
+          <button
+            type="button"
+            onClick={onDownload}
+            className="lightbox-btn lightbox-btn--primary w-full"
+          >
+            <Icon name="download" className="w-3.5 h-3.5" strokeWidth={1.75} />
+            Baixar 4K
+          </button>
         )}
 
         <div className="flex gap-2">
@@ -201,50 +153,15 @@ function ExerciseDetails({
           </button>
 
           {compact && (
-            <div className="relative shrink-0">
-              <button
-                type="button"
-                onClick={() => setShowDownloadMenu((v) => !v)}
-                className={`lightbox-btn lightbox-btn--ghost px-3 ${
-                  showDownloadMenu ? 'lightbox-btn--ghost-active' : ''
-                }`}
-                aria-expanded={showDownloadMenu}
-                aria-label="Baixar vídeo"
-                title="Baixar vídeo"
-              >
-                <Icon name="download" className="w-3.5 h-3.5" strokeWidth={1.75} />
-              </button>
-
-              <AnimatePresence>
-                {showDownloadMenu && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.96, y: 4 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.96, y: 4 }}
-                    transition={{ duration: 0.18 }}
-                    className="lightbox-download-menu-compact dropdown-panel"
-                  >
-                    {DOWNLOAD_QUALITIES.map((quality) => (
-                      <button
-                        key={quality}
-                        type="button"
-                        className="lightbox-download-menu-compact__item"
-                        onClick={() => {
-                          setShowDownloadMenu(false);
-                          if (quality !== '4K' && onDownloadUnavailable) {
-                            onDownloadUnavailable(quality);
-                          } else {
-                            onDownload(quality);
-                          }
-                        }}
-                      >
-                        {quality}
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+            <button
+              type="button"
+              onClick={onDownload}
+              className="lightbox-btn lightbox-btn--ghost px-3 shrink-0"
+              aria-label="Baixar 4K"
+              title="Baixar 4K"
+            >
+              <Icon name="download" className="w-3.5 h-3.5" strokeWidth={1.75} />
+            </button>
           )}
 
           {!compact && (
@@ -275,7 +192,10 @@ function MobileWatchPanel({ ex }: { ex: Exercise }) {
         draggable={false}
         onLoad={handleLoad}
         onError={handleError}
-        style={{ objectPosition: getCoverObjectPosition(ex) }}
+        style={{
+          objectPosition: getCoverFrameStyle(ex).objectPosition,
+          ...(getCoverFrameStyle(ex).cssVars as React.CSSProperties),
+        }}
         className="cinema-mobile-watch-poster"
       />
       <div className="cinema-mobile-watch-gradient" aria-hidden="true" />
@@ -300,7 +220,6 @@ function MobileExerciseSheet({
   isCopied,
   onCopy,
   onDownload,
-  onDownloadUnavailable,
   isFavorite,
   onToggleFavorite,
   isAdmin,
@@ -317,8 +236,7 @@ function MobileExerciseSheet({
   onClose: () => void;
   isCopied: boolean;
   onCopy: () => void;
-  onDownload: (quality: string) => void;
-  onDownloadUnavailable?: (quality: string) => void;
+  onDownload: () => void;
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
   isAdmin?: boolean;
@@ -351,7 +269,6 @@ function MobileExerciseSheet({
           onCopy={onCopy}
           onClose={onClose}
           onDownload={onDownload}
-          onDownloadUnavailable={onDownloadUnavailable}
           isFavorite={isFavorite}
           onToggleFavorite={onToggleFavorite}
           isAdmin={isAdmin}
@@ -429,25 +346,24 @@ function ComparePanel({
 
   return (
     <div className="compare-panel flex flex-col gap-2 min-w-0 flex-1">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2 min-w-0">
         <p className="compare-panel-label">{label}</p>
         <button
           type="button"
           onClick={onSyncPlay}
-          className="compare-sync-btn"
+          className="compare-sync-btn shrink-0"
           title="Sincronizar play/pause nos dois"
         >
           <Icon name="play" className="w-3 h-3" />
         </button>
       </div>
-      <p className="lightbox-title text-xs truncate">{ex.name}</p>
       <div
-        className={`compare-panel-video relative shrink-0 w-full overflow-hidden rounded-xl bg-canvas-sunken ring-1 ring-white/10 ${
+        className={`compare-panel-video relative shrink-0 w-full overflow-hidden rounded-xl ring-1 ring-white/10 ${
           mobileLayout
             ? isVertical
-              ? 'compare-panel-video--mobile-vertical'
-              : 'compare-panel-video--mobile'
-            : ''
+              ? 'compare-panel-video--mobile-vertical bg-canvas-sunken'
+              : 'compare-panel-video--mobile bg-canvas-sunken'
+            : 'compare-panel-video--desktop'
         }`}
         style={videoSizeStyle}
       >
@@ -486,7 +402,6 @@ export function CinemaLightbox({
   copyLink,
   copiedId,
   onDownload,
-  onDownloadUnavailable,
   playlist = [],
   playlistIndex = 0,
   onPlaylistNext,
@@ -532,6 +447,11 @@ export function CinemaLightbox({
   const effectiveNavPrev = navList.length > 1 ? onNavPrev : onPlaylistPrev;
   const hasNav = effectiveNavList.length > 1;
 
+  useEffect(() => {
+    if (isMobileLayout || !hasNav) return;
+    prefetchExerciseNeighbors(effectiveNavList, effectiveNavIndex);
+  }, [ex.firestoreId, effectiveNavIndex, effectiveNavList, isMobileLayout, hasNav]);
+
   const resetHideTimer = useCallback(() => {
     setControlsVisible(true);
     setSidebarVisible(true);
@@ -541,6 +461,11 @@ export function CinemaLightbox({
       if (!isMobileLayout) setSidebarVisible(false);
     }, CONTROLS_HIDE_MS);
   }, [isMobileLayout]);
+
+  const handlePrimaryPlayerReady = useCallback(() => {
+    resetHideTimer();
+    playerRef.current?.playVideo();
+  }, [resetHideTimer]);
 
   useEffect(() => {
     if (!isMobileLayout) return;
@@ -600,6 +525,13 @@ export function CinemaLightbox({
     };
   }, [resetHideTimer, ex.firestoreId]);
 
+  useEffect(() => {
+    if (isMobileLayout) return;
+    const onMove = () => resetHideTimer();
+    document.addEventListener('mousemove', onMove, { passive: true });
+    return () => document.removeEventListener('mousemove', onMove);
+  }, [isMobileLayout, resetHideTimer]);
+
   const handleNavPrev = useCallback(() => {
     effectiveNavPrev?.();
     resetHideTimer();
@@ -612,6 +544,8 @@ export function CinemaLightbox({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return;
+
       if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
@@ -624,10 +558,12 @@ export function CinemaLightbox({
         resetHideTimer();
         return;
       }
-      if (e.key === 'f' || e.key === 'F') {
-        e.preventDefault();
-        playerRef.current?.requestFullscreen();
-        resetHideTimer();
+      if ((e.key === 'f' || e.key === 'F') && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (onToggleFavorite) {
+          e.preventDefault();
+          onToggleFavorite();
+          resetHideTimer();
+        }
         return;
       }
       if (e.key === 'ArrowRight' && hasNav && effectiveNavNext) {
@@ -641,7 +577,15 @@ export function CinemaLightbox({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose, resetHideTimer, isCompare, hasNav, handleNavNext, handleNavPrev]);
+  }, [
+    onClose,
+    onToggleFavorite,
+    resetHideTimer,
+    isCompare,
+    hasNav,
+    handleNavNext,
+    handleNavPrev,
+  ]);
 
   const spring = reducedMotion
     ? { duration: 0.08 }
@@ -689,7 +633,7 @@ export function CinemaLightbox({
   const showMobileSheet = isMobileLayout && !isCompare;
   const showSidebar = showMobileSheet ? false : isMobileLayout || sidebarVisible;
 
-  return (
+  return createPortal(
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -705,10 +649,9 @@ export function CinemaLightbox({
       aria-labelledby={isMobileLayout ? undefined : 'cinema-lightbox-title'}
       onMouseMove={isMobileLayout ? undefined : resetHideTimer}
       onWheel={isMobileLayout ? undefined : resetHideTimer}
-      onScroll={isMobileLayout ? undefined : resetHideTimer}
     >
       {!isMobileLayout && (
-        <motion.div
+        <div
           className="absolute inset-0 cinema-backdrop pointer-events-auto"
           onClick={onClose}
           onWheel={handleBackdropWheel}
@@ -717,13 +660,25 @@ export function CinemaLightbox({
       )}
 
       <motion.div
-        initial={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.985, y: 6 }}
-        animate={reducedMotion ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
+        initial={
+          reducedMotion
+            ? { opacity: 0 }
+            : { opacity: 0, scale: 0.985, y: 6 }
+        }
+        animate={
+          reducedMotion
+            ? { opacity: 1 }
+            : { opacity: 1, scale: 1, y: 0 }
+        }
         exit={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.99, y: 4 }}
         transition={spring}
-        className={`cinema-lightbox-panel pointer-events-auto relative z-10 mx-auto flex flex-col md:flex-row md:items-stretch w-fit max-w-[calc(100vw-1rem)] max-h-[94vh] overflow-hidden rounded-cinema ${
+        className={`cinema-lightbox-panel pointer-events-auto relative z-10 mx-auto flex flex-col md:flex-row md:items-stretch max-h-[94vh] overflow-hidden rounded-cinema ${
+          isCompare ? 'compare-lightbox-panel' : 'w-fit max-w-[calc(100vw-1rem)]'
+        } ${
           isMobileLayout ? 'cinema-lightbox-panel--mobile' : ''
         } ${isCompare ? 'compare-lightbox-panel' : ''}`}
+        onMouseMove={isMobileLayout ? undefined : resetHideTimer}
+        onWheel={isMobileLayout ? undefined : resetHideTimer}
       >
         {isMobileLayout && !isCompare ? (
           <MobileExerciseSheet
@@ -732,12 +687,7 @@ export function CinemaLightbox({
             onClose={onClose}
             isCopied={isCopied}
             onCopy={() => copyLink(ex.youtubeUrl, ex.firestoreId)}
-            onDownload={(quality) => onDownload(ex, quality)}
-            onDownloadUnavailable={
-              onDownloadUnavailable
-                ? (quality) => onDownloadUnavailable(ex, quality)
-                : undefined
-            }
+            onDownload={() => onDownload(ex)}
             isFavorite={isFavorite}
             onToggleFavorite={onToggleFavorite}
             isAdmin={isAdmin}
@@ -754,29 +704,27 @@ export function CinemaLightbox({
             className={
               isMobileLayout
                 ? 'cinema-lightbox-compare-layout'
-                : 'flex flex-col lg:flex-row gap-4 p-4 cinema-lightbox-compare-inner w-full'
+                : 'compare-lightbox-stage cinema-lightbox-compare-inner'
             }
           >
-            <div className={isMobileLayout ? 'cinema-compare-videos-row' : 'contents'}>
-              <ComparePanel
-                ex={ex}
-                label="Exercício A"
-                playerRef={playerRef}
-                onSyncPlay={syncCompare}
-                onPlayerReady={handleComparePrimaryReady}
-                isShort={isShort}
-                mobileLayout={isMobileLayout}
-              />
-              <ComparePanel
-                ex={compareEx}
-                label="Exercício B"
-                playerRef={comparePlayerRef}
-                onSyncPlay={syncCompare}
-                onPlayerReady={handleCompareSecondaryReady}
-                isShort={isYouTubeShort(compareEx.youtubeUrl)}
-                mobileLayout={isMobileLayout}
-              />
-            </div>
+            <ComparePanel
+              ex={ex}
+              label="Exercício A"
+              playerRef={playerRef}
+              onSyncPlay={syncCompare}
+              onPlayerReady={handleComparePrimaryReady}
+              isShort={isShort}
+              mobileLayout={isMobileLayout}
+            />
+            <ComparePanel
+              ex={compareEx}
+              label="Exercício B"
+              playerRef={comparePlayerRef}
+              onSyncPlay={syncCompare}
+              onPlayerReady={handleCompareSecondaryReady}
+              isShort={isYouTubeShort(compareEx.youtubeUrl)}
+              mobileLayout={isMobileLayout}
+            />
           </div>
         ) : (
           <div
@@ -804,18 +752,23 @@ export function CinemaLightbox({
               isMobileLayout ? (
                 <MobileWatchPanel ex={ex} />
               ) : (
-                <YouTubePlayer
-                  ref={playerRef}
-                  videoId={ytId}
-                  title={ex.name}
-                  autoplay
-                  mute={false}
-                  controls
-                  preferMaxQuality
-                  isShort={isShort}
-                  largeSurface
-                  onEnded={onVideoEnded}
-                />
+                <>
+                  <div className="cinema-player-layer absolute inset-0 z-[1]">
+                    <YouTubePlayer
+                      ref={playerRef}
+                      videoId={ytId}
+                      title={ex.name}
+                      autoplay
+                      mute={false}
+                      controls
+                      preferMaxQuality
+                      isShort={isShort}
+                      largeSurface
+                      onReady={handlePrimaryPlayerReady}
+                      onEnded={onVideoEnded}
+                    />
+                  </div>
+                </>
               )
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 glass-panel">
@@ -827,61 +780,47 @@ export function CinemaLightbox({
             )}
 
             <div className="cinema-overlay-controls">
-              <AnimatePresence>
-                {!isMobileLayout && controlsVisible && (
-                  <motion.button
-                    type="button"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.18 }}
-                    className="cinema-fullscreen-btn liquid-glass-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      playerRef.current?.requestFullscreen();
-                      resetHideTimer();
-                    }}
-                    aria-label="Tela cheia"
-                    title="Tela cheia (F)"
-                  >
-                    <Icon name="maximize" className="w-4 h-4" />
-                  </motion.button>
-                )}
-              </AnimatePresence>
-
-              {hasNav && (
-                <div
-                  className={`cinema-playlist-nav ${
-                    controlsVisible ? '' : 'cinema-playlist-nav--idle'
-                  }`}
-                >
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleNavPrev();
-                    }}
-                    disabled={effectiveNavIndex <= 0}
-                    className="cinema-control-btn liquid-glass-btn"
-                    aria-label="Exercício anterior"
-                  >
-                    <Icon name="skipback" className="w-4 h-4" />
-                  </button>
-                  <span className="cinema-playlist-nav-counter tabular-nums">
-                    {effectiveNavIndex + 1} / {effectiveNavList.length}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleNavNext();
-                    }}
-                    disabled={effectiveNavIndex >= effectiveNavList.length - 1}
-                    className="cinema-control-btn liquid-glass-btn"
-                    aria-label="Próximo exercício"
-                  >
-                    <Icon name="skipforward" className="w-4 h-4" />
-                  </button>
+              {hasNav && !isMobileLayout && (
+                <div className="cinema-playlist-nav-anchor">
+                  <AnimatePresence>
+                    {controlsVisible && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                        className="cinema-playlist-nav"
+                      >
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleNavPrev();
+                          }}
+                          disabled={effectiveNavIndex <= 0}
+                          className="cinema-control-btn liquid-glass-btn"
+                          aria-label="Exercício anterior"
+                        >
+                          <Icon name="skipback" className="w-4 h-4" />
+                        </button>
+                        <span className="cinema-playlist-nav-counter tabular-nums">
+                          {effectiveNavIndex + 1} / {effectiveNavList.length}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleNavNext();
+                          }}
+                          disabled={effectiveNavIndex >= effectiveNavList.length - 1}
+                          className="cinema-control-btn liquid-glass-btn"
+                          aria-label="Próximo exercício"
+                        >
+                          <Icon name="skipforward" className="w-4 h-4" />
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               )}
             </div>
@@ -893,8 +832,12 @@ export function CinemaLightbox({
             <motion.aside
               {...(isMobileLayout ? {} : sidebarMotion)}
               transition={isMobileLayout ? { duration: 0 } : sidebarTransition}
-              className={`cinema-lightbox-sidebar relative flex flex-col w-full md:w-[min(360px,32vw)] shrink-0 self-stretch p-5 md:p-6 min-h-full overflow-y-auto no-scrollbar ${
-                isMobileLayout ? 'cinema-lightbox-sidebar--mobile' : ''
+              className={`cinema-lightbox-sidebar relative flex flex-col w-full shrink-0 self-stretch p-5 md:p-6 min-h-full overflow-y-auto overflow-x-hidden no-scrollbar ${
+                isMobileLayout
+                  ? 'cinema-lightbox-sidebar--mobile'
+                  : isCompare
+                    ? 'cinema-lightbox-sidebar--compare'
+                    : 'md:w-[min(360px,32vw)]'
               } ${isCompare && isMobileLayout ? 'cinema-lightbox-sidebar--compare-mobile' : ''}`}
             >
               {!isMobileLayout && (
@@ -909,37 +852,31 @@ export function CinemaLightbox({
               )}
 
               {isCompare && compareEx ? (
-                <div className="flex flex-col min-h-full pb-10">
-                  <div className="space-y-4 flex-1 min-h-0">
+                <div className="flex flex-col min-h-full pb-10 min-w-0">
+                  <div className="space-y-5 flex-1 min-h-0 min-w-0">
                     <p className="compare-panel-label compare-panel-label--mode">
                       Modo comparador
                     </p>
-                    <ExerciseDetails
+                    <div className="compare-sidebar-card">
+                      <p className="compare-slot-label">Exercício A</p>
+                      <ExerciseDetails
                     ex={ex}
                     isCopied={isCopied}
                     onCopy={() => copyLink(ex.youtubeUrl, ex.firestoreId)}
                     onClose={onClose}
-                    onDownload={(q) => onDownload(ex, q)}
-                    onDownloadUnavailable={
-                      onDownloadUnavailable
-                        ? (quality) => onDownloadUnavailable(ex, quality)
-                        : undefined
-                    }
+                    onDownload={() => onDownload(ex)}
                     compact
                     isAdmin={isAdmin}
                   />
-                  <div className="lightbox-divider pt-4">
+                    </div>
+                  <div className="compare-sidebar-card compare-sidebar-card--b">
+                    <p className="compare-slot-label">Exercício B</p>
                     <ExerciseDetails
                       ex={compareEx}
                       isCopied={copiedId === compareEx.firestoreId}
                       onCopy={() => copyLink(compareEx.youtubeUrl, compareEx.firestoreId)}
                       onClose={onClose}
-                      onDownload={(q) => onDownload(compareEx, q)}
-                      onDownloadUnavailable={
-                        onDownloadUnavailable
-                          ? (quality) => onDownloadUnavailable(compareEx, quality)
-                          : undefined
-                      }
+                      onDownload={() => onDownload(compareEx)}
                       compact
                       isAdmin={isAdmin}
                     />
@@ -956,12 +893,7 @@ export function CinemaLightbox({
                     isCopied={isCopied}
                     onCopy={() => copyLink(ex.youtubeUrl, ex.firestoreId)}
                     onClose={onClose}
-                    onDownload={(quality) => onDownload(ex, quality)}
-                    onDownloadUnavailable={
-                      onDownloadUnavailable
-                        ? (quality) => onDownloadUnavailable(ex, quality)
-                        : undefined
-                    }
+                    onDownload={() => onDownload(ex)}
                     isFavorite={isFavorite}
                     onToggleFavorite={onToggleFavorite}
                     isAdmin={isAdmin}
@@ -974,7 +906,7 @@ export function CinemaLightbox({
                         exit={{ opacity: 0 }}
                         className="cinema-shortcuts-hint cinema-shortcuts-hint--sidebar mt-auto pt-4 shrink-0"
                       >
-                        <kbd>F</kbd> tela cheia · <kbd>Esc</kbd> fechar
+                        <kbd>F</kbd> favoritar · <kbd>Esc</kbd> fechar
                         {hasNav && (
                           <>
                             {' '}
@@ -990,6 +922,7 @@ export function CinemaLightbox({
           )}
         </AnimatePresence>
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.body
   );
 }

@@ -1,52 +1,79 @@
-import type { Exercise } from '../types';
-import { useExerciseCover } from '../hooks/useExerciseCover';
-import { getCoverObjectPosition } from '../lib/coverFocus';
+import { getCoverFrameStyle } from '../lib/coverFocus';
 import { Icon } from './Icon';
+import { useExerciseCover } from '../hooks/useExerciseCover';
+import type { HeroDisplayContent } from '../lib/heroSpotlight';
 
 interface HeroBannerMobileProps {
-  ex: Exercise;
-  onWatch: (ex: Exercise) => void;
-  fromFavorites?: boolean;
+  hero: HeroDisplayContent;
+  onWatch: (ex: import('../types').Exercise) => void;
+  onCampaignClick?: (linkUrl: string) => void;
 }
 
 /**
  * Destaque do dia — versão mobile isolada.
  * Sem Framer Motion, sem cinematic-card, sem animações de scroll.
  */
-export function HeroBannerMobile({ ex, onWatch, fromFavorites }: HeroBannerMobileProps) {
-  const { imgSrc, handleLoad, handleError } = useExerciseCover(ex);
-  const eyebrow = fromFavorites ? 'Seu treino do dia' : 'Destaque do dia';
+export function HeroBannerMobile({ hero, onWatch, onCampaignClick }: HeroBannerMobileProps) {
+  const isCampaign = hero.mode === 'campaign';
+  const coverSource = hero.exercise
+    ? {
+        firestoreId: hero.exercise.firestoreId,
+        id: hero.exercise.id,
+        thumbnail: hero.exercise.thumbnail,
+        youtubeUrl: hero.exercise.youtubeUrl,
+      }
+    : {
+        firestoreId: 'hero-campaign',
+        id: 'hero',
+        thumbnail: hero.imageUrl,
+        youtubeUrl: '',
+      };
+
+  const { imgSrc, handleLoad, handleError } = useExerciseCover(coverSource);
+  const displaySrc = isCampaign && hero.imageUrl ? hero.imageUrl : imgSrc;
+  const frame = getCoverFrameStyle(hero.frameSource);
+
+  const handleClick = () => {
+    if (isCampaign && hero.linkUrl) {
+      onCampaignClick?.(hero.linkUrl);
+      return;
+    }
+    if (hero.exercise) onWatch(hero.exercise);
+  };
 
   return (
     <article className="m-hero" data-testid="hero-mobile">
       <div className="m-hero__text-block">
         <p className="m-hero__eyebrow">
-          <span className="m-hero__eyebrow-accent">{eyebrow}</span>
+          <span className="m-hero__eyebrow-accent">{isCampaign ? 'Outdoor' : 'Destaque do dia'}</span>
           <span className="m-hero__eyebrow-sep" aria-hidden="true">
             ·
           </span>
-          <span className="m-hero__eyebrow-cat">{ex.category}</span>
+          <span className="m-hero__eyebrow-cat">{hero.categoryLabel}</span>
         </p>
-        <p className="m-hero__id">#{ex.id}</p>
-        <h2 className="m-hero__title">{ex.name}</h2>
-        <button type="button" className="m-hero__cta" onClick={() => onWatch(ex)}>
+        {hero.exerciseId && <p className="m-hero__id">#{hero.exerciseId}</p>}
+        <h2 className="m-hero__title">{hero.title}</h2>
+        <button type="button" className="m-hero__cta" onClick={handleClick}>
           <span className="m-hero__cta-icon" aria-hidden="true">
             <Icon name="play" className="w-4 h-4 ml-0.5" strokeWidth={2} />
           </span>
-          Assistir execução
+          {hero.ctaLabel}
         </button>
       </div>
 
       <div className="m-hero__cover" aria-hidden="true">
         <img
-          src={imgSrc}
+          src={displaySrc}
           alt=""
           loading="lazy"
           decoding="async"
           draggable={false}
           onLoad={handleLoad}
           onError={handleError}
-          style={{ objectPosition: getCoverObjectPosition(ex) }}
+          style={{
+            objectPosition: frame.objectPosition,
+            ...(frame.cssVars as React.CSSProperties),
+          }}
           className="m-hero__cover-img"
         />
       </div>

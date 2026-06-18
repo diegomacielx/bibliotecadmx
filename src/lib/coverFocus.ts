@@ -7,14 +7,14 @@ import { normalizeString } from './utils';
  *
  * Membro superior: corpo centralizado no enquadramento (~45%)
  * Deadlift / stiff / RDL: ação na região central do corpo (~65%)
- * Membro inferior: prioriza pés/pernas, evita cortar joelhos (~73%)
+ * Membro inferior: prioriza pés/pernas, evita cortar joelhos (~78%)
  * Barra fixa / pull-up: cabeça no topo do quadro (~24%)
  */
 export const COVER_FOCUS = {
   HANGING: 24,
   UPPER: 45,
   HINGE: 65,
-  LOWER: 73,
+  LOWER: 78,
 } as const;
 
 type FocusRule = { focusY: number; keywords: string[] };
@@ -309,25 +309,33 @@ function resolveHeuristicFocusY(
  * Prioridade: `coverFocusY` manual → heurística por nome/categoria/músculos.
  */
 export function getCoverObjectPosition(
-  ex: Pick<Exercise, 'name' | 'category' | 'muscleGroups' | 'keywords' | 'coverFocusY'>
+  ex: Pick<
+    Exercise,
+    'name' | 'category' | 'muscleGroups' | 'keywords' | 'coverFocusX' | 'coverFocusY' | 'coverZoom'
+  >
 ): string {
-  if (typeof ex.coverFocusY === 'number' && Number.isFinite(ex.coverFocusY)) {
-    const y = Math.min(100, Math.max(0, ex.coverFocusY));
-    return `center ${y}%`;
-  }
-
-  const focusY = resolveHeuristicFocusY(ex);
-  return `center ${focusY}%`;
+  return getCoverFrameStyle(ex).objectPosition;
 }
 
 /** Retorna só o valor Y (útil para debug/admin) */
 export function getCoverFocusY(
-  ex: Pick<Exercise, 'name' | 'category' | 'muscleGroups' | 'keywords' | 'coverFocusY'>
+  ex: Pick<
+    Exercise,
+    'name' | 'category' | 'muscleGroups' | 'keywords' | 'coverFocusX' | 'coverFocusY' | 'coverZoom'
+  >
 ): number {
   if (typeof ex.coverFocusY === 'number' && Number.isFinite(ex.coverFocusY)) {
     return Math.min(100, Math.max(0, ex.coverFocusY));
   }
   return resolveHeuristicFocusY(ex);
+}
+
+export function getCoverFocusX(ex: CoverFrameSource): number {
+  return resolveCoverFocusX(ex);
+}
+
+export function getCoverZoomPercent(ex: CoverFrameSource): number {
+  return Math.round(resolveCoverZoom(ex) * 100);
 }
 
 /** Converte input do admin (string vazia = automático) */
@@ -345,4 +353,96 @@ export function formatCoverFocusYInput(value: number | undefined | null): string
     return String(Math.min(100, Math.max(0, Math.round(value))));
   }
   return '';
+}
+
+export function parseCoverFocusXInput(raw: string | undefined | null): number | undefined {
+  if (raw == null) return undefined;
+  const trimmed = String(raw).trim();
+  if (!trimmed) return undefined;
+  const n = Number(trimmed);
+  if (!Number.isFinite(n)) return undefined;
+  return Math.min(100, Math.max(0, Math.round(n)));
+}
+
+export function formatCoverFocusXInput(value: number | undefined | null): string {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(Math.min(100, Math.max(0, Math.round(value))));
+  }
+  return '';
+}
+
+/** Zoom: 75–160% no admin · 0.75–1.6 no Firestore */
+export function parseCoverZoomInput(raw: string | undefined | null): number | undefined {
+  if (raw == null) return undefined;
+  const trimmed = String(raw).trim();
+  if (!trimmed) return undefined;
+  const n = Number(trimmed);
+  if (!Number.isFinite(n)) return undefined;
+  const asMultiplier = n > 3 ? n / 100 : n;
+  return Math.min(1.6, Math.max(0.75, Math.round(asMultiplier * 100) / 100));
+}
+
+export function formatCoverZoomInput(value: number | undefined | null): string {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(Math.round(value * 100));
+  }
+  return '';
+}
+
+export type CoverFrameSource = Pick<
+  Exercise,
+  'name' | 'category' | 'muscleGroups' | 'keywords' | 'coverFocusX' | 'coverFocusY' | 'coverZoom'
+>;
+
+function clampPercent(value: number): number {
+  return Math.min(100, Math.max(0, Math.round(value)));
+}
+
+function resolveCoverFocusX(ex: CoverFrameSource): number {
+  if (typeof ex.coverFocusX === 'number' && Number.isFinite(ex.coverFocusX)) {
+    return clampPercent(ex.coverFocusX);
+  }
+  return 50;
+}
+
+function resolveCoverZoom(ex: CoverFrameSource): number {
+  if (typeof ex.coverZoom === 'number' && Number.isFinite(ex.coverZoom)) {
+    return Math.min(1.6, Math.max(0.75, ex.coverZoom));
+  }
+  return 1;
+}
+
+export function isCoverFramingManual(ex: {
+  coverFocusX?: number;
+  coverFocusY?: number;
+  coverZoom?: number;
+}): boolean {
+  return (
+    (typeof ex.coverFocusY === 'number' && Number.isFinite(ex.coverFocusY)) ||
+    (typeof ex.coverFocusX === 'number' && Number.isFinite(ex.coverFocusX)) ||
+    (typeof ex.coverZoom === 'number' && Number.isFinite(ex.coverZoom))
+  );
+}
+
+export interface CoverFrameStyle {
+  objectPosition: string;
+  cssVars: Record<string, string>;
+}
+
+export function getCoverFrameStyle(ex: CoverFrameSource): CoverFrameStyle {
+  const x = resolveCoverFocusX(ex);
+  const y =
+    typeof ex.coverFocusY === 'number' && Number.isFinite(ex.coverFocusY)
+      ? clampPercent(ex.coverFocusY)
+      : resolveHeuristicFocusY(ex);
+  const zoom = resolveCoverZoom(ex);
+
+  return {
+    objectPosition: `${x}% ${y}%`,
+    cssVars: {
+      '--cover-x': `${x}%`,
+      '--cover-y': `${y}%`,
+      '--cover-zoom': String(zoom),
+    },
+  };
 }

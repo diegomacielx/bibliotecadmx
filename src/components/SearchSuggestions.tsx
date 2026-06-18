@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { Exercise } from '../types';
 import { CUSTOM_LOGO_URL } from '../lib/constants';
 import { buildExerciseImageFallbacks } from '../lib/utils';
-import { getCoverObjectPosition } from '../lib/coverFocus';
+import { getCoverFrameStyle } from '../lib/coverFocus';
 import { Icon } from './Icon';
 
 interface SearchSuggestionsProps {
@@ -55,7 +55,10 @@ export function SearchSuggestions({
                   src={thumb}
                   alt=""
                   className="search-suggestion-thumb"
-                  style={{ objectPosition: getCoverObjectPosition(ex) }}
+                  style={{
+                    objectPosition: getCoverFrameStyle(ex).objectPosition,
+                    ...(getCoverFrameStyle(ex).cssVars as React.CSSProperties),
+                  }}
                   loading="lazy"
                 />
                 <div className="search-suggestion-body">

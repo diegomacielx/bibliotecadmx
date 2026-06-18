@@ -38,12 +38,20 @@ interface SiteHeaderProps {
   visibleNotifications: Notification[];
   lastReadAt: string | null;
   onNotificationClick: (exerciseId?: string) => void;
+  onOpenShortcuts?: () => void;
 }
 
 function UserAvatar({ name }: { name: string }) {
   const initial = (name.trim()[0] || 'D').toUpperCase();
   return (
-    <span className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-red-600 to-red-800 text-white text-xs font-bold shrink-0">
+    <span
+      className="flex items-center justify-center w-[1.875rem] h-[1.875rem] rounded-full text-white text-[11px] font-semibold shrink-0 select-none"
+      style={{
+        background: 'linear-gradient(135deg, #be123c 0%, #7f1d1d 100%)',
+        boxShadow: '0 0 0 1.5px rgba(244,63,94,0.25), 0 2px 6px rgba(0,0,0,0.4)',
+        letterSpacing: '0.02em',
+      }}
+    >
       {initial}
     </span>
   );
@@ -75,6 +83,7 @@ export function SiteHeader({
   visibleNotifications,
   lastReadAt,
   onNotificationClick,
+  onOpenShortcuts,
 }: SiteHeaderProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
@@ -246,6 +255,20 @@ export function SiteHeader({
 
           {/* Ações */}
           <div className="header-actions flex items-center ml-auto shrink-0">
+            {onOpenShortcuts && (
+              <button
+                type="button"
+                onClick={onOpenShortcuts}
+                className="header-action header-action--icon hidden md:inline-flex"
+                title="Atalhos de teclado (?)"
+                aria-label="Atalhos de teclado"
+              >
+                <span className="header-action-icon-slot">
+                  <Icon name="help" className="shrink-0" strokeWidth={1.35} />
+                </span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={onSuggest}

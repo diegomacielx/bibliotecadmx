@@ -26,7 +26,7 @@ export function CategoryNav({
       <div className="category-nav-inner">
         <button
           type="button"
-          className="category-nav-arrow hidden sm:flex"
+          className="category-nav-arrow flex"
           onClick={() => scroll('left')}
           aria-label="Categorias anteriores"
         >
@@ -64,7 +64,7 @@ export function CategoryNav({
 
         <button
           type="button"
-          className="category-nav-arrow hidden sm:flex"
+          className="category-nav-arrow flex"
           onClick={() => scroll('right')}
           aria-label="Próximas categorias"
         >

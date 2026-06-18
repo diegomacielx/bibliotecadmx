@@ -79,7 +79,7 @@ function startQualityEnforcer(player: YT.Player, isShort: boolean) {
     timers.push(
       setTimeout(() => {
         try {
-          const state = (player as YT.Player & { getPlayerState?: () => number }).getPlayerState?.();
+          const state = player.getPlayerState?.();
           if (state === 0 || state === 5) return;
           forceMaximumQuality(player, `enforce@${delay}ms`);
         } catch {
@@ -97,7 +97,7 @@ function startQualityEnforcer(player: YT.Player, isShort: boolean) {
       return;
     }
     try {
-      const state = (player as YT.Player & { getPlayerState?: () => number }).getPlayerState?.();
+      const state = player.getPlayerState?.();
       if (state === 1 || state === 3) {
         forceMaximumQuality(player, `interval@${ticks}`);
       }
@@ -118,6 +118,8 @@ export interface YouTubePlayerHandle {
   togglePlay: () => void;
   seekTo: (seconds: number) => void;
   getCurrentTime: () => number;
+  getDuration: () => number;
+  getVideoLoadedFraction: () => number;
   getPlayerState: () => number;
   requestFullscreen: () => void;
 }
@@ -164,7 +166,16 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YT.Player | null>(null);
   const cleanupQualityRef = useRef<(() => void) | null>(null);
+  const onReadyRef = useRef(onReady);
+  const onEndedRef = useRef(onEnded);
+  const onPlayStateChangeRef = useRef(onPlayStateChange);
   const domId = useId().replace(/:/g, '');
+
+  useEffect(() => {
+    onReadyRef.current = onReady;
+    onEndedRef.current = onEnded;
+    onPlayStateChangeRef.current = onPlayStateChange;
+  }, [onReady, onEnded, onPlayStateChange]);
 
   useImperativeHandle(ref, () => ({
     playVideo: () => {
@@ -204,6 +215,20 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
         return 0;
       }
     },
+    getDuration: () => {
+      try {
+        return playerRef.current?.getDuration() ?? 0;
+      } catch {
+        return 0;
+      }
+    },
+    getVideoLoadedFraction: () => {
+      try {
+        return playerRef.current?.getVideoLoadedFraction() ?? 0;
+      } catch {
+        return 0;
+      }
+    },
     getPlayerState: () => {
       try {
         return playerRef.current?.getPlayerState() ?? -1;
@@ -212,13 +237,12 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
       }
     },
     requestFullscreen: () => {
-      const iframe = playerRef.current?.getIframe();
-      const el = iframe ?? containerRef.current ?? hostRef.current;
+      const el = containerRef.current ?? playerRef.current?.getIframe();
       if (!el) return;
       const fsEl = el as HTMLElement & { webkitRequestFullscreen?: () => void };
       if (fsEl.requestFullscreen) {
         void fsEl.requestFullscreen().catch(() => {
-          /* iOS pode bloquear — usuário usa controles nativos do YouTube */
+          /* iOS pode bloquear */
         });
       } else {
         fsEl.webkitRequestFullscreen?.();
@@ -250,7 +274,9 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
           enablejsapi: 1,
           origin: window.location.origin,
           iv_load_policy: 3,
-          fs: 1,
+          fs: controls ? 1 : 0,
+          disablekb: controls ? 0 : 1,
+          cc_load_policy: 0,
           ...(preferMaxQuality ? { vq: 'highres' } : {}),
           ...(loop ? { loop: 1, playlist: videoId } : {}),
         },
@@ -261,15 +287,15 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
               cleanupQualityRef.current = startQualityEnforcer(event.target, isShort);
             }
             if (autoplay && !deferAutoplay) event.target.playVideo();
-            onReady?.();
+            onReadyRef.current?.();
           },
           onPlaybackQualityChange: (event) => {
             if (preferMaxQuality) forceMaximumQuality(event.target, 'onQualityChange');
           },
           onStateChange: (event) => {
-            if (event.data === 0) onEnded?.();
-            if (event.data === 1) onPlayStateChange?.(true);
-            if (event.data === 2) onPlayStateChange?.(false);
+            if (event.data === 0) onEndedRef.current?.();
+            if (event.data === 1) onPlayStateChangeRef.current?.(true);
+            if (event.data === 2) onPlayStateChangeRef.current?.(false);
             if (!preferMaxQuality) return;
             if (event.data === 1 || event.data === 3) {
               forceMaximumQuality(event.target, event.data === 3 ? 'onBuffer' : 'onPlay');
@@ -303,18 +329,19 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
     loop,
     preferMaxQuality,
     isShort,
-    onEnded,
-    onPlayStateChange,
-    onReady,
     deferAutoplay,
   ]);
 
   return (
-    <div ref={containerRef} className={className} aria-label={title}>
+    <div
+      ref={containerRef}
+      className={`dmx-yt-root ${className}`.trim()}
+      aria-label={title}
+    >
       <div
         ref={hostRef}
         id={`yt-${domId}`}
-        className={`w-full h-full ${largeSurface ? 'min-w-[min(100%,1280px)] min-h-[480px]' : ''}`}
+        className={`dmx-yt-host ${largeSurface ? 'dmx-yt-host--large' : ''}`.trim()}
       />
     </div>
   );

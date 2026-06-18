@@ -1,10 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import type { Exercise, ExerciseForm, AdminTab } from '../types';
 import {
   getDbPath,
-  getYouTubeId,
-  isYouTubeShort,
   openYouTubeWatch,
 } from '../lib/utils';
 import { deleteDoc, fbDoc, db } from '../lib/firebase';
@@ -13,20 +11,32 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useTilt3D } from '../hooks/useTilt3D';
 import { useExerciseCover } from '../hooks/useExerciseCover';
 import { getSpring, staggerItem } from '../lib/motion';
-import { getCoverObjectPosition, formatCoverFocusYInput } from '../lib/coverFocus';
-import { useTouchLayout } from '../hooks/useMediaQuery';
+import {
+  formatCoverFocusYInput,
+  formatCoverFocusXInput,
+  formatCoverZoomInput,
+  isCoverFramingManual,
+} from '../lib/coverFocus';
+import { useTouchLayout, useMediaQuery } from '../hooks/useMediaQuery';
+import { useCardPreviewHover } from '../hooks/useCardPreviewHover';
 import { MuscleGroupList } from './MuscleGroupList';
-import { Skeleton } from './Skeleton';
+import { ExerciseCoverImage } from './ExerciseCoverImage';
 import { Icon } from './Icon';
-import { YouTubePlayer, preloadYouTubePlayerApi } from './YouTubePlayer';
+import { CardVideoPreview } from './CardVideoPreview';
+import { prefetchCinemaLightboxChunk, prefetchExerciseHoverBundle } from '../lib/exercisePrefetch';
+import {
+  CARD_PREVIEW_HOVER_DELAY_MS,
+  isCardPreviewVertical,
+  resolveCardPreviewVideoUrl,
+  warmCardPreviewVideo,
+} from '../lib/cardPreview';
 
 interface ExerciseCardProps {
   ex: Exercise;
   index: number;
   isAdmin: boolean;
   isExerciseIncomplete: (url: string) => boolean;
-  handleDownloadCheck: (e: React.MouseEvent, ex: Exercise, quality: string) => void;
-  showToast: (msg: string, type?: 'success' | 'error') => void;
+  handleDownloadCheck: (e: React.MouseEvent, ex: Exercise) => void;
   setForm: (form: ExerciseForm) => void;
   setEditingId: (id: string | null) => void;
   setAdminTab: (tab: AdminTab) => void;
@@ -42,6 +52,7 @@ interface ExerciseCardProps {
   onCompare?: (ex: Exercise) => void;
   isComparePick?: boolean;
   playlistSequence?: number;
+  prefetchPeers?: Exercise[];
 }
 
 export function ExerciseCard({
@@ -50,7 +61,6 @@ export function ExerciseCard({
   isAdmin,
   isExerciseIncomplete,
   handleDownloadCheck,
-  showToast,
   setForm,
   setEditingId,
   setAdminTab,
@@ -66,39 +76,93 @@ export function ExerciseCard({
   onCompare,
   isComparePick = false,
   playlistSequence,
+  prefetchPeers = [],
 }: ExerciseCardProps) {
   const touchLayout = useTouchLayout();
-  const [showPreview, setShowPreview] = useState(false);
-  const [downloadOpen, setDownloadOpen] = useState(false);
+  // Gate robusto: depende só da capacidade de hover do dispositivo (mouse/touchpad),
+  // independente de largura de tela, zoom do navegador ou prefers-reduced-motion.
+  const hoverDevice = useMediaQuery('(hover: hover)');
   const [mobileExpanded, setMobileExpanded] = useState(false);
-  const downloadRef = useRef<HTMLDivElement>(null);
   const coverRef = useRef<HTMLDivElement>(null);
-  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { imgSrc, imgLoaded, handleLoad, handleError } = useExerciseCover(ex);
+  const { imgSrc, imgLoaded, isCoverInstant, placeholderSrc, webpSrc, handleLoad, handleError, shouldUseCoverBlurUp } =
+    useExerciseCover(ex);
   const handleGlow = useAmbientGlow<HTMLDivElement>();
   const reducedMotion = useReducedMotion();
-  const tilt = useTilt3D(6, !reducedMotion);
-  const ytId = getYouTubeId(ex.youtubeUrl);
-  const canPreview = !!ytId && !reducedMotion;
-  const coverObjectPosition = getCoverObjectPosition(ex);
+  const desktopEffects = hoverDevice;
+  const canPreview = hoverDevice;
   const showMobileActions = touchLayout && (mobileExpanded || selectionMode);
   const showCenterPlay = touchLayout && mobileExpanded && !selectionMode;
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewSrc, setPreviewSrc] = useState<string | null>(null);
+  const [previewPlaying, setPreviewPlaying] = useState(false);
+  const cardHoveredRef = useRef(false);
+  const activatePreview = useCallback(() => {
+    if (!cardHoveredRef.current) return;
+    setShowPreview(true);
+  }, []);
+
+  const deactivatePreview = useCallback(() => {
+    setShowPreview(false);
+    setPreviewSrc(null);
+    setPreviewPlaying(false);
+  }, []);
+
+  const startPreviewWarmup = useCallback(() => {
+    const url = resolveCardPreviewVideoUrl(ex);
+    warmCardPreviewVideo(url);
+    setPreviewSrc(url);
+  }, [ex]);
+
+  const handlePreviewError = useCallback(() => {
+    deactivatePreview();
+  }, [deactivatePreview]);
+
+  const { onMouseEnter: previewMouseEnter, onMouseLeave: previewMouseLeave } = useCardPreviewHover({
+    enabled: canPreview,
+    delayMs: CARD_PREVIEW_HOVER_DELAY_MS,
+    onActivate: activatePreview,
+    onDeactivate: deactivatePreview,
+    onHoverStart: () => {
+      startPreviewWarmup();
+      if (!touchLayout) {
+        prefetchCinemaLightboxChunk();
+        prefetchExerciseHoverBundle(ex, prefetchPeers);
+      }
+    },
+  });
+
+  const handlePreviewPlaying = useCallback(() => {
+    setPreviewPlaying(true);
+  }, []);
+
+  const tiltEnabled = desktopEffects && !showPreview && !previewSrc;
+  const tilt = useTilt3D(6, tiltEnabled);
+
+  const resetCoverMotion = useCallback(() => {
+    const el = tilt.ref.current;
+    if (!el || !desktopEffects) return;
+    el.style.setProperty('--parallax-x', '0');
+    el.style.setProperty('--parallax-y', '0');
+    el.style.setProperty('--mouse-x', '50%');
+    el.style.setProperty('--mouse-y', '50%');
+  }, [desktopEffects, tilt.ref]);
+
+  const handleCardMouseEnter = useCallback(() => {
+    cardHoveredRef.current = true;
+    if (canPreview) previewMouseEnter();
+  }, [canPreview, previewMouseEnter]);
+
+  const handleCardMouseLeave = useCallback(() => {
+    cardHoveredRef.current = false;
+    if (canPreview) previewMouseLeave();
+    resetCoverMotion();
+    if (tiltEnabled) tilt.onMouseLeave();
+  }, [canPreview, previewMouseLeave, resetCoverMotion, tiltEnabled, tilt]);
 
   useEffect(() => {
     if (!selectionMode) return;
     setMobileExpanded(false);
   }, [selectionMode]);
-
-  useEffect(() => {
-    if (!downloadOpen) return;
-    const onPointerDown = (e: PointerEvent) => {
-      if (downloadRef.current && !downloadRef.current.contains(e.target as Node)) {
-        setDownloadOpen(false);
-      }
-    };
-    document.addEventListener('pointerdown', onPointerDown);
-    return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [downloadOpen]);
 
   useEffect(() => {
     if (!mobileExpanded || selectionMode) return;
@@ -109,24 +173,6 @@ export function ExerciseCard({
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [mobileExpanded, selectionMode]);
-
-  const handleMouseEnter = useCallback(() => {
-    void preloadYouTubePlayerApi();
-    if (!canPreview || touchLayout) return;
-    previewTimerRef.current = setTimeout(() => setShowPreview(true), 450);
-  }, [canPreview, touchLayout]);
-
-  const handleMouseLeave = useCallback(() => {
-    if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
-    setShowPreview(false);
-  }, []);
-
-  useEffect(
-    () => () => {
-      if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
-    },
-    []
-  );
 
   const handleDelete = async (e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -143,10 +189,14 @@ export function ExerciseCard({
       category: ex.category,
       muscleGroups: Array.isArray(ex.muscleGroups) ? ex.muscleGroups.join(', ') : '',
       keywords: Array.isArray(ex.keywords) ? ex.keywords.join(', ') : '',
+      equipment: Array.isArray(ex.equipment) ? [...ex.equipment] : [],
       youtubeUrl: ex.youtubeUrl || '',
       thumbnail: ex.thumbnail || '',
       hasCloudVideo: ex.hasCloudVideo,
       coverFocusY: formatCoverFocusYInput(ex.coverFocusY),
+      coverFocusX: formatCoverFocusXInput(ex.coverFocusX),
+      coverZoom: formatCoverZoomInput(ex.coverZoom),
+      coverFramingManual: isCoverFramingManual(ex),
     });
     setEditingId(ex.firestoreId);
     setAdminTab('single');
@@ -154,10 +204,8 @@ export function ExerciseCard({
   };
 
   const handleCoverActivate = (e: React.SyntheticEvent) => {
-    if (downloadOpen) return;
     if ((e.target as HTMLElement).closest('[data-card-play-trigger]')) return;
     if ((e.target as HTMLElement).closest('[data-card-action]')) return;
-    if ((e.target as HTMLElement).closest('.card-download-menu')) return;
 
     if (touchLayout) {
       if (selectionMode && onTogglePlaylist) {
@@ -183,6 +231,7 @@ export function ExerciseCard({
       onCompare(ex);
       return;
     }
+    deactivatePreview();
     onWatch(ex);
   };
 
@@ -212,30 +261,27 @@ export function ExerciseCard({
       ref={tilt.ref}
       variants={staggerItem}
       custom={index}
-      layout={!reducedMotion && !touchLayout}
+      layout={false}
+      onMouseEnter={handleCardMouseEnter}
+      onMouseLeave={handleCardMouseLeave}
       onMouseMove={(e) => {
-        if (touchLayout) return;
-        handleGlow(e);
-        tilt.onMouseMove(e);
+        if (desktopEffects) handleGlow(e);
+        if (tiltEnabled) tilt.onMouseMove(e);
       }}
-      onMouseLeave={() => {
-        if (touchLayout) return;
-        tilt.onMouseLeave();
-        handleMouseLeave();
-      }}
-      onMouseEnter={handleMouseEnter}
       style={
-        reducedMotion || touchLayout
-          ? undefined
-          : {
+        tiltEnabled
+          ? {
               rotateX: tilt.rotateX,
               rotateY: tilt.rotateY,
               transformPerspective: 900,
             }
+          : undefined
       }
-      className={`exercise-card cinematic-card card-grid-item card-3d group relative rounded-cinema-lg border shadow-cinematic hover:shadow-cinematic-red ease-cinematic duration-cinematic ${
+      className={`exercise-card cinematic-card card-grid-item card-3d group relative rounded-cinema-lg border shadow-cinematic hover:shadow-cinematic ease-cinematic duration-cinematic ${
+        showPreview ? 'exercise-card--preview-active' : ''
+      } ${previewSrc && !showPreview ? 'exercise-card--preview-warming' : ''} ${
         isAdmin ? 'exercise-card--admin' : ''
-      } ${downloadOpen || mobileExpanded || selectionMode ? 'card-actions-pinned z-[50]' : 'z-10'} ${
+      } ${mobileExpanded || selectionMode ? 'card-actions-pinned z-[50]' : 'z-10'} ${
         mobileExpanded ? 'card-mobile-expanded' : ''
       } ${selectionMode ? 'card-selection-mode' : ''} ${
         isComparePick
@@ -245,14 +291,14 @@ export function ExerciseCard({
             : 'border-white/5 hover:border-white/10'
       }`}
       whileHover={
-        reducedMotion || touchLayout ? undefined : { y: -4, transition: getSpring(reducedMotion) }
+        tiltEnabled ? { y: -4, transition: getSpring(reducedMotion) } : undefined
       }
     >
       <div className="card-shimmer" aria-hidden="true" />
 
       <div
         ref={coverRef}
-        className="exercise-card-cover aspect-card-poster relative cursor-pointer touch-manipulation select-none"
+        className="exercise-card-cover card-catalog-cover aspect-card-poster relative cursor-pointer touch-manipulation select-none"
         onClick={touchLayout ? undefined : handleCoverClick}
         onPointerUp={touchLayout ? handleCoverPointerUp : undefined}
         onContextMenu={(e) => e.preventDefault()}
@@ -272,43 +318,27 @@ export function ExerciseCard({
           }
         }}
       >
-        <div className="card-media absolute inset-0 overflow-hidden">
-          {!imgLoaded && (
-            <div className="absolute inset-0 z-0">
-              <Skeleton className="w-full h-full rounded-none" />
-            </div>
-          )}
-
-          <motion.img
-            src={imgSrc}
-            loading="lazy"
-            decoding="async"
-            draggable={false}
+        <div
+          className={`card-media card-catalog-media absolute inset-0 overflow-hidden ${
+            previewPlaying ? 'card-media--previewing' : ''
+          }`}
+        >
+          <ExerciseCoverImage
+            imgSrc={imgSrc}
+            imgLoaded={imgLoaded}
+            placeholderSrc={placeholderSrc}
+            webpSrc={webpSrc}
+            alt={`Capa do exercício ${ex.name}`}
+            frameSource={ex}
+            instantDisplay={isCoverInstant}
+            useBlurUp={shouldUseCoverBlurUp(reducedMotion) && !isCoverInstant}
             onLoad={handleLoad}
             onError={handleError}
-            className={`card-cover-img w-full h-full object-cover relative z-10 transition-opacity duration-300 ${
-              imgLoaded ? 'opacity-100' : 'opacity-0'
-            } ${mobileExpanded ? 'scale-[0.98]' : ''}`}
-            style={{ objectPosition: coverObjectPosition }}
-            alt={`Capa do exercício ${ex.name}`}
-            whileHover={reducedMotion || showPreview || touchLayout ? undefined : { scale: 1.04 }}
-            transition={getSpring(reducedMotion)}
+            imgClassName="card-cover-img"
+            className={mobileExpanded ? 'cover-image-root--mobile-expanded' : ''}
           />
 
-          {showPreview && ytId && !touchLayout && (
-            <div className="card-preview-player absolute inset-0 z-[15] pointer-events-none">
-              <YouTubePlayer
-                videoId={ytId}
-                title={ex.name}
-                autoplay
-                mute
-                controls={false}
-                preferMaxQuality
-                isShort={isYouTubeShort(ex.youtubeUrl)}
-                className="absolute inset-0 w-full h-full"
-              />
-            </div>
-          )}
+          <div className="card-cover-grain" aria-hidden="true" />
 
           <div className="card-cover-vignette" aria-hidden="true" />
 
@@ -318,7 +348,7 @@ export function ExerciseCard({
             </div>
           )}
 
-          {!showPreview && showCenterPlay && (
+          {!showPreview && !previewPlaying && showCenterPlay && (
             <button
               type="button"
               data-card-play-trigger
@@ -341,6 +371,17 @@ export function ExerciseCard({
                 <Icon name="play" className="w-5 h-5 text-white ml-0.5" />
               </div>
             </div>
+          )}
+
+          {previewSrc && (
+            <CardVideoPreview
+              src={previewSrc}
+              title={ex.name}
+              revealed={showPreview}
+              isVertical={isCardPreviewVertical(ex)}
+              onPlaying={handlePreviewPlaying}
+              onError={handlePreviewError}
+            />
           )}
         </div>
 
@@ -428,54 +469,16 @@ export function ExerciseCard({
                   <Icon name={copiedId === ex.firestoreId ? 'check' : 'copy'} className="w-3.5 h-3.5" />
                 </button>
 
-                <div ref={downloadRef} className="relative">
-                  <button
-                    type="button"
-                    data-card-action="download"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDownloadOpen((v) => !v);
-                    }}
-                    className={actionBtnClass(downloadOpen ? 'card-action-btn--active' : '')}
-                    title="Baixar vídeo"
-                    aria-label="Baixar vídeo"
-                    aria-expanded={downloadOpen}
-                  >
-                    <Icon name="download" className="w-3.5 h-3.5" />
-                  </button>
-
-                  <AnimatePresence>
-                    {downloadOpen && (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.96, y: -4 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.96, y: -4 }}
-                        transition={getSpring(reducedMotion)}
-                        className="card-download-menu dropdown-panel"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {['4K', '1080p', '720p', '480p'].map((quality) => (
-                          <button
-                            key={quality}
-                            type="button"
-                            className="card-download-option"
-                            onClick={(e) => {
-                              if (quality === '4K') {
-                                handleDownloadCheck(e, ex, quality);
-                              } else {
-                                e.stopPropagation();
-                                showToast(`"${ex.name}" em ${quality} estará disponível em breve!`);
-                              }
-                              setDownloadOpen(false);
-                            }}
-                          >
-                            {quality}
-                          </button>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
+                <button
+                  type="button"
+                  data-card-action="download"
+                  onClick={(e) => handleDownloadCheck(e, ex)}
+                  className={actionBtnClass('')}
+                  title="Baixar 4K"
+                  aria-label="Baixar 4K"
+                >
+                  <Icon name="download" className="w-3.5 h-3.5" />
+                </button>
 
                 {isAdmin && (
                   <>

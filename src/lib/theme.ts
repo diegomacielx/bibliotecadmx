@@ -1,5 +1,3 @@
-import { isThemeWaveActive, runThemeWaveTransition } from './themeWave';
-
 export type ThemeMode = 'dark' | 'light';
 
 export const THEME_STORAGE_KEY = 'dmx_theme';
@@ -23,23 +21,10 @@ export function applyTheme(mode: ThemeMode): void {
   document.documentElement.style.colorScheme = mode;
 }
 
-function shouldRunThemeWave(): boolean {
-  if (typeof window === 'undefined') return false;
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
-  if (window.matchMedia('(max-width: 767px)').matches) return false;
-  if (window.matchMedia('(hover: none) and (pointer: coarse)').matches) return false;
-  return true;
-}
-
 export function setTheme(mode: ThemeMode): void {
   const domTheme = document.documentElement.dataset.theme as ThemeMode | undefined;
-  const waveActive = isThemeWaveActive();
 
-  if (waveActive && domTheme === mode) {
-    return;
-  }
-
-  if (!waveActive && domTheme === mode) {
+  if (domTheme === mode) {
     try {
       localStorage.setItem(THEME_STORAGE_KEY, mode);
     } catch {
@@ -54,12 +39,7 @@ export function setTheme(mode: ThemeMode): void {
     /* ignore */
   }
 
-  if (!shouldRunThemeWave()) {
-    applyTheme(mode);
-    return;
-  }
-
-  void runThemeWaveTransition(mode);
+  applyTheme(mode);
 }
 
 /** Executar antes do React montar para evitar flash */

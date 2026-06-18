@@ -48,6 +48,8 @@ declare namespace YT {
     unMute(): void;
     seekTo(seconds: number, allowSeekAhead: boolean): void;
     getCurrentTime(): number;
+    getDuration(): number;
+    getVideoLoadedFraction(): number;
     getPlayerState(): PlayerState;
     setPlaybackQuality(quality: PlaybackQuality): void;
     getAvailableQualityLevels(): PlaybackQuality[];

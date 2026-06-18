@@ -17,10 +17,11 @@ interface AdminStudioBarProps {
 
 const FILTER_OPTIONS: { value: AdminFilter; label: string; short: string }[] = [
   { value: 'all', label: 'Todos os exercícios', short: 'Todos' },
-  { value: 'completed', label: 'Youtube ✅', short: 'Youtube ✅' },
-  { value: 'incomplete', label: 'Youtube ❌', short: 'Youtube ❌' },
-  { value: 'upados_cloud', label: 'Cloud ✅', short: 'Cloud ✅' },
-  { value: 'missing_cloud', label: 'Cloud ❌', short: 'Cloud ❌' },
+  { value: 'completed', label: 'Youtube — com vídeo', short: 'Youtube OK' },
+  { value: 'incomplete', label: 'Youtube — sem vídeo', short: 'Youtube ?' },
+  { value: 'upados_cloud', label: 'Cloud — upados', short: 'Cloud OK' },
+  { value: 'missing_cloud', label: 'Cloud — faltando', short: 'Cloud ?' },
+  { value: 'missing_cover', label: 'Capa 4K — sem GitHub', short: 'Capa ?' },
 ];
 
 const MANAGE_ITEMS: {
@@ -124,7 +125,7 @@ export function AdminStudioBar({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 6 }}
                   transition={{ duration: 0.15 }}
-                  className="absolute left-0 sm:left-auto sm:right-0 top-[calc(100%+0.4rem)] w-56 dropdown-panel py-1 z-50"
+                  className="absolute left-0 sm:left-auto sm:right-0 top-[calc(100%+0.4rem)] w-64 dropdown-panel py-1 z-50"
                 >
                   {FILTER_OPTIONS.map((opt) => (
                     <button

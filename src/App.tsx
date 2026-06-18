@@ -8,6 +8,7 @@ import type {
   ExerciseRequest,
   AuthorizedEmail,
   AppSettings,
+  HeroSpotlightSettings,
   ToastState,
   AuthMode,
   AdminTab,
@@ -32,15 +33,20 @@ import {
   logDebug,
   logError,
   logWarn,
+  buildGcsVideoMetadataUrl,
+  buildGcsVideoDownloadUrl,
+  sanitizeDownloadFilename,
+  triggerBrowserDownload,
 } from './lib/utils';
 import { normalizeMuscleGroups } from './lib/muscleGroups';
+import { normalizeEquipment } from './lib/equipment';
 import { getAuthErrorCode, getAuthErrorMessage } from './lib/authErrors';
 import {
   buildExerciseSearchIndex,
   rankExercises,
-  pickDailyFeaturedExercise,
   filterExercisesByCategory,
 } from './lib/search';
+import { DEFAULT_HERO_SPOTLIGHT, resolveHeroDisplay } from './lib/heroSpotlight';
 import {
   fb,
   db,
@@ -66,6 +72,9 @@ import { HeroBanner } from './components/HeroBanner';
 import { ExerciseCard } from './components/ExerciseCard';
 import { RequestModal } from './components/RequestModal';
 import { GridSkeleton } from './components/Skeleton';
+import { EmptyState } from './components/EmptyState';
+import { ShortcutsPanel } from './components/ShortcutsPanel';
+import { isTypingTarget } from './lib/keyboard';
 import { staggerContainer, pageTransition } from './lib/motion';
 import { SiteHeader } from './components/SiteHeader';
 import { AdminStudioBar } from './components/AdminStudioBar';
@@ -76,9 +85,14 @@ import { useFavorites } from './hooks/useFavorites';
 import { isCoarsePointer, isMobileUi, useTouchLayoutClass } from './hooks/useMediaQuery';
 import { isFeatureEnabled } from './lib/mobileCapabilities';
 import { prefetchCoverUrls } from './lib/coverCache';
+import { getGridPrefetchPeers } from './lib/exercisePrefetch';
 import { normalizeNickname, validateNickname } from './lib/nickname';
 import { warmSessionCovers } from './lib/coverImageStore';
-import { buildExerciseWritePayload } from './lib/exercisePayload';
+import { AdvancedFiltersBar } from './components/AdvancedFiltersBar';
+import { useAdvancedFilters } from './hooks/useAdvancedFilters';
+import { applyAdvancedFilters, hasActiveAdvancedFilters } from './lib/exerciseFilters';
+import { useGitHubCoverProbe, resolveNeedsGitHubCover } from './hooks/useGitHubCoverProbe';
+import { buildExerciseWritePayload, applyExerciseSaveToList } from './lib/exercisePayload';
 import { parseCoverFocusYInput } from './lib/coverFocus';
 import {
   isAuthorizedEmailActive,
@@ -115,6 +129,8 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState(() => localStorage.getItem('dmx_search') || '');
   const [activeCategory, setActiveCategory] = useState(() => localStorage.getItem('dmx_category') || 'Todos');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const { filters: advancedFilters, setFilters: setAdvancedFilters, resetFilters: resetAdvancedFilters } =
+    useAdvancedFilters();
   const [adminFilter, setAdminFilter] = useState<AdminFilter>('all');
   const [toast, setToast] = useState<ToastState>({ show: false, msg: '', type: 'success' });
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -125,6 +141,7 @@ export default function App() {
   const [batchInput, setBatchInput] = useState('');
   const [syncing, setSyncing] = useState(false);
   const [activeVideo, setActiveVideo] = useState<Exercise | null>(null);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [compareEx, setCompareEx] = useState<Exercise | null>(null);
   const [comparePick, setComparePick] = useState<Exercise | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
@@ -159,6 +176,7 @@ export default function App() {
   const [newAuthEmail, setNewAuthEmail] = useState('');
   const [appUsers, setAppUsers] = useState<UserProfile[]>([]);
   const [appSettings, setAppSettings] = useState<AppSettings>({ webhookUrl: '' });
+  const [heroSpotlight, setHeroSpotlight] = useState<HeroSpotlightSettings>(DEFAULT_HERO_SPOTLIGHT);
   const [form, setForm] = useState<ExerciseForm>(DEFAULT_FORM);
   const [exercisesPath, setExercisesPath] = useState<string[]>(() => getDbPath());
   const triedAlternateExercisesPath = useRef(false);
@@ -209,6 +227,24 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('dmx_category', activeCategory);
   }, [activeCategory]);
+
+  useEffect(() => {
+    if (isMobileLayout) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return;
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        setShortcutsOpen((open) => !open);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+        e.preventDefault();
+        setShortcutsOpen((open) => !open);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isMobileLayout]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -277,11 +313,36 @@ export default function App() {
     return () => unsubProfile();
   }, [isLoggedIn, user, isAdmin]);
 
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const settingsRef = fbDoc(db, ...getSettingsPath());
+    const unsubSettings = onSnapshot(settingsRef, (snap) => {
+      if (!snap.exists()) {
+        setHeroSpotlight(DEFAULT_HERO_SPOTLIGHT);
+        return;
+      }
+      const data = snap.data() as AppSettings;
+      setHeroSpotlight(data.heroSpotlight ?? DEFAULT_HERO_SPOTLIGHT);
+      if (isAdmin) setAppSettings(data);
+    });
+    return () => unsubSettings();
+  }, [isLoggedIn, isAdmin]);
+
+  const normalizeCoverNumber = (raw: unknown): number | undefined => {
+    if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+    if (raw != null && raw !== '') {
+      const n = Number(raw);
+      if (Number.isFinite(n)) return n;
+    }
+    return undefined;
+  };
+
   const normalizeExerciseDoc = useCallback((docId: string, raw: Record<string, unknown>): Exercise => {
     const muscleGroups = normalizeMuscleGroups(
       parseCommaList(raw.muscleGroups as string | string[] | undefined)
     );
     const keywords = parseCommaList(raw.keywords as string | string[] | undefined);
+    const equipment = normalizeEquipment(raw.equipment as string[] | string | undefined);
     const youtubeUrl = String(
       raw.youtubeUrl ||
         raw.youtube_url ||
@@ -302,15 +363,13 @@ export default function App() {
       youtubeUrl,
       thumbnail: raw.thumbnail ? String(raw.thumbnail) : undefined,
       keywords,
+      equipment: equipment.length > 0 ? equipment : undefined,
       hasCloudVideo: raw.hasCloudVideo as boolean | null | undefined,
       videoOrientation: raw.videoOrientation ? String(raw.videoOrientation) : undefined,
       aspectRatio: raw.aspectRatio ? String(raw.aspectRatio) : undefined,
-      coverFocusY:
-        typeof raw.coverFocusY === 'number'
-          ? raw.coverFocusY
-          : raw.coverFocusY != null && raw.coverFocusY !== ''
-            ? Number(raw.coverFocusY)
-            : undefined,
+      coverFocusY: normalizeCoverNumber(raw.coverFocusY),
+      coverFocusX: normalizeCoverNumber(raw.coverFocusX),
+      coverZoom: normalizeCoverNumber(raw.coverZoom),
       createdAt: raw.createdAt ? String(raw.createdAt) : undefined,
       updatedAt: raw.updatedAt ? String(raw.updatedAt) : undefined,
     };
@@ -415,11 +474,6 @@ export default function App() {
       setAppUsers(users);
     });
 
-    const settingsRef = fbDoc(db, ...getSettingsPath());
-    const unsubSettings = onSnapshot(settingsRef, (snap) => {
-      if (snap.exists()) setAppSettings(snap.data() as AppSettings);
-    });
-
     const reqRef = fbCollection(db, ...getRequestsPath());
     const unsubReqs = onSnapshot(reqRef, (snap) => {
       const reqs = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ExerciseRequest[];
@@ -435,7 +489,6 @@ export default function App() {
     });
     return () => {
       unsubUsers();
-      unsubSettings();
       unsubReqs();
       unsubAuth();
     };
@@ -803,26 +856,20 @@ export default function App() {
   }, [showToast]);
 
 
-  const downloadExercise = async (ex: Exercise, quality: string) => {
-    const gcpApiUrl = `https://storage.googleapis.com/storage/v1/b/biblioteca-dmx-videos-oficiais/o/${ex.id}_${quality}.mp4`;
-    const mediaUrl = `https://storage.googleapis.com/biblioteca-dmx-videos-oficiais/${ex.id}_${quality}.mp4`;
+  const downloadExercise = async (ex: Exercise) => {
+    const quality = '4K';
+    const filename = sanitizeDownloadFilename(ex.name, quality);
+    const metadataUrl = buildGcsVideoMetadataUrl(ex.id, quality);
     showToast('Verificando disponibilidade de dados...');
     try {
-      const response = await fetch(gcpApiUrl, {
+      const response = await fetch(metadataUrl, {
         method: 'GET',
         cache: 'no-store',
         headers: { Accept: 'application/json' },
       });
       if (response.ok) {
-        showToast('Iniciando download seguro...');
-        const noCacheUrl = `${mediaUrl}?t=${new Date().getTime()}`;
-        const link = document.createElement('a');
-        link.href = noCacheUrl;
-        link.setAttribute('download', `${ex.name.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '_')}_${quality}.mp4`);
-        link.setAttribute('target', '_blank');
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        showToast('Iniciando download...');
+        triggerBrowserDownload(buildGcsVideoDownloadUrl(ex.id, quality, filename), filename);
       } else {
         showToast(`O vídeo "${ex.name}" ainda não está disponível em ${quality}.`, 'error');
       }
@@ -833,9 +880,9 @@ export default function App() {
     }
   };
 
-  const handleDownloadCheck = async (e: React.MouseEvent, ex: Exercise, quality: string) => {
+  const handleDownloadCheck = async (e: React.MouseEvent, ex: Exercise) => {
     e.stopPropagation();
-    await downloadExercise(ex, quality);
+    await downloadExercise(ex);
   };
 
   const showAdminUI = isAdmin && !adminUserPreview;
@@ -865,6 +912,10 @@ export default function App() {
     [searchableExercises]
   );
 
+  const coverProbeEnabled = showAdminUI && adminFilter === 'missing_cover';
+  const { probeMap, loading: coverProbeLoading, progress: coverProbeProgress } =
+    useGitHubCoverProbe(exercises, coverProbeEnabled);
+
   const filteredExercises = useMemo(() => {
     const validExercises = exercises.filter((ex) => {
       const youtubeOk = hasValidYouTubeUrl(ex.youtubeUrl);
@@ -873,6 +924,11 @@ export default function App() {
         if (adminFilter === 'incomplete') return !youtubeOk;
         if (adminFilter === 'missing_cloud') return youtubeOk && ex.hasCloudVideo === false;
         if (adminFilter === 'upados_cloud') return youtubeOk && ex.hasCloudVideo === true;
+        if (adminFilter === 'missing_cover') {
+          if (!youtubeOk) return false;
+          const needs = resolveNeedsGitHubCover(ex, probeMap, !coverProbeLoading);
+          return needs === true;
+        }
         return true;
       }
       return youtubeOk;
@@ -880,17 +936,33 @@ export default function App() {
 
     const categoryFiltered = filterExercisesByCategory(validExercises, activeCategory, favorites);
 
-    if (!searchTerm.trim()) return categoryFiltered;
+    const searched = !searchTerm.trim()
+      ? categoryFiltered
+      : (() => {
+          const indexById = new Map(searchIndexes.map((idx) => [idx.exercise.firestoreId, idx]));
+          /** Com busca ativa: pesquisa em todos os exercícios públicos (ignora categoria) */
+          const searchPool = showAdminUI ? validExercises : publicExercises;
+          const scopedIndexes = searchPool
+            .map((ex) => indexById.get(ex.firestoreId))
+            .filter((idx): idx is NonNullable<typeof idx> => !!idx);
 
-    const indexById = new Map(searchIndexes.map((idx) => [idx.exercise.firestoreId, idx]));
-    /** Com busca ativa: pesquisa em todos os exercícios públicos (ignora categoria) */
-    const searchPool = showAdminUI ? validExercises : publicExercises;
-    const scopedIndexes = searchPool
-      .map((ex) => indexById.get(ex.firestoreId))
-      .filter((idx): idx is NonNullable<typeof idx> => !!idx);
+          return rankExercises(scopedIndexes, searchTerm).map((r) => r.exercise);
+        })();
 
-    return rankExercises(scopedIndexes, searchTerm).map((r) => r.exercise);
-  }, [searchTerm, activeCategory, exercises, showAdminUI, adminFilter, searchIndexes, favorites, publicExercises]);
+    return applyAdvancedFilters(searched, advancedFilters);
+  }, [
+    searchTerm,
+    activeCategory,
+    exercises,
+    showAdminUI,
+    adminFilter,
+    searchIndexes,
+    favorites,
+    publicExercises,
+    probeMap,
+    coverProbeLoading,
+    advancedFilters,
+  ]);
 
   const searchSuggestions = useMemo(() => {
     if (searchTerm.trim().length < 2) return [];
@@ -913,26 +985,34 @@ export default function App() {
     [recents, publicExerciseIds, showAdminUI]
   );
 
-  const featuredExercise = useMemo(() => {
-    if (searchTerm.trim() || activeCategory !== 'Todos') return null;
-    const pool = exercises.filter((ex) => hasValidYouTubeUrl(ex.youtubeUrl));
-    const favoritePool = pool.filter((ex) => favorites.has(ex.firestoreId));
-    const wodPool = favoritePool.length > 0 ? favoritePool : pool;
-    return pickDailyFeaturedExercise(wodPool);
-  }, [searchTerm, activeCategory, exercises, favorites]);
-
-  const featuredFromFavorites = useMemo(() => {
-    if (searchTerm.trim() || activeCategory !== 'Todos') return false;
-    const pool = exercises.filter((ex) => hasValidYouTubeUrl(ex.youtubeUrl));
-    return pool.some((ex) => favorites.has(ex.firestoreId));
-  }, [searchTerm, activeCategory, exercises, favorites]);
+  const heroDisplay = useMemo(
+    () => resolveHeroDisplay(exercises, heroSpotlight),
+    [exercises, heroSpotlight]
+  );
 
   const gridExercises = useMemo(() => {
-    if (!featuredExercise || searchTerm.trim() || activeCategory !== 'Todos') {
+    if (searchTerm.trim() || activeCategory !== 'Todos') {
       return filteredExercises;
     }
-    return filteredExercises.filter((ex) => ex.firestoreId !== featuredExercise.firestoreId);
-  }, [filteredExercises, featuredExercise, searchTerm, activeCategory]);
+    const heroExId = heroDisplay?.exercise?.firestoreId;
+    if (!heroExId || heroDisplay.mode === 'campaign') {
+      return filteredExercises;
+    }
+    return filteredExercises.filter((ex) => ex.firestoreId !== heroExId);
+  }, [filteredExercises, heroDisplay, searchTerm, activeCategory]);
+
+  const emptyStateVariant = useMemo(() => {
+    if (hasActiveAdvancedFilters(advancedFilters)) return 'filters' as const;
+    if (searchTerm.trim()) return 'search' as const;
+    if (activeCategory === 'Favoritos') return 'favorites' as const;
+    return 'category' as const;
+  }, [searchTerm, activeCategory, advancedFilters]);
+
+  const handleEmptyClearFilters = useCallback(() => {
+    setSearchTerm('');
+    setActiveCategory('Todos');
+    resetAdvancedFilters();
+  }, [resetAdvancedFilters]);
 
   useEffect(() => {
     if (loading || exercises.length === 0) return;
@@ -949,6 +1029,22 @@ export default function App() {
       );
     }
   }, [loading, exercises.length, filteredExercises.length, isAdmin, adminFilter, activeCategory, searchTerm]);
+
+  const saveHeroSpotlight = async (next: HeroSpotlightSettings) => {
+    setHeroSpotlight(next);
+    setAppSettings((prev) => ({ ...prev, heroSpotlight: next }));
+    try {
+      const settingsRef = fbDoc(db, ...getSettingsPath());
+      await setDoc(settingsRef, { heroSpotlight: next }, { merge: true });
+      showToast('Destaque salvo!');
+    } catch {
+      showToast('Erro ao salvar destaque', 'error');
+    }
+  };
+
+  const handleCampaignClick = (linkUrl: string) => {
+    window.open(linkUrl, '_blank', 'noopener,noreferrer');
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -993,6 +1089,7 @@ export default function App() {
       }
       if (editingId) {
         const docRef = fbDoc(db, ...path, editingId);
+        setExercises((prev) => applyExerciseSaveToList(prev, editingId, data, form));
         await updateDoc(docRef, data);
         showToast('Alterações salvas com sucesso!');
       } else {
@@ -1093,6 +1190,7 @@ export default function App() {
           ...item,
           muscleGroups: normalizeMuscleGroups(parseCommaList(String(item.muscleGroups || ''))),
           keywords: parseCommaList(String(item.keywords || '')),
+          equipment: normalizeEquipment(item.equipment as string[] | string | undefined),
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
@@ -1342,6 +1440,15 @@ export default function App() {
 
   return (
     <div className="page-canvas min-h-screen flex flex-col relative font-sans text-[var(--dmx-fg)]">
+      {!isMobileLayout && (
+        <ShortcutsPanel
+          open={shortcutsOpen}
+          onClose={() => setShortcutsOpen(false)}
+          hasLightboxNav={lightboxNavList.length > 1}
+          hasCompare={isFeatureEnabled('compare')}
+          isAdmin={showAdminUI}
+        />
+      )}
       <AnimatePresence>
         {activeVideo && (
           <Suspense fallback={null}>
@@ -1353,9 +1460,6 @@ export default function App() {
             copyLink={copyLink}
             copiedId={copiedId}
             onDownload={downloadExercise}
-            onDownloadUnavailable={(ex, quality) =>
-              showToast(`"${ex.name}" em ${quality} estará disponível em breve!`)
-            }
             playlist={isPlaylistActive ? playlist : []}
             playlistIndex={activePlaylistIndex}
             onPlaylistNext={handlePlaylistNext}
@@ -1412,10 +1516,20 @@ export default function App() {
         visibleNotifications={visibleNotifications}
         lastReadAt={lastReadAt}
         onNotificationClick={handleNotificationClick}
+        onOpenShortcuts={isMobileLayout ? undefined : () => setShortcutsOpen(true)}
       />
 
       {showAdminUI && (
-        <AdminStudioBar
+        <>
+          {adminFilter === 'missing_cover' && coverProbeLoading && (
+            <div className="cover-audit-banner cinema-container mb-fluid-sm">
+              <Icon name="loader" className="w-4 h-4 animate-spin shrink-0" />
+              <span>
+                Verificando capas no GitHub… {coverProbeProgress.done}/{coverProbeProgress.total}
+              </span>
+            </div>
+          )}
+          <AdminStudioBar
           stats={stats}
           adminFilter={adminFilter}
           onFilterChange={setAdminFilter}
@@ -1426,6 +1540,7 @@ export default function App() {
           adminUserPreview={adminUserPreview}
           onToggleUserPreview={() => setAdminUserPreview((v) => !v)}
         />
+        </>
       )}
 
       {adminUserPreview && (
@@ -1453,6 +1568,15 @@ export default function App() {
         favoritesCount={favorites.size}
       />
 
+      {!isMobileLayout && (
+        <AdvancedFiltersBar
+          filters={advancedFilters}
+          onChange={setAdvancedFilters}
+          onReset={resetAdvancedFilters}
+          resultCount={filteredExercises.length}
+        />
+      )}
+
       {comparePick && isFeatureEnabled('compareBanner') && (
         <div className="compare-pick-banner cinema-container">
           <Icon name="compare" className="w-4 h-4 text-red-400 shrink-0" />
@@ -1473,11 +1597,11 @@ export default function App() {
       <main className="cinema-container w-full flex-1 pb-fluid-xl relative z-10">
         {isMobileLayout ? (
           <div key={pageKey}>
-        {!searchTerm && activeCategory === 'Todos' && featuredExercise && (
+        {!searchTerm && activeCategory === 'Todos' && heroDisplay && (
           <HeroBanner
-            ex={featuredExercise}
+            hero={heroDisplay}
             onWatch={watchExercise}
-            fromFavorites={featuredFromFavorites}
+            onCampaignClick={handleCampaignClick}
           />
         )}
         {searchTerm.trim() && !loading && filteredExercises.length > 0 && (
@@ -1497,29 +1621,20 @@ export default function App() {
             )}
           </div>
         ) : filteredExercises.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-fluid-2xl px-fluid-md">
-            <div className="w-20 h-20 bg-surface rounded-full flex items-center justify-center mb-fluid-md text-zinc-600 shadow-cinematic">
-              <Icon name="search" className="w-10 h-10" />
-            </div>
-            <h3 className="font-display text-xl font-black text-white mb-2 text-center uppercase italic leading-title">
-              Nenhum resultado
-            </h3>
-            <p className="text-body text-sm text-zinc-400 text-center max-w-md mb-fluid-lg">
-              Não encontrámos nenhum exercício correspondente à sua busca.
-            </p>
-            {searchTerm.trim() && (
-              <button
-                type="button"
-                onClick={() => {
-                  setRequestForm({ name: searchTerm, details: '' });
-                  setShowRequestModal(true);
-                }}
-                className="cta-pill font-black uppercase tracking-widest text-2xs hover:bg-red-600 hover:text-white shadow-cinematic"
-              >
-                <Icon name="lightbulb" className="w-5 h-5" /> Sugerir a gravação de &quot;{searchTerm}&quot;
-              </button>
-            )}
-          </div>
+          <EmptyState
+            variant={emptyStateVariant}
+            searchTerm={searchTerm}
+            category={activeCategory}
+            onSuggest={
+              searchTerm.trim()
+                ? () => {
+                    setRequestForm({ name: searchTerm, details: '' });
+                    setShowRequestModal(true);
+                  }
+                : undefined
+            }
+            onClearFilters={handleEmptyClearFilters}
+          />
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-fluid-md @container">
             {gridExercises.map((ex, index) => (
@@ -1530,7 +1645,6 @@ export default function App() {
                 isAdmin={showAdminUI}
                 isExerciseIncomplete={isExerciseIncomplete}
                 handleDownloadCheck={handleDownloadCheck}
-                showToast={showToast}
                 setForm={setForm}
                 setEditingId={setEditingId}
                 setAdminTab={setAdminTab}
@@ -1552,6 +1666,7 @@ export default function App() {
                 onToggleFavorite={() => toggleFavorite(ex.firestoreId)}
                 onCompare={isFeatureEnabled('compare') ? handleCompare : undefined}
                 isComparePick={comparePick?.firestoreId === ex.firestoreId}
+                prefetchPeers={getGridPrefetchPeers(gridExercises, index)}
               />
             ))}
           </div>
@@ -1566,11 +1681,11 @@ export default function App() {
             animate="animate"
             exit="exit"
           >
-        {!searchTerm && activeCategory === 'Todos' && featuredExercise && (
+        {!searchTerm && activeCategory === 'Todos' && heroDisplay && (
           <HeroBanner
-            ex={featuredExercise}
+            hero={heroDisplay}
             onWatch={watchExercise}
-            fromFavorites={featuredFromFavorites}
+            onCampaignClick={handleCampaignClick}
           />
         )}
         {searchTerm.trim() && !loading && filteredExercises.length > 0 && (
@@ -1590,33 +1705,20 @@ export default function App() {
             )}
           </div>
         ) : filteredExercises.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col items-center justify-center py-fluid-2xl px-fluid-md"
-          >
-            <div className="w-20 h-20 bg-surface rounded-full flex items-center justify-center mb-fluid-md text-zinc-600 shadow-cinematic">
-              <Icon name="search" className="w-10 h-10" />
-            </div>
-            <h3 className="font-display text-xl font-black text-white mb-2 text-center uppercase italic leading-title">
-              Nenhum resultado
-            </h3>
-            <p className="text-body text-sm text-zinc-400 text-center max-w-md mb-fluid-lg">
-              Não encontrámos nenhum exercício correspondente à sua busca.
-            </p>
-            {searchTerm.trim() && (
-              <button
-                type="button"
-                onClick={() => {
-                  setRequestForm({ name: searchTerm, details: '' });
-                  setShowRequestModal(true);
-                }}
-                className="cta-pill font-black uppercase tracking-widest text-2xs hover:bg-red-600 hover:text-white shadow-cinematic"
-              >
-                <Icon name="lightbulb" className="w-5 h-5" /> Sugerir a gravação de &quot;{searchTerm}&quot;
-              </button>
-            )}
-          </motion.div>
+          <EmptyState
+            variant={emptyStateVariant}
+            searchTerm={searchTerm}
+            category={activeCategory}
+            onSuggest={
+              searchTerm.trim()
+                ? () => {
+                    setRequestForm({ name: searchTerm, details: '' });
+                    setShowRequestModal(true);
+                  }
+                : undefined
+            }
+            onClearFilters={handleEmptyClearFilters}
+          />
         ) : (
           <motion.div
             variants={staggerContainer}
@@ -1632,7 +1734,6 @@ export default function App() {
                 isAdmin={showAdminUI}
                 isExerciseIncomplete={isExerciseIncomplete}
                 handleDownloadCheck={handleDownloadCheck}
-                showToast={showToast}
                 setForm={setForm}
                 setEditingId={setEditingId}
                 setAdminTab={setAdminTab}
@@ -1654,6 +1755,7 @@ export default function App() {
                 onToggleFavorite={() => toggleFavorite(ex.firestoreId)}
                 onCompare={isFeatureEnabled('compare') ? handleCompare : undefined}
                 isComparePick={comparePick?.firestoreId === ex.firestoreId}
+                prefetchPeers={getGridPrefetchPeers(gridExercises, index)}
               />
             ))}
           </motion.div>
@@ -1707,6 +1809,12 @@ export default function App() {
           appSettings={appSettings}
           setAppSettings={setAppSettings}
           onSaveSettings={saveSettings}
+          exercises={exercises}
+          heroSpotlight={appSettings.heroSpotlight ?? heroSpotlight}
+          onHeroSpotlightChange={(next) =>
+            setAppSettings((prev) => ({ ...prev, heroSpotlight: next }))
+          }
+          onSaveHeroSpotlight={saveHeroSpotlight}
         />
         </Suspense>
       )}

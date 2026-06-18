@@ -74,6 +74,22 @@ export function useTouchLayoutClass(): boolean {
   return touchLayout;
 }
 
+export function useHoverCapable(): boolean {
+  const [capable, setCapable] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(hover: hover)').matches : false
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia('(hover: hover)');
+    const update = () => setCapable(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+
+  return capable;
+}
+
 /** @deprecated use useTouchLayout */
 export function useMobileUi() {
   return useTouchLayout();

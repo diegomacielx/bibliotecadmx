@@ -1,16 +1,20 @@
 import type { ReactNode } from 'react';
 import type {
   AdminTab,
+  Exercise,
   ExerciseForm,
   ExerciseRequest,
   AuthorizedEmail,
   UserProfile,
   AppSettings,
+  HeroSpotlightSettings,
 } from '../types';
 import { CATEGORIES } from '../lib/constants';
 import { Icon } from './Icon';
-import { AdminCoverFocusField } from './AdminCoverFocusField';
+import { AdminCoverEditor } from './AdminCoverEditor';
+import { AdminEquipmentField } from './AdminEquipmentField';
 import { AccessIntegrationsSection } from './AccessIntegrationsSection';
+import { HeroSpotlightSection } from './HeroSpotlightSection';
 
 interface AdminPanelProps {
   adminTab: AdminTab;
@@ -46,6 +50,10 @@ interface AdminPanelProps {
   appSettings: AppSettings;
   setAppSettings: (s: AppSettings) => void;
   onSaveSettings: (e: React.FormEvent) => void;
+  exercises: Exercise[];
+  heroSpotlight: HeroSpotlightSettings;
+  onHeroSpotlightChange: (next: HeroSpotlightSettings) => void;
+  onSaveHeroSpotlight: (next: HeroSpotlightSettings) => Promise<void>;
 }
 
 type NavItem = {
@@ -118,6 +126,10 @@ export function AdminPanel({
   appSettings,
   setAppSettings,
   onSaveSettings,
+  exercises,
+  heroSpotlight,
+  onHeroSpotlightChange,
+  onSaveHeroSpotlight,
 }: AdminPanelProps) {
   const pendingRequests = exerciseRequests.filter((r) => r.status === 'pending');
   const pendingUsers = appUsers.filter((u) => u.status === 'pending').length;
@@ -181,11 +193,11 @@ export function AdminPanel({
             {adminTab === 'batch' && (
               <div className="admin-panel-section admin-panel-section--batch">
                 <p className="admin-lead">
-                  Cole um array JSON. O sistema normaliza <code>muscleGroups</code> e{' '}
-                  <code>keywords</code> e grava em lote no Firestore.
+                  Cole um array JSON. O sistema normaliza <code>muscleGroups</code>,{' '}
+                  <code>keywords</code> e <code>equipment</code> e grava em lote no Firestore.
                 </p>
                 <textarea
-                  placeholder={'[\n  {\n    "name": "Agachamento Livre",\n    "category": "Quadríceps",\n    "muscleGroups": "Quadríceps, Glúteos",\n    "youtubeUrl": "https://..."\n  }\n]'}
+                  placeholder={'[\n  {\n    "name": "Agachamento Livre",\n    "category": "Quadríceps",\n    "muscleGroups": "Quadríceps, Glúteos",\n    "equipment": ["barra"],\n    "keywords": "agachamento, squat",\n    "youtubeUrl": ""\n  }\n]'}
                   className="admin-code-editor"
                   value={batchInput}
                   onChange={(e) => setBatchInput(e.target.value)}
@@ -229,17 +241,19 @@ export function AdminPanel({
                   />
                 </AdminField>
                 <AdminField label="Categoria">
-                  <select
-                    className="admin-input"
-                    value={form.category}
-                    onChange={(e) => setForm({ ...form, category: e.target.value })}
-                  >
-                    {CATEGORIES.slice(1).map((c) => (
-                      <option key={c} value={c} className="bg-canvas">
-                        {c}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="admin-select-wrap">
+                    <select
+                      className="admin-input"
+                      value={form.category}
+                      onChange={(e) => setForm({ ...form, category: e.target.value })}
+                    >
+                      {CATEGORIES.slice(1).map((c) => (
+                        <option key={c} value={c} className="bg-canvas">
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </AdminField>
                 <AdminField label="YouTube URL">
                   <input
@@ -252,10 +266,16 @@ export function AdminPanel({
                 </AdminField>
                 <AdminField label="Músculos (vírgula)" className="admin-field--full">
                   <input
-                    placeholder="Peitoral, Tríceps, Deltoide"
+                    placeholder="Peitoral, Tríceps — primeiro = primário"
                     className="admin-input"
                     value={form.muscleGroups}
                     onChange={(e) => setForm({ ...form, muscleGroups: e.target.value })}
+                  />
+                </AdminField>
+                <AdminField label="Equipamento" className="admin-field--full">
+                  <AdminEquipmentField
+                    equipment={form.equipment}
+                    onChange={(equipment) => setForm({ ...form, equipment })}
                   />
                 </AdminField>
                 <AdminField label="Capa (opcional)" className="admin-field--full">
@@ -267,7 +287,7 @@ export function AdminPanel({
                   />
                 </AdminField>
                 <AdminField label="Enquadramento da capa" className="admin-field--full">
-                  <AdminCoverFocusField
+                  <AdminCoverEditor
                     form={form}
                     setForm={setForm}
                     editingFirestoreId={editingId}
@@ -331,6 +351,7 @@ export function AdminPanel({
                             onClick={() => onMarkRequestDone(r)}
                             className="admin-btn admin-btn--success admin-btn--sm"
                           >
+                            <Icon name="check" className="w-3.5 h-3.5" />
                             Gravado
                           </button>
                           <button
@@ -339,7 +360,7 @@ export function AdminPanel({
                             className="admin-btn admin-btn--ghost admin-btn--sm"
                             title="Excluir sem notificar"
                           >
-                            <Icon name="trash" className="w-4 h-4" />
+                            <Icon name="trash" className="w-3.5 h-3.5" />
                           </button>
                         </AdminRowActions>
                       </article>
@@ -445,7 +466,17 @@ export function AdminPanel({
                               u.status === 'approved' ? 'admin-btn--ghost' : 'admin-btn--success'
                             }`}
                           >
-                            {u.status === 'approved' ? 'Bloquear' : 'Aprovar'}
+                            {u.status === 'approved' ? (
+                              <>
+                                <Icon name="x" className="w-3.5 h-3.5" />
+                                Bloquear
+                              </>
+                            ) : (
+                              <>
+                                <Icon name="check" className="w-3.5 h-3.5" />
+                                Aprovar
+                              </>
+                            )}
                           </button>
                         </div>
                       </article>
@@ -504,11 +535,19 @@ export function AdminPanel({
             )}
 
             {adminTab === 'settings' && (
-              <AccessIntegrationsSection
-                appSettings={appSettings}
-                setAppSettings={setAppSettings}
-                onSave={onSaveSettings}
-              />
+              <div className="admin-settings-stack">
+                <HeroSpotlightSection
+                  exercises={exercises}
+                  heroSpotlight={heroSpotlight}
+                  onChange={onHeroSpotlightChange}
+                  onSave={onSaveHeroSpotlight}
+                />
+                <AccessIntegrationsSection
+                  appSettings={appSettings}
+                  setAppSettings={setAppSettings}
+                  onSave={onSaveSettings}
+                />
+              </div>
             )}
           </div>
         </div>

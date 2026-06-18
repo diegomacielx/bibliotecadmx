@@ -45,6 +45,10 @@ export const DEFAULT_FORM = {
   youtubeUrl: '',
   thumbnail: '',
   keywords: '',
+  equipment: [] as string[],
   hasCloudVideo: null as boolean | null,
   coverFocusY: '',
+  coverFocusX: '',
+  coverZoom: '',
+  coverFramingManual: false,
 };

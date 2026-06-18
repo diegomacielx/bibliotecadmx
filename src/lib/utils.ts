@@ -203,7 +203,34 @@ export function openYouTubeWatch(url: string | undefined | null): void {
   window.open(href, '_blank', 'noopener,noreferrer');
 }
 
-/** Lista ordenada de URLs de capa: cache → thumbnail → GitHub → YouTube */
+/** Abre Shorts ou watch conforme a URL original do exercício */
+export function openYouTubeExternal(url: string | undefined | null): void {
+  const trimmed = url?.trim();
+  if (!trimmed) return;
+  const id = getYouTubeId(trimmed);
+  if (id && isYouTubeShort(trimmed)) {
+    window.open(`https://www.youtube.com/shorts/${id}`, '_blank', 'noopener,noreferrer');
+    return;
+  }
+  openYouTubeWatch(trimmed);
+}
+
+/** URLs do YouTube em ordem de qualidade (maxres primeiro) */
+function buildYouTubeThumbUrls(ytId: string): string[] {
+  return [
+    `https://i.ytimg.com/vi/${ytId}/maxresdefault.webp`,
+    `https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`,
+    `https://i.ytimg.com/vi/${ytId}/sddefault.webp`,
+    `https://img.youtube.com/vi/${ytId}/sddefault.jpg`,
+    `https://i.ytimg.com/vi/${ytId}/hqdefault.webp`,
+    `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`,
+    `https://i.ytimg.com/vi/${ytId}/mqdefault.webp`,
+    `https://img.youtube.com/vi/${ytId}/mqdefault.jpg`,
+    `https://img.youtube.com/vi/${ytId}/0.jpg`,
+  ];
+}
+
+/** Lista ordenada de URLs de capa: cache → thumbnail → YouTube (max) → GitHub → YouTube (fallback) */
 export const buildExerciseImageFallbacks = (ex: {
   firestoreId?: string;
   id: string;
@@ -218,8 +245,19 @@ export const buildExerciseImageFallbacks = (ex: {
   }
 
   const thumb = ex.thumbnail?.trim();
-  if (thumb && !isPlaceholderYouTubeUrl(thumb) && !PLACEHOLDER_URL_VALUES.has(thumb.toLowerCase())) {
+  const hasCustomThumbnail =
+    !!thumb && !isPlaceholderYouTubeUrl(thumb) && !PLACEHOLDER_URL_VALUES.has(thumb.toLowerCase());
+
+  if (hasCustomThumbnail) {
     urls.push(thumb);
+  }
+
+  const ytId = !isExerciseIncomplete(ex.youtubeUrl) ? getYouTubeId(ex.youtubeUrl) : null;
+  const ytUrls = ytId ? buildYouTubeThumbUrls(ytId) : [];
+
+  // Sem capa customizada: YouTube em máxima qualidade antes de tentar assets no GitHub
+  if (!hasCustomThumbnail && ytUrls.length > 0) {
+    urls.push(...ytUrls);
   }
 
   for (const assetId of getExerciseAssetIds(ex.id)) {
@@ -228,15 +266,8 @@ export const buildExerciseImageFallbacks = (ex: {
     }
   }
 
-  if (!isExerciseIncomplete(ex.youtubeUrl)) {
-    const ytId = getYouTubeId(ex.youtubeUrl);
-    if (ytId) {
-      urls.push(`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`);
-      urls.push(`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`);
-      urls.push(`https://img.youtube.com/vi/${ytId}/sddefault.jpg`);
-      urls.push(`https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`);
-      urls.push(`https://img.youtube.com/vi/${ytId}/0.jpg`);
-    }
+  if (hasCustomThumbnail && ytUrls.length > 0) {
+    urls.push(...ytUrls);
   }
 
   return [...new Set(urls)];
@@ -317,3 +348,39 @@ export const getUserProfilePath = (uid: string): string[] =>
 
 export const getUserNotifSettingsPath = (uid: string): string[] =>
   ['artifacts', APP_ID, 'users', uid, 'settings', 'notifications'];
+
+export const GCS_VIDEO_BUCKET = 'biblioteca-dmx-videos-oficiais';
+
+export function sanitizeDownloadFilename(name: string, quality: string): string {
+  const base = name.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '_');
+  return `${base}_${quality}.mp4`;
+}
+
+export function buildGcsVideoMediaUrl(exerciseId: string, quality: string): string {
+  return `https://storage.googleapis.com/${GCS_VIDEO_BUCKET}/${exerciseId}_${quality}.mp4`;
+}
+
+export function buildGcsVideoMetadataUrl(exerciseId: string, quality: string): string {
+  const objectName = encodeURIComponent(`${exerciseId}_${quality}.mp4`);
+  return `https://storage.googleapis.com/storage/v1/b/${GCS_VIDEO_BUCKET}/o/${objectName}`;
+}
+
+/** URL com Content-Disposition attachment — download direto sem abrir nova aba */
+export function buildGcsVideoDownloadUrl(
+  exerciseId: string,
+  quality: string,
+  filename: string
+): string {
+  const disposition = encodeURIComponent(`attachment; filename="${filename}"`);
+  return `${buildGcsVideoMediaUrl(exerciseId, quality)}?response-content-disposition=${disposition}&t=${Date.now()}`;
+}
+
+export function triggerBrowserDownload(url: string, filename: string): void {
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}

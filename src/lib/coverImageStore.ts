@@ -41,6 +41,9 @@ export function warmSessionCover(firestoreId: string, url: string): void {
   img.onload = () => setSessionCoverUrl(firestoreId, url);
   img.onerror = () => sessionLoading.delete(firestoreId);
   img.src = url;
+  if (img.complete && img.naturalWidth > 0) {
+    setSessionCoverUrl(firestoreId, url);
+  }
 }
 
 export function warmSessionCovers(items: { firestoreId: string; url: string }[]): void {
