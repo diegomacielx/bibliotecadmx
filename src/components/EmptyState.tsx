@@ -9,6 +9,7 @@ interface EmptyStateProps {
   category?: string;
   onSuggest?: () => void;
   onClearFilters?: () => void;
+  onGoHome?: () => void;
   animated?: boolean;
 }
 
@@ -52,43 +53,62 @@ export function EmptyState({
   category,
   onSuggest,
   onClearFilters,
+  onGoHome,
   animated = true,
 }: EmptyStateProps) {
   const { icon, title, getDescription } = CONFIG[variant];
   const description = getDescription(searchTerm, category);
 
   const content = (
-    <div className="empty-state" role="status">
-      <div className="empty-state__glow" aria-hidden="true" />
-      <div className="empty-state__icon-wrap">
-        <Icon name={icon} className="empty-state__icon" strokeWidth={1.5} />
+    <>
+      <div className="empty-state" role="status">
+        <div className="empty-state__glow" aria-hidden="true" />
+        <div className="empty-state__icon-wrap">
+          <Icon name={icon} className="empty-state__icon" strokeWidth={1.5} />
+        </div>
+        <h3 className="empty-state__title">{title}</h3>
+        <p className="empty-state__description">{description}</p>
+        <div className="empty-state__actions">
+          {variant === 'search' && searchTerm?.trim() && onSuggest && (
+            <button type="button" onClick={onSuggest} className="empty-state__cta">
+              <Icon name="lightbulb" className="w-4 h-4" />
+              Sugerir gravação de “{searchTerm}”
+            </button>
+          )}
+          {variant === 'favorites' && onClearFilters && (
+            <button type="button" onClick={onClearFilters} className="empty-state__cta empty-state__cta--ghost">
+              Explorar todos os exercícios
+            </button>
+          )}
+          {variant === 'category' && category && category !== 'Todos' && onClearFilters && (
+            <button type="button" onClick={onClearFilters} className="empty-state__cta empty-state__cta--ghost">
+              Ver todas as categorias
+            </button>
+          )}
+          {variant === 'filters' && onClearFilters && (
+            <button type="button" onClick={onClearFilters} className="empty-state__cta empty-state__cta--ghost">
+              Limpar filtros avançados
+            </button>
+          )}
+        </div>
+        {variant === 'search' && (
+          <p className="empty-state__hint">
+            Pressione <kbd className="empty-state__kbd">Esc</kbd> para voltar à categoria anterior
+          </p>
+        )}
       </div>
-      <h3 className="empty-state__title">{title}</h3>
-      <p className="empty-state__description">{description}</p>
-      <div className="empty-state__actions">
-        {variant === 'search' && searchTerm?.trim() && onSuggest && (
-          <button type="button" onClick={onSuggest} className="empty-state__cta">
-            <Icon name="lightbulb" className="w-4 h-4" />
-            Sugerir gravação de “{searchTerm}”
-          </button>
-        )}
-        {variant === 'favorites' && onClearFilters && (
-          <button type="button" onClick={onClearFilters} className="empty-state__cta empty-state__cta--ghost">
-            Explorar todos os exercícios
-          </button>
-        )}
-        {variant === 'category' && category && category !== 'Todos' && onClearFilters && (
-          <button type="button" onClick={onClearFilters} className="empty-state__cta empty-state__cta--ghost">
-            Ver todas as categorias
-          </button>
-        )}
-        {variant === 'filters' && onClearFilters && (
-          <button type="button" onClick={onClearFilters} className="empty-state__cta empty-state__cta--ghost">
-            Limpar filtros avançados
-          </button>
-        )}
-      </div>
-    </div>
+      {variant === 'search' && onGoHome && (
+        <button
+          type="button"
+          className="empty-state__home-fab"
+          onClick={onGoHome}
+          aria-label="Voltar ao início — categoria Todos"
+          title="Voltar ao início"
+        >
+          <Icon name="x" className="w-5 h-5" strokeWidth={2} />
+        </button>
+      )}
+    </>
   );
 
   if (!animated) return content;

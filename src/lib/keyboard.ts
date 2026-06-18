@@ -48,6 +48,7 @@ export function buildShortcutSections(options: {
         { id: 'shortcuts', label: 'Abrir este painel', keys: ['?'] },
         { id: 'shortcuts-alt', label: 'Abrir este painel (alternativo)', keys: [mod, '/'] },
         { id: 'escape', label: 'Fechar painel, player ou modal', keys: ['Esc'] },
+        { id: 'home', label: 'Voltar ao início (categoria Todos)', keys: ['Home'] },
       ],
     },
     {
@@ -75,6 +76,11 @@ export function buildShortcutSections(options: {
           label: 'Comparar dois exercícios',
           keys: ['Shift', 'Clique no card'],
           when: options.hasCompare,
+        },
+        {
+          id: 'empty-search-back',
+          label: 'Sair da busca sem resultados (categoria anterior)',
+          keys: ['Esc'],
         },
       ],
     },

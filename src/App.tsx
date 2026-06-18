@@ -126,8 +126,9 @@ export default function App() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [loading, setLoading] = useState(true);
   const [slowConnection, setSlowConnection] = useState(false);
-  const [searchTerm, setSearchTerm] = useState(() => localStorage.getItem('dmx_search') || '');
+  const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState(() => localStorage.getItem('dmx_category') || 'Todos');
+  const categoryBeforeSearchRef = useRef(activeCategory);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const { filters: advancedFilters, setFilters: setAdvancedFilters, resetFilters: resetAdvancedFilters } =
     useAdvancedFilters();
@@ -221,8 +222,8 @@ export default function App() {
   }, [authLoading, loading]);
 
   useEffect(() => {
-    localStorage.setItem('dmx_search', searchTerm);
-  }, [searchTerm]);
+    localStorage.removeItem('dmx_search');
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('dmx_category', activeCategory);
@@ -1014,6 +1015,83 @@ export default function App() {
     resetAdvancedFilters();
   }, [resetAdvancedFilters]);
 
+  const handleGoHome = useCallback(() => {
+    setSearchTerm('');
+    setActiveCategory('Todos');
+    resetAdvancedFilters();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [resetAdvancedFilters]);
+
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      setSearchTerm((prev) => {
+        if (!prev.trim() && value.trim()) {
+          categoryBeforeSearchRef.current = activeCategory;
+        }
+        return value;
+      });
+    },
+    [activeCategory]
+  );
+
+  const handleSelectSearchHistory = useCallback(
+    (term: string) => {
+      setSearchTerm((prev) => {
+        if (!prev.trim() && term.trim()) {
+          categoryBeforeSearchRef.current = activeCategory;
+        }
+        return term;
+      });
+    },
+    [activeCategory]
+  );
+
+  const handleCategoryChange = useCallback((cat: string) => {
+    setSearchTerm('');
+    setActiveCategory(cat);
+  }, []);
+
+  const handleSearchEscapeBack = useCallback(() => {
+    setSearchTerm('');
+    setActiveCategory(categoryBeforeSearchRef.current || 'Todos');
+  }, []);
+
+  const isEmptySearchState =
+    !loading && !!searchTerm.trim() && filteredExercises.length === 0 && emptyStateVariant === 'search';
+
+  useEffect(() => {
+    if (isMobileLayout) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Home' || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (isTypingTarget(e.target)) return;
+      if (activeVideo || showAdminPanel || shortcutsOpen || comparePick) return;
+      e.preventDefault();
+      handleGoHome();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isMobileLayout, handleGoHome, activeVideo, showAdminPanel, shortcutsOpen, comparePick]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (activeVideo || showAdminPanel || shortcutsOpen || comparePick) return;
+      if (!isEmptySearchState) return;
+      e.preventDefault();
+      e.stopPropagation();
+      handleSearchEscapeBack();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [
+    isEmptySearchState,
+    activeVideo,
+    showAdminPanel,
+    shortcutsOpen,
+    comparePick,
+    handleSearchEscapeBack,
+  ]);
+
   useEffect(() => {
     if (loading || exercises.length === 0) return;
     console.log('[DMX:Filter] Total:', exercises.length, '→ visíveis:', filteredExercises.length, {
@@ -1491,12 +1569,12 @@ export default function App() {
         userProfile={userProfile}
         onUpdateNickname={handleUpdateNickname}
         searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
+        onSearchChange={handleSearchChange}
         onSearchCommit={addSearch}
         searchHistory={history}
         searchRecents={visibleRecents}
-        onSelectHistory={setSearchTerm}
-        onSelectRecent={(_id, name) => setSearchTerm(name)}
+        onSelectHistory={handleSelectSearchHistory}
+        onSelectRecent={(_id, name) => handleSearchChange(name)}
         onRemoveHistoryItem={removeHistoryItem}
         onClearHistory={clearHistory}
         onRecentWatch={handleRecentWatch}
@@ -1517,6 +1595,7 @@ export default function App() {
         lastReadAt={lastReadAt}
         onNotificationClick={handleNotificationClick}
         onOpenShortcuts={isMobileLayout ? undefined : () => setShortcutsOpen(true)}
+        onGoHome={handleGoHome}
       />
 
       {showAdminUI && (
@@ -1564,7 +1643,7 @@ export default function App() {
       <CategoryNav
         categories={NAV_CATEGORIES}
         activeCategory={activeCategory}
-        onCategoryChange={setActiveCategory}
+        onCategoryChange={handleCategoryChange}
         favoritesCount={favorites.size}
       />
 
@@ -1634,6 +1713,7 @@ export default function App() {
                 : undefined
             }
             onClearFilters={handleEmptyClearFilters}
+            onGoHome={emptyStateVariant === 'search' ? handleGoHome : undefined}
           />
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-fluid-md @container">
@@ -1718,6 +1798,7 @@ export default function App() {
                 : undefined
             }
             onClearFilters={handleEmptyClearFilters}
+            onGoHome={emptyStateVariant === 'search' ? handleGoHome : undefined}
           />
         ) : (
           <motion.div

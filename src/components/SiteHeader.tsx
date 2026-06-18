@@ -39,6 +39,7 @@ interface SiteHeaderProps {
   lastReadAt: string | null;
   onNotificationClick: (exerciseId?: string) => void;
   onOpenShortcuts?: () => void;
+  onGoHome?: () => void;
 }
 
 function UserAvatar({ name }: { name: string }) {
@@ -84,6 +85,7 @@ export function SiteHeader({
   lastReadAt,
   onNotificationClick,
   onOpenShortcuts,
+  onGoHome,
 }: SiteHeaderProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
@@ -236,7 +238,13 @@ export function SiteHeader({
         {/* Linha principal */}
         <div className="flex items-center gap-4 lg:gap-8 py-3 lg:py-4">
           {/* Brand */}
-          <div className="header-brand shrink-0">
+          <button
+            type="button"
+            onClick={onGoHome}
+            className="header-brand shrink-0 text-left"
+            aria-label="Voltar ao início — categoria Todos"
+            title="Início"
+          >
             <div className="header-brand-logo-wrap">
               <BrandLogo variant="header" />
             </div>
@@ -246,7 +254,7 @@ export function SiteHeader({
               </h1>
               <p className="header-brand-tagline">Execuções em alta definição</p>
             </div>
-          </div>
+          </button>
 
           {/* Search — desktop inline */}
           <div className="hidden lg:flex flex-1 max-w-3xl xl:max-w-4xl mx-auto min-w-0 items-center">
