@@ -74,8 +74,9 @@ export function HeroSpotlightSection({
     return { firestoreId: 'hero-preview', id: '0000', youtubeUrl: '', thumbnail: '' };
   }, [mode, heroSpotlight.imageUrl, selectedExercise]);
 
-  const { imgSrc, placeholderSrc, webpSrc, handleLoad, handleError } = useExerciseCover(coverSource);
+  const { imgSrc, coverMissing, placeholderSrc, webpSrc, handleLoad, handleError } = useExerciseCover(coverSource);
   const previewSrc = mode === 'campaign' ? heroSpotlight.imageUrl || imgSrc : imgSrc;
+  const showCoverPreview = Boolean(previewSrc) || (mode !== 'campaign' && coverMissing);
 
   const displayY =
     parseCoverFocusYInput(
@@ -200,13 +201,14 @@ export function HeroSpotlightSection({
 
       <div className="admin-cover-focus admin-hero-cover-focus">
         <div className="admin-cover-preview admin-cover-preview--live admin-cover-preview--hero" aria-hidden="true">
-          {previewSrc ? (
+          {showCoverPreview ? (
             <ExerciseCoverImage
               imgSrc={previewSrc}
               imgLoaded
               placeholderSrc={mode === 'campaign' ? null : placeholderSrc}
               webpSrc={mode === 'campaign' ? null : webpSrc}
               alt=""
+              coverMissing={mode !== 'campaign' && coverMissing}
               frameSource={{
                 ...previewFrame,
                 coverFocusX: displayX,

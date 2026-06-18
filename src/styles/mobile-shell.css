@@ -463,6 +463,11 @@ html[data-touch-layout='true'] .cinema-container {
     object-fit: cover;
   }
 
+  .cinema-mobile-watch-poster--placeholder {
+    position: relative;
+    object-fit: unset;
+  }
+
   .cinema-mobile-watch-gradient {
     position: absolute;
     inset: 0;

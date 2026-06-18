@@ -455,6 +455,12 @@ html[data-theme="light"] {
   margin-inline: auto;
 }
 
+.brand-logo-stack--card {
+  width: 2.75rem;
+  height: 2.75rem;
+  flex-shrink: 0;
+}
+
 @media (min-width: 640px) {
   .brand-logo-stack--auth {
     height: 5.25rem;

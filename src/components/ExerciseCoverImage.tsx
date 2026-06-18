@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Skeleton } from './Skeleton';
 import { getCoverFrameStyle, type CoverFrameSource } from '../lib/coverFocus';
+import { ExerciseCoverPlaceholder } from './ExerciseCoverPlaceholder';
 
 interface ExerciseCoverImageProps {
   imgSrc: string;
@@ -13,6 +14,8 @@ interface ExerciseCoverImageProps {
   className?: string;
   imgClassName?: string;
   useBlurUp?: boolean;
+  /** Capa indisponível — exibe placeholder com logo + play */
+  coverMissing?: boolean;
   /** Capa já resolvida nesta sessão — exibe sem fade-in */
   instantDisplay?: boolean;
   onLoad: (e: React.SyntheticEvent<HTMLImageElement>) => void;
@@ -30,6 +33,7 @@ export function ExerciseCoverImage({
   className = '',
   imgClassName = '',
   useBlurUp = false,
+  coverMissing = false,
   instantDisplay = false,
   onLoad,
   onError,
@@ -38,6 +42,10 @@ export function ExerciseCoverImage({
     () => (frameSource ? getCoverFrameStyle(frameSource) : getCoverFrameStyle({ name: '', category: '', muscleGroups: [] })),
     [frameSource]
   );
+
+  if (coverMissing) {
+    return <ExerciseCoverPlaceholder className={className} />;
+  }
 
   const showPlaceholder = useBlurUp && !imgLoaded && placeholderSrc;
   const showSkeleton = !imgLoaded && !showPlaceholder;

@@ -84,7 +84,7 @@ export function ExerciseCard({
   const hoverDevice = useMediaQuery('(hover: hover)');
   const [mobileExpanded, setMobileExpanded] = useState(false);
   const coverRef = useRef<HTMLDivElement>(null);
-  const { imgSrc, imgLoaded, isCoverInstant, placeholderSrc, webpSrc, handleLoad, handleError, shouldUseCoverBlurUp } =
+  const { imgSrc, imgLoaded, isCoverInstant, coverMissing, placeholderSrc, webpSrc, handleLoad, handleError, shouldUseCoverBlurUp } =
     useExerciseCover(ex);
   const handleGlow = useAmbientGlow<HTMLDivElement>();
   const reducedMotion = useReducedMotion();
@@ -278,8 +278,8 @@ export function ExerciseCard({
           : undefined
       }
       className={`exercise-card cinematic-card card-grid-item card-3d group relative rounded-cinema-lg border shadow-cinematic hover:shadow-cinematic ease-cinematic duration-cinematic ${
-        showPreview ? 'exercise-card--preview-active' : ''
-      } ${previewSrc && !showPreview ? 'exercise-card--preview-warming' : ''} ${
+        coverMissing ? 'exercise-card--no-cover' : ''
+      } ${showPreview ? 'exercise-card--preview-active' : ''} ${previewSrc && !showPreview ? 'exercise-card--preview-warming' : ''} ${
         isAdmin ? 'exercise-card--admin' : ''
       } ${mobileExpanded || selectionMode ? 'card-actions-pinned z-[50]' : 'z-10'} ${
         mobileExpanded ? 'card-mobile-expanded' : ''
@@ -331,6 +331,7 @@ export function ExerciseCard({
             alt={`Capa do exercício ${ex.name}`}
             frameSource={ex}
             instantDisplay={isCoverInstant}
+            coverMissing={coverMissing}
             useBlurUp={shouldUseCoverBlurUp(reducedMotion) && !isCoverInstant}
             onLoad={handleLoad}
             onError={handleError}
@@ -338,9 +339,9 @@ export function ExerciseCard({
             className={mobileExpanded ? 'cover-image-root--mobile-expanded' : ''}
           />
 
-          <div className="card-cover-grain" aria-hidden="true" />
+          {!coverMissing && <div className="card-cover-grain" aria-hidden="true" />}
 
-          <div className="card-cover-vignette" aria-hidden="true" />
+          {!coverMissing && <div className="card-cover-vignette" aria-hidden="true" />}
 
           {touchLayout && selectionMode && playlistSequence != null && (
             <div className="card-selection-order-mobile" aria-label={`${playlistSequence}º no treino`}>
@@ -362,7 +363,7 @@ export function ExerciseCard({
             </button>
           )}
 
-          {!showPreview && !touchLayout && (
+          {!coverMissing && !showPreview && !touchLayout && (
             <div
               className="card-play-overlay absolute inset-0 z-[25] flex items-center justify-center pointer-events-none"
               aria-hidden="true"

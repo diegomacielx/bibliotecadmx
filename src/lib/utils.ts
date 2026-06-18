@@ -12,6 +12,12 @@ export const GITHUB_COVER_BASE_FALLBACK =
   (import.meta.env.VITE_GITHUB_COVER_BASE_FALLBACK as string | undefined)?.replace(/\/$/, '') ||
   'https://raw.githubusercontent.com/diegomacielx/dmx/main';
 
+export function isGenericCoverFallbackUrl(url: string | undefined | null): boolean {
+  if (!url?.trim()) return true;
+  const u = url.trim().toLowerCase();
+  return u.includes('imgur.com/rllyq3z');
+}
+
 export function isYouTubeCoverUrl(url: string): boolean {
   const u = url.toLowerCase();
   return u.includes('ytimg.com') || u.includes('img.youtube.com/vi/') || u.includes('youtube.com/vi/');

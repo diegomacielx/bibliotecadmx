@@ -12,8 +12,10 @@ import { isTypingTarget } from '../lib/keyboard';
 import { prefetchExerciseNeighbors } from '../lib/exercisePrefetch';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useTouchLayout } from '../hooks/useMediaQuery';
+import { useTheme } from '../hooks/useTheme';
 import { useExerciseCover } from '../hooks/useExerciseCover';
 import { getCoverFrameStyle } from '../lib/coverFocus';
+import { ExerciseCoverPlaceholder } from './ExerciseCoverPlaceholder';
 import { YouTubePlayer, type YouTubePlayerHandle } from './YouTubePlayer';
 import { Icon } from './Icon';
 import { MuscleGroupList } from './MuscleGroupList';
@@ -43,6 +45,12 @@ interface CinemaLightboxProps {
 const VIDEO_H = 'min(92vh, 900px)';
 const CONTROLS_HIDE_MS = 3200;
 const SIDEBAR_SLIDE_EASE = [0.32, 0.72, 0, 1] as const;
+
+/** Valores literais — o build de produção remove backdrop-filter do CSS e mantém só -webkit */
+const CINEMA_BACKDROP_BLUR = {
+  dark: 'blur(36px) saturate(1.65) brightness(0.955) contrast(1.08)',
+  light: 'blur(38px) saturate(1.55) brightness(0.97) contrast(1.06)',
+} as const;
 
 function useMdUp() {
   const [isMdUp, setIsMdUp] = useState(() =>
@@ -180,24 +188,28 @@ function ExerciseDetails({
 }
 
 function MobileWatchPanel({ ex }: { ex: Exercise }) {
-  const { imgSrc, handleLoad, handleError } = useExerciseCover(ex);
+  const { imgSrc, coverMissing, handleLoad, handleError } = useExerciseCover(ex);
 
   return (
     <div className="cinema-mobile-watch-panel">
-      <img
-        src={imgSrc}
-        alt=""
-        loading="eager"
-        decoding="async"
-        draggable={false}
-        onLoad={handleLoad}
-        onError={handleError}
-        style={{
-          objectPosition: getCoverFrameStyle(ex).objectPosition,
-          ...(getCoverFrameStyle(ex).cssVars as React.CSSProperties),
-        }}
-        className="cinema-mobile-watch-poster"
-      />
+      {coverMissing ? (
+        <ExerciseCoverPlaceholder className="cinema-mobile-watch-poster cinema-mobile-watch-poster--placeholder" />
+      ) : (
+        <img
+          src={imgSrc}
+          alt=""
+          loading="eager"
+          decoding="async"
+          draggable={false}
+          onLoad={handleLoad}
+          onError={handleError}
+          style={{
+            objectPosition: getCoverFrameStyle(ex).objectPosition,
+            ...(getCoverFrameStyle(ex).cssVars as React.CSSProperties),
+          }}
+          className="cinema-mobile-watch-poster"
+        />
+      )}
       <div className="cinema-mobile-watch-gradient" aria-hidden="true" />
       <button
         type="button"
@@ -418,6 +430,7 @@ export function CinemaLightbox({
   const reducedMotion = useReducedMotion();
   const isMobileLayout = useTouchLayout();
   const isMdUp = useMdUp();
+  const { theme } = useTheme();
   const isCompare = !!compareEx;
   const playerRef = useRef<YouTubePlayerHandle>(null);
   const comparePlayerRef = useRef<YouTubePlayerHandle>(null);
@@ -649,15 +662,25 @@ export function CinemaLightbox({
   const showMobileSheet = isMobileLayout && !isCompare;
   const showSidebar = showMobileSheet ? false : isMobileLayout || sidebarVisible;
 
+  const backdropFxStyle = useMemo((): CSSProperties => {
+    const filter = CINEMA_BACKDROP_BLUR[theme === 'light' ? 'light' : 'dark'];
+    return {
+      backdropFilter: filter,
+      WebkitBackdropFilter: filter,
+    };
+  }, [theme]);
+
   return createPortal(
     <>
       {!isMobileLayout && (
         <div
-          className="cinema-backdrop cinema-backdrop--portal fixed inset-0 z-[199] pointer-events-auto"
+          className="cinema-backdrop cinema-backdrop--portal"
           onClick={onClose}
           onWheel={handleBackdropWheel}
           aria-hidden="true"
-        />
+        >
+          <div className="cinema-backdrop__fx" style={backdropFxStyle} aria-hidden="true" />
+        </div>
       )}
 
       <motion.div

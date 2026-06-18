@@ -8,8 +8,8 @@ import {
 interface BrandLogoProps {
   alt?: string;
   className?: string;
-  /** Header compacto ou login maior */
-  variant?: 'header' | 'auth';
+  /** Header compacto, login maior ou capa de card sem imagem */
+  variant?: 'header' | 'auth' | 'card';
 }
 
 function LogoLayer({
@@ -21,7 +21,7 @@ function LogoLayer({
 }: {
   candidates: readonly string[];
   layer: 'dark' | 'light';
-  variant: 'header' | 'auth';
+  variant: 'header' | 'auth' | 'card';
   alt: string;
   className?: string;
 }) {
