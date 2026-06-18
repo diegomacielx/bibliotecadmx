@@ -7,6 +7,24 @@ export const GITHUB_COVER_BASE =
   (import.meta.env.VITE_GITHUB_COVER_BASE as string | undefined)?.replace(/\/$/, '') ||
   'https://raw.githubusercontent.com/diegomacielx/bibliotecadmx/main';
 
+/** Repositório legado — mesmo conjunto de capas, fallback extra */
+export const GITHUB_COVER_BASE_FALLBACK =
+  (import.meta.env.VITE_GITHUB_COVER_BASE_FALLBACK as string | undefined)?.replace(/\/$/, '') ||
+  'https://raw.githubusercontent.com/diegomacielx/dmx/main';
+
+export function isYouTubeCoverUrl(url: string): boolean {
+  const u = url.toLowerCase();
+  return u.includes('ytimg.com') || u.includes('img.youtube.com/vi/') || u.includes('youtube.com/vi/');
+}
+
+function appendGitHubCoverCandidates(urls: string[], exerciseId: string, base: string): void {
+  for (const assetId of getExerciseAssetIds(exerciseId)) {
+    for (const ext of ['jpg', 'JPG', 'png', 'PNG'] as const) {
+      urls.push(`${base}/${assetId}.${ext}`);
+    }
+  }
+}
+
 /** Logs de depuração — visíveis no console do navegador (filtro: DMX) */
 export const logDebug = (tag: string, ...args: unknown[]) => {
   console.debug(`[DMX:${tag}]`, ...args);
@@ -243,7 +261,10 @@ export const buildExerciseImageFallbacks = (ex: {
 
   if (ex.firestoreId) {
     const cached = getCachedCoverUrl(ex.firestoreId);
-    if (cached) urls.push(cached);
+    // Não priorizar cache do YouTube — capas 4K no GitHub devem ser tentadas primeiro
+    if (cached && !isYouTubeCoverUrl(cached)) {
+      urls.push(cached);
+    }
   }
 
   const thumb = ex.thumbnail?.trim();
@@ -257,11 +278,9 @@ export const buildExerciseImageFallbacks = (ex: {
   const ytId = !isExerciseIncomplete(ex.youtubeUrl) ? getYouTubeId(ex.youtubeUrl) : null;
   const ytUrls = ytId ? buildYouTubeThumbUrls(ytId) : [];
 
-  // Capas 4K no GitHub (bibliotecadmx/main) antes do YouTube quando não há thumbnail customizada
-  for (const assetId of getExerciseAssetIds(ex.id)) {
-    for (const ext of ['png', 'PNG', 'jpg', 'JPG'] as const) {
-      urls.push(getExerciseCoverUrl(assetId, ext));
-    }
+  const githubBases = [...new Set([GITHUB_COVER_BASE, GITHUB_COVER_BASE_FALLBACK])];
+  for (const base of githubBases) {
+    appendGitHubCoverCandidates(urls, ex.id, base);
   }
 
   if (ytUrls.length > 0) {

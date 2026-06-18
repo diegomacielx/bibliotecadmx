@@ -1,6 +1,6 @@
 import { readJSON, writeJSON } from './storage';
 
-const COVER_CACHE_KEY = 'dmx_cover_hits_v2';
+const COVER_CACHE_KEY = 'dmx_cover_hits_v3';
 const MAX_ENTRIES = 800;
 
 interface CoverHit {
@@ -22,6 +22,8 @@ export function getCachedCoverUrl(firestoreId: string): string | null {
 /** Persiste a URL que carregou com sucesso para priorizar no próximo login */
 export function rememberCoverUrl(firestoreId: string, url: string): void {
   if (!firestoreId || !url || url.startsWith('blob:')) return;
+  const lower = url.toLowerCase();
+  if (lower.includes('ytimg.com') || lower.includes('img.youtube.com/vi/')) return;
 
   const map = readMap();
   map[firestoreId] = { url, ts: Date.now() };

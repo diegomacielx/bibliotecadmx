@@ -650,25 +650,10 @@ export function CinemaLightbox({
   const showSidebar = showMobileSheet ? false : isMobileLayout || sidebarVisible;
 
   return createPortal(
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.1, ease: [0.22, 1, 0.36, 1] }}
-      className={`cinema-lightbox fixed inset-0 z-[200] flex overflow-hidden ${
-        isMobileLayout
-          ? 'cinema-lightbox--mobile pointer-events-auto flex-col p-0'
-          : 'pointer-events-none items-center justify-center p-2 sm:p-4'
-      }`}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={isMobileLayout ? undefined : 'cinema-lightbox-title'}
-      onMouseMove={isMobileLayout ? undefined : resetHideTimer}
-      onWheel={isMobileLayout ? undefined : resetHideTimer}
-    >
+    <>
       {!isMobileLayout && (
         <div
-          className="absolute inset-0 cinema-backdrop pointer-events-auto"
+          className="cinema-backdrop cinema-backdrop--portal fixed inset-0 z-[199] pointer-events-auto"
           onClick={onClose}
           onWheel={handleBackdropWheel}
           aria-hidden="true"
@@ -676,6 +661,22 @@ export function CinemaLightbox({
       )}
 
       <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.1, ease: [0.22, 1, 0.36, 1] }}
+        className={`cinema-lightbox fixed inset-0 z-[200] flex overflow-hidden ${
+          isMobileLayout
+            ? 'cinema-lightbox--mobile pointer-events-auto flex-col p-0'
+            : 'pointer-events-none items-center justify-center p-2 sm:p-4'
+        }`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={isMobileLayout ? undefined : 'cinema-lightbox-title'}
+        onMouseMove={isMobileLayout ? undefined : resetHideTimer}
+        onWheel={isMobileLayout ? undefined : resetHideTimer}
+      >
+        <motion.div
         initial={
           reducedMotion
             ? { opacity: 0 }
@@ -938,7 +939,8 @@ export function CinemaLightbox({
           )}
         </AnimatePresence>
       </motion.div>
-    </motion.div>,
+    </motion.div>
+    </>,
     document.body
   );
 }

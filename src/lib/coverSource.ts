@@ -2,8 +2,8 @@ import { CUSTOM_LOGO_URL } from './constants';
 import { getCachedCoverUrl } from './coverCache';
 import {
   GITHUB_COVER_BASE,
+  GITHUB_COVER_BASE_FALLBACK,
   getExerciseAssetIds,
-  getExerciseCoverUrl,
   hasValidYouTubeUrl,
 } from './utils';
 
@@ -38,12 +38,12 @@ export function classifyCoverUrl(url: string | null | undefined): CoverSourceKin
 /** URLs candidatas oficiais no GitHub para o ID do exercício */
 export function getOfficialGitHubCoverCandidates(ex: { id: string }): string[] {
   const urls: string[] = [];
-  for (const assetId of getExerciseAssetIds(ex.id)) {
-    for (const ext of ['png', 'PNG'] as const) {
-      urls.push(getExerciseCoverUrl(assetId, ext));
-    }
-    for (const ext of ['jpg', 'JPG'] as const) {
-      urls.push(getExerciseCoverUrl(assetId, ext));
+  const bases = [...new Set([GITHUB_COVER_BASE, GITHUB_COVER_BASE_FALLBACK])];
+  for (const base of bases) {
+    for (const assetId of getExerciseAssetIds(ex.id)) {
+      for (const ext of ['jpg', 'JPG', 'png', 'PNG'] as const) {
+        urls.push(`${base}/${assetId}.${ext}`);
+      }
     }
   }
   return [...new Set(urls)];

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { CUSTOM_LOGO_URL } from '../lib/constants';
-import { buildExerciseImageFallbacks } from '../lib/utils';
+import { buildExerciseImageFallbacks, isYouTubeCoverUrl } from '../lib/utils';
 import {
   getSessionCoverUrl,
   isSessionCoverReady,
@@ -119,7 +119,7 @@ export function useExerciseCover(ex: CoverSource) {
       }
       setImgLoaded(true);
       setIsCoverInstant(true);
-      if (url && !url.includes('imgur.com/rLLYQ3Z')) {
+      if (url && !url.includes('imgur.com/rLLYQ3Z') && !isYouTubeCoverUrl(url)) {
         setSessionCoverUrl(ex.firestoreId, url);
       }
     },
