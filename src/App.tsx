@@ -88,6 +88,7 @@ import { prefetchCoverUrls } from './lib/coverCache';
 import { getGridPrefetchPeers } from './lib/exercisePrefetch';
 import { normalizeNickname, validateNickname } from './lib/nickname';
 import { warmSessionCovers } from './lib/coverImageStore';
+import { sendTransactionalEmail } from './lib/email';
 import { AdvancedFiltersBar } from './components/AdvancedFiltersBar';
 import { useAdvancedFilters } from './hooks/useAdvancedFilters';
 import { applyAdvancedFilters, hasActiveAdvancedFilters } from './lib/exerciseFilters';
@@ -695,6 +696,13 @@ export default function App() {
         targetUserId: req.userId,
         createdAt: new Date().toISOString(),
       });
+      if (req.userEmail) {
+        void sendTransactionalEmail({
+          type: 'request_fulfilled',
+          to: req.userEmail,
+          data: { studentName: req.userName ?? '', exerciseName: req.exerciseName ?? '' },
+        });
+      }
       if (appSettings?.webhookUrl) {
         try {
           fetch(appSettings.webhookUrl, {
@@ -774,8 +782,11 @@ export default function App() {
       if (authMode === 'login') {
         await fb.signInWithEmailAndPassword(auth, email, loginPassword);
       } else if (authMode === 'forgot') {
-        await fb.sendPasswordResetEmail(auth, email);
-        showToast('E-mail de recuperação enviado!');
+        await fb.sendPasswordResetEmail(auth, email, {
+          url: `${window.location.origin}/`,
+          handleCodeInApp: false,
+        });
+        showToast('Se o e-mail estiver cadastrado, enviamos o link de recuperação. Verifique a caixa de entrada e o spam.');
         setAuthMode('login');
       } else {
         if (!registerName.trim()) {

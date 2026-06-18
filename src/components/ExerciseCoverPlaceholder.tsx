@@ -1,6 +1,5 @@
 import type { CSSProperties } from 'react';
 import { BrandLogo } from './BrandLogo';
-import { Icon } from './Icon';
 
 interface ExerciseCoverPlaceholderProps {
   className?: string;
@@ -30,7 +29,7 @@ export function getCoverPlaceholderStyle(exerciseId?: string, category?: string)
   } as CSSProperties;
 }
 
-/** Capa ausente ou carregando — fundo temático + logo + play */
+/** Capa ausente ou carregando — fundo temático + logo */
 export function ExerciseCoverPlaceholder({
   className = '',
   exerciseId,
@@ -50,14 +49,6 @@ export function ExerciseCoverPlaceholder({
       <div className="cover-placeholder__logo">
         <BrandLogo variant="card" alt="" />
       </div>
-      <div className="cover-placeholder__play" aria-hidden="true">
-        <Icon name="play" className="cover-placeholder__play-icon" strokeWidth={1.75} />
-      </div>
-      {exerciseId && (
-        <span className="cover-placeholder__id" aria-hidden="true">
-          #{exerciseId}
-        </span>
-      )}
     </div>
   );
 }

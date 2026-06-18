@@ -1010,9 +1010,7 @@ button.header-brand:focus-visible {
   z-index: 1;
 }
 
-.cover-placeholder--subdued .cover-placeholder__logo,
-.cover-placeholder--subdued .cover-placeholder__play,
-.cover-placeholder--subdued .cover-placeholder__id {
+.cover-placeholder--subdued .cover-placeholder__logo {
   opacity: 0.55;
 }
 
@@ -1049,22 +1047,6 @@ html[data-theme="light"] .cover-placeholder__mesh {
     );
 }
 
-.cover-placeholder__id {
-  position: absolute;
-  right: 0.875rem;
-  bottom: 0.75rem;
-  z-index: 2;
-  font-size: 0.625rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.28);
-}
-
-html[data-theme="light"] .cover-placeholder__id {
-  color: rgba(26, 24, 22, 0.28);
-}
-
 .search-suggestion-thumb--art {
   display: block;
   flex-shrink: 0;
@@ -1077,17 +1059,11 @@ html[data-theme="dark"] .cover-placeholder,
 :root .cover-placeholder {
   --cover-placeholder-bg: linear-gradient(168deg, #121218 0%, #0c0c10 52%, #14101a 100%);
   --cover-placeholder-glow: rgba(239, 68, 68, 0.08);
-  --cover-placeholder-play-bg: rgba(255, 255, 255, 0.06);
-  --cover-placeholder-play-border: rgba(255, 255, 255, 0.12);
-  --cover-placeholder-play-color: rgba(255, 255, 255, 0.68);
 }
 
 html[data-theme="light"] .cover-placeholder {
   --cover-placeholder-bg: linear-gradient(168deg, #f5f2ec 0%, #ebe6dc 52%, #f0ebe4 100%);
   --cover-placeholder-glow: rgba(239, 68, 68, 0.06);
-  --cover-placeholder-play-bg: rgba(26, 24, 22, 0.05);
-  --cover-placeholder-play-border: rgba(26, 24, 22, 0.1);
-  --cover-placeholder-play-color: rgba(26, 24, 22, 0.58);
 }
 
 .cover-placeholder__sheen {
@@ -1123,42 +1099,12 @@ html[data-theme="light"] .cover-placeholder__sheen {
   justify-content: center;
 }
 
-.cover-placeholder__play {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 9999px;
-  background: var(--cover-placeholder-play-bg);
-  border: 1px solid var(--cover-placeholder-play-border);
-  color: var(--cover-placeholder-play-color);
-  opacity: 0.82;
-  transition:
-    opacity 420ms var(--ease-cinematic),
-    transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.cover-placeholder__play-icon {
-  width: 0.75rem;
-  height: 0.75rem;
-  margin-left: 0.0625rem;
-}
-
 .exercise-card--no-cover .card-shimmer {
   opacity: 0.28;
 }
 
 .exercise-card--no-cover .card-media {
   background: var(--dmx-card-cover-bg);
-}
-
-.exercise-card--no-cover:hover .cover-placeholder__play,
-.exercise-card--no-cover:focus-within .cover-placeholder__play {
-  opacity: 1;
-  transform: scale(1.06);
 }
 
 .card-media {
