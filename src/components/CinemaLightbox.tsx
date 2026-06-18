@@ -48,8 +48,8 @@ const SIDEBAR_SLIDE_EASE = [0.32, 0.72, 0, 1] as const;
 
 /** Valores literais — o build de produção remove backdrop-filter do CSS e mantém só -webkit */
 const CINEMA_BACKDROP_BLUR = {
-  dark: 'blur(49px) saturate(1.65) brightness(0.952) contrast(1.08)',
-  light: 'blur(51px) saturate(1.58) brightness(0.968) contrast(1.062)',
+  dark: 'blur(59px) saturate(1.82) brightness(1.05) contrast(0.9)',
+  light: 'blur(61px) saturate(1.76) brightness(1.07) contrast(0.92)',
 } as const;
 
 function useMdUp() {
