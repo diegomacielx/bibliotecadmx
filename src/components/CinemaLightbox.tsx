@@ -7,7 +7,7 @@ import {
   resolveVideoOrientation,
 } from '../lib/utils';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { useMobileUi } from '../hooks/useMediaQuery';
+import { useTouchLayout } from '../hooks/useMediaQuery';
 import { YouTubePlayer, type YouTubePlayerHandle } from './YouTubePlayer';
 import { Icon } from './Icon';
 import { MuscleGroupList } from './MuscleGroupList';
@@ -358,7 +358,7 @@ export function CinemaLightbox({
   isAdmin = false,
 }: CinemaLightboxProps) {
   const reducedMotion = useReducedMotion();
-  const isMobileLayout = useMobileUi();
+  const isMobileLayout = useTouchLayout();
   const isMdUp = useMdUp();
   const isCompare = !!compareEx;
   const playerRef = useRef<YouTubePlayerHandle>(null);
@@ -545,7 +545,7 @@ export function CinemaLightbox({
       }`}
       role="dialog"
       aria-modal="true"
-      aria-labelledby="cinema-lightbox-title"
+      aria-labelledby={isMobileLayout ? undefined : 'cinema-lightbox-title'}
       onMouseMove={isMobileLayout ? undefined : resetHideTimer}
       onWheel={isMobileLayout ? undefined : resetHideTimer}
       onScroll={isMobileLayout ? undefined : resetHideTimer}
@@ -557,23 +557,6 @@ export function CinemaLightbox({
           onWheel={handleBackdropWheel}
           aria-hidden="true"
         />
-      )}
-
-      {isMobileLayout && (
-        <div className="cinema-lightbox-mobile-bar shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            className="cinema-lightbox-mobile-close"
-            aria-label="Fechar"
-          >
-            <Icon name="x" className="w-4 h-4" strokeWidth={2} />
-            <span>Fechar</span>
-          </button>
-          <p id="cinema-lightbox-title" className="cinema-lightbox-mobile-title truncate">
-            {isCompare && compareEx ? 'Comparador' : ex.name}
-          </p>
-        </div>
       )}
 
       <motion.div
@@ -622,6 +605,20 @@ export function CinemaLightbox({
             } ${isVertical && isMobileLayout ? 'cinema-video-area--mobile-vertical' : ''}`}
             style={isMobileLayout ? undefined : videoSizeStyle}
           >
+            {isMobileLayout && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClose();
+                }}
+                className="cinema-mobile-back-btn"
+                aria-label="Voltar para início"
+              >
+                <Icon name="left" className="w-4 h-4" strokeWidth={2.25} />
+              </button>
+            )}
+
             {ytId ? (
               <YouTubePlayer
                 ref={playerRef}
@@ -646,7 +643,7 @@ export function CinemaLightbox({
 
             <div className="cinema-overlay-controls">
               <AnimatePresence>
-                {(controlsVisible || isMobileLayout) && (
+                {!isMobileLayout && controlsVisible && (
                   <motion.button
                     type="button"
                     initial={{ opacity: 0 }}

@@ -91,14 +91,14 @@ export function SiteHeader({
   }, []);
 
   useEffect(() => {
+    if (!showUserMenu) return;
     const handleClickOutside = (e: PointerEvent) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
-        setShowUserMenu(false);
-      }
+      if (userMenuRef.current?.contains(e.target as Node)) return;
+      setShowUserMenu(false);
     };
-    document.addEventListener('pointerdown', handleClickOutside, true);
-    return () => document.removeEventListener('pointerdown', handleClickOutside, true);
-  }, []);
+    document.addEventListener('pointerdown', handleClickOutside);
+    return () => document.removeEventListener('pointerdown', handleClickOutside);
+  }, [showUserMenu]);
 
   useEffect(() => {
     if (!showUserMenu) return;
@@ -381,7 +381,10 @@ export function SiteHeader({
                       userProfile={userProfile}
                       onUpdateNickname={onUpdateNickname}
                       onSuggest={onSuggest}
-                      onLogout={onLogout}
+                      onLogout={() => {
+                        setShowUserMenu(false);
+                        void onLogout();
+                      }}
                       onClose={() => setShowUserMenu(false)}
                     />
                   </motion.div>

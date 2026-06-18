@@ -151,6 +151,7 @@ export function UserAccountMenu({
       <button
         type="button"
         onClick={(e) => {
+          e.preventDefault();
           e.stopPropagation();
           onLogout();
         }}

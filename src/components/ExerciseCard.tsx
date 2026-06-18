@@ -162,7 +162,9 @@ export function ExerciseCard({
         return;
       }
       e.stopPropagation();
-      setMobileExpanded((open) => !open);
+      if (!mobileExpanded) {
+        setMobileExpanded(true);
+      }
       return;
     }
 

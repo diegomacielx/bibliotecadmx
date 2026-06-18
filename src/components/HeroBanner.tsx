@@ -4,7 +4,7 @@ import type { Exercise } from '../types';
 import { useExerciseCover } from '../hooks/useExerciseCover';
 import { getCoverObjectPosition } from '../lib/coverFocus';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { useMobileUi } from '../hooks/useMediaQuery';
+import { useTouchLayout } from '../hooks/useMediaQuery';
 import { Icon } from './Icon';
 
 interface HeroBannerProps {
@@ -165,7 +165,7 @@ function HeroBannerDesktop({ ex, onWatch, fromFavorites }: HeroBannerProps) {
 }
 
 export function HeroBanner(props: HeroBannerProps) {
-  const isMobile = useMobileUi();
-  if (isMobile) return <HeroBannerMobile {...props} />;
+  const touchLayout = useTouchLayout();
+  if (touchLayout) return <HeroBannerMobile {...props} />;
   return <HeroBannerDesktop {...props} />;
 }

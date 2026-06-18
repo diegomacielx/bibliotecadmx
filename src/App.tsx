@@ -338,7 +338,6 @@ export default function App() {
 
     const path = exercisesPath;
     console.log('[DMX:Firestore] Escutando exercícios em:', path.join('/'));
-    logDebug('Firestore', 'Escutando exercícios em:', path.join('/'));
     const collectionRef = fbCollection(db, ...path);
     const unsubExercises = onSnapshot(
       collectionRef,
@@ -346,13 +345,11 @@ export default function App() {
         const data = snap.docs.map((d) => normalizeExerciseDoc(d.id, d.data() as Record<string, unknown>));
         data.sort((a, b) => String(a.id || '').localeCompare(String(b.id || ''), undefined, { numeric: true }));
 
-        console.log('[DMX:Firestore] Exercises loaded:', data.length, 'from', path.join('/'), data.slice(0, 2));
         logDebug('Firestore', `${data.length} exercício(s) em ${path.join('/')}`);
 
         if (data.length === 0 && tryAlternatePath(path)) return;
 
         const withYoutube = data.filter((ex) => !isExerciseIncomplete(ex.youtubeUrl)).length;
-        console.log('[DMX:Firestore] Com YouTube válido:', withYoutube, '/', data.length);
         logDebug('Firestore', `${withYoutube}/${data.length} com YouTube válido`);
 
         setExercises(data);
@@ -445,7 +442,7 @@ export default function App() {
   }, [isAdmin]);
 
   useEffect(() => {
-    if (!isAdmin || exercises.length === 0) return;
+    if (!isAdmin || exercises.length === 0 || isCoarsePointer()) return;
     const processQueue = async () => {
       if (backgroundAuditRunning.current) return;
       backgroundAuditRunning.current = true;
@@ -794,16 +791,15 @@ export default function App() {
     [user]
   );
 
-  const handleLogout = useCallback(async () => {
-    try {
-      await fb.signOut(auth);
+  const handleLogout = useCallback(() => {
+    void fb.signOut(auth).then(() => {
       localStorage.removeItem('dmx_search');
       localStorage.removeItem('dmx_category');
       setSearchTerm('');
       setActiveCategory('Todos');
-    } catch {
+    }).catch(() => {
       showToast('Não foi possível encerrar a sessão. Tente novamente.', 'error');
-    }
+    });
   }, [showToast]);
 
 
@@ -1282,8 +1278,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (loading || publicExercises.length === 0) return;
-    const limit = isMobileUi() ? 10 : 80;
+    if (loading || publicExercises.length === 0 || isCoarsePointer()) return;
+    const limit = isMobileUi() ? 6 : 80;
     const warmItems = publicExercises
       .slice(0, limit)
       .map((ex) => ({
@@ -1298,8 +1294,8 @@ export default function App() {
   }, [loading, publicExercises]);
 
   useEffect(() => {
-    if (loading || gridExercises.length === 0) return;
-    const limit = isMobileUi() ? 8 : 48;
+    if (loading || gridExercises.length === 0 || isCoarsePointer()) return;
+    const limit = isMobileUi() ? 4 : 48;
     const warmItems = gridExercises.slice(0, limit).map((ex) => ({
       firestoreId: ex.firestoreId,
       url: buildExerciseImageFallbacks(ex)[0],
