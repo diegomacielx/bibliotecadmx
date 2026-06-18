@@ -3798,15 +3798,15 @@ html[data-theme="light"] .advanced-filters-segment--active {
 .cinema-backdrop--portal {
   --lb-backdrop-bg: linear-gradient(
     168deg,
-    rgba(18, 4, 8, 0.72) 0%,
-    rgba(8, 2, 4, 0.6) 42%,
-    rgba(22, 6, 10, 0.68) 72%,
-    rgba(10, 2, 5, 0.64) 100%
+    rgba(6, 1, 3, 0.92) 0%,
+    rgba(3, 0, 1, 0.88) 42%,
+    rgba(8, 1, 3, 0.9) 72%,
+    rgba(4, 0, 2, 0.88) 100%
   );
   --lb-backdrop-blur: 59px;
-  --lb-backdrop-saturate: 1.62;
-  --lb-backdrop-brightness: 0.76;
-  --lb-backdrop-contrast: 0.92;
+  --lb-backdrop-saturate: 1.58;
+  --lb-backdrop-brightness: 0.58;
+  --lb-backdrop-contrast: 0.9;
 }
 
 .cinema-lightbox {
@@ -3854,14 +3854,14 @@ html[data-theme="light"] .cinema-lightbox,
 html[data-theme="light"] .cinema-backdrop--portal {
   --lb-backdrop-bg: linear-gradient(
     155deg,
-    rgba(28, 8, 12, 0.6) 0%,
-    rgba(18, 4, 8, 0.52) 44%,
-    rgba(12, 3, 6, 0.48) 100%
+    rgba(10, 2, 4, 0.88) 0%,
+    rgba(6, 1, 3, 0.84) 44%,
+    rgba(4, 0, 2, 0.82) 100%
   );
   --lb-backdrop-blur: 61px;
-  --lb-backdrop-saturate: 1.55;
-  --lb-backdrop-brightness: 0.78;
-  --lb-backdrop-contrast: 0.94;
+  --lb-backdrop-saturate: 1.52;
+  --lb-backdrop-brightness: 0.62;
+  --lb-backdrop-contrast: 0.92;
 }
 
 /* Impede overrides globais do tema claro dentro do lightbox cinema */
@@ -3975,7 +3975,7 @@ html[data-theme="light"] .cinema-backdrop--portal {
 
 .cinema-backdrop,
 .cinema-backdrop--portal {
-  --lb-backdrop-scrim: rgba(4, 1, 2, 0.52);
+  --lb-backdrop-scrim: rgba(0, 0, 0, 0.55);
   position: absolute;
   inset: 0;
   z-index: 0;
@@ -3999,18 +3999,18 @@ html[data-theme="light"] .cinema-backdrop--portal {
   pointer-events: none;
   background: linear-gradient(
     180deg,
-    rgba(48, 8, 14, 0.4) 0%,
-    rgba(12, 2, 4, 0.32) 45%,
-    rgba(28, 4, 8, 0.36) 100%
+    rgba(24, 2, 6, 0.72) 0%,
+    rgba(6, 0, 2, 0.58) 45%,
+    rgba(16, 1, 4, 0.65) 100%
   );
 }
 
 .cinema-backdrop--portal::before {
   background:
-    radial-gradient(ellipse 110% 70% at 18% 12%, rgba(127, 29, 29, 0.28) 0%, transparent 55%),
-    radial-gradient(ellipse 85% 60% at 82% 78%, rgba(69, 10, 10, 0.24) 0%, transparent 58%),
-    radial-gradient(ellipse 60% 45% at 50% 38%, rgba(239, 68, 68, 0.1) 0%, transparent 65%),
-    linear-gradient(125deg, transparent 28%, rgba(60, 8, 16, 0.14) 50%, transparent 72%);
+    radial-gradient(ellipse 110% 70% at 18% 12%, rgba(80, 8, 8, 0.48) 0%, transparent 55%),
+    radial-gradient(ellipse 85% 60% at 82% 78%, rgba(40, 4, 4, 0.42) 0%, transparent 58%),
+    radial-gradient(ellipse 60% 45% at 50% 38%, rgba(127, 29, 29, 0.18) 0%, transparent 65%),
+    linear-gradient(125deg, transparent 28%, rgba(32, 2, 8, 0.26) 50%, transparent 72%);
   mix-blend-mode: multiply;
   opacity: 1;
 }
@@ -4019,44 +4019,44 @@ html[data-theme="light"] .cinema-backdrop--portal {
   background:
     linear-gradient(
       168deg,
-      rgba(40, 6, 12, 0.2) 0%,
+      rgba(20, 2, 6, 0.38) 0%,
       transparent 32%,
       transparent 68%,
-      rgba(4, 1, 2, 0.24) 100%
+      rgba(0, 0, 0, 0.42) 100%
     ),
     repeating-linear-gradient(
       -14deg,
       transparent 0,
       transparent 18px,
-      rgba(127, 29, 29, 0.044) 18px,
-      rgba(127, 29, 29, 0.044) 19px
+      rgba(80, 8, 8, 0.08) 18px,
+      rgba(80, 8, 8, 0.08) 19px
     );
-  opacity: 0.85;
+  opacity: 1;
 }
 
 html[data-theme='light'] .cinema-backdrop--portal {
-  --lb-backdrop-scrim: rgba(12, 4, 6, 0.44);
+  --lb-backdrop-scrim: rgba(4, 0, 2, 0.72);
 }
 
 html[data-theme='light'] .cinema-backdrop--portal::before {
   background:
-    radial-gradient(ellipse 100% 62% at 14% 10%, rgba(127, 29, 29, 0.24) 0%, transparent 52%),
-    radial-gradient(ellipse 80% 50% at 88% 86%, rgba(69, 10, 10, 0.2) 0%, transparent 56%),
-    radial-gradient(ellipse 55% 40% at 48% 42%, rgba(239, 68, 68, 0.08) 0%, transparent 62%);
+    radial-gradient(ellipse 100% 62% at 14% 10%, rgba(80, 8, 8, 0.42) 0%, transparent 52%),
+    radial-gradient(ellipse 80% 50% at 88% 86%, rgba(40, 4, 4, 0.36) 0%, transparent 56%),
+    radial-gradient(ellipse 55% 40% at 48% 42%, rgba(127, 29, 29, 0.14) 0%, transparent 62%);
   mix-blend-mode: multiply;
-  opacity: 0.95;
+  opacity: 1;
 }
 
 html[data-theme='light'] .cinema-backdrop--portal::after {
-  opacity: 0.75;
+  opacity: 0.92;
 }
 
 html[data-theme='light'] .cinema-backdrop__fx {
   background: linear-gradient(
     180deg,
-    rgba(48, 8, 14, 0.32) 0%,
-    rgba(18, 4, 8, 0.24) 50%,
-    rgba(12, 3, 6, 0.28) 100%
+    rgba(24, 2, 6, 0.58) 0%,
+    rgba(8, 0, 2, 0.48) 50%,
+    rgba(4, 0, 2, 0.52) 100%
   );
 }
 
@@ -4076,7 +4076,7 @@ html[data-theme='light'] .cinema-backdrop__fx {
 
 html[data-theme='light'] .cinema-backdrop,
 html[data-theme='light'] .cinema-backdrop--portal {
-  --lb-backdrop-scrim: rgba(12, 4, 6, 0.44);
+  --lb-backdrop-scrim: rgba(4, 0, 2, 0.72);
 }
 
 .cinema-backdrop::before {
