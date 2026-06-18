@@ -52,6 +52,7 @@ declare namespace YT {
     setPlaybackQuality(quality: PlaybackQuality): void;
     getAvailableQualityLevels(): PlaybackQuality[];
     getPlaybackQuality(): PlaybackQuality;
+    getIframe(): HTMLIFrameElement;
   }
 }
 

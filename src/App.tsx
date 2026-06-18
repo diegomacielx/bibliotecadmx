@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type {
   Exercise,
@@ -61,12 +61,10 @@ import { Toast } from './components/Toast';
 import { LoadingScreen } from './components/LoadingScreen';
 import { LoginScreen } from './components/LoginScreen';
 import { PendingAccessScreen } from './components/PendingAccessScreen';
-import { CinemaLightbox } from './components/CinemaLightbox';
 import { preloadYouTubePlayerApi } from './components/YouTubePlayer';
 import { HeroBanner } from './components/HeroBanner';
 import { ExerciseCard } from './components/ExerciseCard';
 import { RequestModal } from './components/RequestModal';
-import { AdminPanel } from './components/AdminPanel';
 import { GridSkeleton } from './components/Skeleton';
 import { staggerContainer, pageTransition } from './lib/motion';
 import { SiteHeader } from './components/SiteHeader';
@@ -75,6 +73,7 @@ import { CategoryNav } from './components/CategoryNav';
 import { PlaylistBar } from './components/PlaylistBar';
 import { useSearchHistory } from './hooks/useSearchHistory';
 import { useFavorites } from './hooks/useFavorites';
+import { isCoarsePointer, isMobileUi, useMobileUi } from './hooks/useMediaQuery';
 import { prefetchCoverUrls } from './lib/coverCache';
 import { normalizeNickname, validateNickname } from './lib/nickname';
 import { warmSessionCovers } from './lib/coverImageStore';
@@ -86,9 +85,17 @@ import {
   syncUserAccess,
 } from './lib/accessControl';
 
+const CinemaLightbox = lazy(() =>
+  import('./components/CinemaLightbox').then((m) => ({ default: m.CinemaLightbox }))
+);
+const AdminPanel = lazy(() =>
+  import('./components/AdminPanel').then((m) => ({ default: m.AdminPanel }))
+);
+
 const NAV_CATEGORIES = ['Todos', 'Favoritos', ...CATEGORIES.slice(1)] as const;
 
 export default function App() {
+  const isMobileLayout = useMobileUi();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [loginEmail, setLoginEmail] = useState('');
@@ -786,15 +793,17 @@ export default function App() {
     [user]
   );
 
-  const handleLogout = async () => {
-    if (confirm('Deseja encerrar sua sessão?')) {
+  const handleLogout = useCallback(async () => {
+    try {
       await fb.signOut(auth);
       localStorage.removeItem('dmx_search');
       localStorage.removeItem('dmx_category');
       setSearchTerm('');
       setActiveCategory('Todos');
+    } catch {
+      showToast('Não foi possível encerrar a sessão. Tente novamente.', 'error');
     }
-  };
+  }, [showToast]);
 
 
   const downloadExercise = async (ex: Exercise, quality: string) => {
@@ -1255,30 +1264,40 @@ export default function App() {
     : `browse-${activeCategory}`;
 
   useEffect(() => {
-    void preloadYouTubePlayerApi();
+    if (isCoarsePointer()) return;
+    const timer = window.setTimeout(() => {
+      void preloadYouTubePlayerApi();
+    }, 3000);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
     if (loading || publicExercises.length === 0) return;
+    const limit = isMobileUi() ? 10 : 80;
     const warmItems = publicExercises
-      .slice(0, 80)
+      .slice(0, limit)
       .map((ex) => ({
         firestoreId: ex.firestoreId,
         url: buildExerciseImageFallbacks(ex)[0],
       }))
       .filter((item) => item.url);
     warmSessionCovers(warmItems);
-    prefetchCoverUrls(warmItems.map((i) => i.url));
+    if (!isMobileUi()) {
+      prefetchCoverUrls(warmItems.map((i) => i.url));
+    }
   }, [loading, publicExercises]);
 
   useEffect(() => {
     if (loading || gridExercises.length === 0) return;
-    const warmItems = gridExercises.slice(0, 48).map((ex) => ({
+    const limit = isMobileUi() ? 8 : 48;
+    const warmItems = gridExercises.slice(0, limit).map((ex) => ({
       firestoreId: ex.firestoreId,
       url: buildExerciseImageFallbacks(ex)[0],
     })).filter((item) => item.url);
     warmSessionCovers(warmItems);
-    prefetchCoverUrls(warmItems.map((i) => i.url));
+    if (!isMobileUi()) {
+      prefetchCoverUrls(warmItems.map((i) => i.url));
+    }
   }, [loading, gridExercises]);
 
   if (authLoading) {
@@ -1319,7 +1338,8 @@ export default function App() {
     <div className="page-canvas min-h-screen flex flex-col relative font-sans text-[var(--dmx-fg)]">
       <AnimatePresence>
         {activeVideo && (
-          <CinemaLightbox
+          <Suspense fallback={null}>
+            <CinemaLightbox
             key={compareEx ? 'compare' : 'cinema'}
             ex={activeVideo}
             compareEx={compareEx}
@@ -1343,6 +1363,7 @@ export default function App() {
             onToggleFavorite={() => toggleFavorite(activeVideo.firestoreId)}
             isAdmin={showAdminUI}
           />
+          </Suspense>
         )}
       </AnimatePresence>
       <Toast toast={toast} onClose={() => setToast({ show: false, msg: '', type: 'success' })} />
@@ -1444,6 +1465,93 @@ export default function App() {
       )}
 
       <main className="cinema-container w-full flex-1 pb-fluid-xl relative z-10">
+        {isMobileLayout ? (
+          <div key={pageKey}>
+        {!searchTerm && activeCategory === 'Todos' && featuredExercise && (
+          <HeroBanner
+            ex={featuredExercise}
+            onWatch={watchExercise}
+            fromFavorites={featuredFromFavorites}
+          />
+        )}
+        {searchTerm.trim() && !loading && filteredExercises.length > 0 && (
+          <p className="search-results-summary mb-fluid-md">
+            <span className="search-results-count">{filteredExercises.length}</span>
+            {filteredExercises.length === 1 ? ' resultado' : ' resultados'}
+            <span className="search-results-meta"> · ordenados por relevância</span>
+          </p>
+        )}
+        {loading ? (
+          <div className="py-fluid-2xl">
+            <GridSkeleton count={isMobileLayout ? 6 : 12} />
+            {slowConnection && (
+              <p className="text-2xs text-red-500 uppercase font-black mt-fluid-md text-center bg-accent-muted px-4 py-2 rounded-xl mx-auto w-fit border border-red-900/30">
+                A conexão parece lenta. Aguarde...
+              </p>
+            )}
+          </div>
+        ) : filteredExercises.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-fluid-2xl px-fluid-md">
+            <div className="w-20 h-20 bg-surface rounded-full flex items-center justify-center mb-fluid-md text-zinc-600 shadow-cinematic">
+              <Icon name="search" className="w-10 h-10" />
+            </div>
+            <h3 className="font-display text-xl font-black text-white mb-2 text-center uppercase italic leading-title">
+              Nenhum resultado
+            </h3>
+            <p className="text-body text-sm text-zinc-400 text-center max-w-md mb-fluid-lg">
+              Não encontrámos nenhum exercício correspondente à sua busca.
+            </p>
+            {searchTerm.trim() && (
+              <button
+                type="button"
+                onClick={() => {
+                  setRequestForm({ name: searchTerm, details: '' });
+                  setShowRequestModal(true);
+                }}
+                className="cta-pill font-black uppercase tracking-widest text-2xs hover:bg-red-600 hover:text-white shadow-cinematic"
+              >
+                <Icon name="lightbulb" className="w-5 h-5" /> Sugerir a gravação de &quot;{searchTerm}&quot;
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-fluid-md @container">
+            {gridExercises.map((ex, index) => (
+              <ExerciseCard
+                key={ex.firestoreId}
+                ex={ex}
+                index={index}
+                isAdmin={showAdminUI}
+                isExerciseIncomplete={isExerciseIncomplete}
+                handleDownloadCheck={handleDownloadCheck}
+                showToast={showToast}
+                setForm={setForm}
+                setEditingId={setEditingId}
+                setAdminTab={setAdminTab}
+                setShowAdminPanel={setShowAdminPanel}
+                copyLink={copyLink}
+                copiedId={copiedId}
+                onWatch={watchExercise}
+                selectionMode={selectionMode}
+                isInPlaylist={playlistOrder.includes(ex.firestoreId)}
+                playlistSequence={
+                  selectionMode
+                    ? playlistOrder.indexOf(ex.firestoreId) >= 0
+                      ? playlistOrder.indexOf(ex.firestoreId) + 1
+                      : undefined
+                    : undefined
+                }
+                onTogglePlaylist={togglePlaylistItem}
+                isFavorite={isFavorite(ex.firestoreId)}
+                onToggleFavorite={() => toggleFavorite(ex.firestoreId)}
+                onCompare={handleCompare}
+                isComparePick={comparePick?.firestoreId === ex.firestoreId}
+              />
+            ))}
+          </div>
+        )}
+          </div>
+        ) : (
         <AnimatePresence mode="wait">
           <motion.div
             key={pageKey}
@@ -1492,6 +1600,7 @@ export default function App() {
             </p>
             {searchTerm.trim() && (
               <button
+                type="button"
                 onClick={() => {
                   setRequestForm({ name: searchTerm, details: '' });
                   setShowRequestModal(true);
@@ -1545,6 +1654,7 @@ export default function App() {
         )}
           </motion.div>
         </AnimatePresence>
+        )}
       </main>
 
       <PlaylistBar
@@ -1556,6 +1666,7 @@ export default function App() {
       />
 
       {showAdminPanel && showAdminUI && (
+        <Suspense fallback={null}>
         <AdminPanel
           adminTab={adminTab}
           setAdminTab={setAdminTab}
@@ -1591,6 +1702,7 @@ export default function App() {
           setAppSettings={setAppSettings}
           onSaveSettings={saveSettings}
         />
+        </Suspense>
       )}
     </div>
   );

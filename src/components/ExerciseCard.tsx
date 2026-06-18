@@ -41,9 +41,7 @@ interface ExerciseCardProps {
   playlistSequence?: number;
 }
 
-function isTouchUi() {
-  return window.matchMedia('(hover: none)').matches;
-}
+import { isTouchUi } from '../hooks/useMediaQuery';
 
 export function ExerciseCard({
   ex,

@@ -20,3 +20,15 @@ export function useMediaQuery(query: string): boolean {
 export function useMobileUi() {
   return useMediaQuery('(max-width: 767px)');
 }
+
+export function isMobileUi(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
+}
+
+export function isTouchUi(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches;
+}
+
+export function isCoarsePointer(): boolean {
+  return typeof window !== 'undefined' && window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+}

@@ -4,6 +4,7 @@ import type { Exercise } from '../types';
 import { useExerciseCover } from '../hooks/useExerciseCover';
 import { getCoverObjectPosition } from '../lib/coverFocus';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import { useMobileUi } from '../hooks/useMediaQuery';
 import { Icon } from './Icon';
 
 interface HeroBannerProps {
@@ -16,6 +17,8 @@ export function HeroBanner({ ex, onWatch, fromFavorites }: HeroBannerProps) {
   const sectionRef = useRef<HTMLElement>(null);
   const { imgSrc, handleLoad, handleError } = useExerciseCover(ex);
   const reducedMotion = useReducedMotion();
+  const isMobile = useMobileUi();
+  const enableScrollFx = !reducedMotion && !isMobile;
 
   const { scrollYProgress } = useScroll({
     target: sectionRef,
@@ -27,7 +30,7 @@ export function HeroBanner({ ex, onWatch, fromFavorites }: HeroBannerProps) {
   const textOpacity = useTransform(scrollYProgress, [0, 0.45], [1, 0]);
   const textY = useTransform(scrollYProgress, [0, 0.45], [0, -32]);
 
-  const textMotion = reducedMotion
+  const textMotion = reducedMotion || isMobile
     ? { initial: { opacity: 1 }, animate: { opacity: 1 } }
     : {
         initial: { opacity: 0, y: 16 },
@@ -37,11 +40,11 @@ export function HeroBanner({ ex, onWatch, fromFavorites }: HeroBannerProps) {
 
   return (
     <section ref={sectionRef} className="hero-scroll-section w-full mb-fluid-lg px-0">
-      <div className="relative grid grid-cols-1 lg:grid-cols-12 gap-fluid-md lg:gap-fluid-lg items-center min-h-[280px] lg:min-h-[380px]">
+      <div className="relative grid grid-cols-1 lg:grid-cols-12 gap-fluid-md lg:gap-fluid-lg items-center min-h-0 lg:min-h-[380px]">
         <motion.div
           {...textMotion}
-          style={reducedMotion ? undefined : { opacity: textOpacity, y: textY }}
-          className="lg:col-span-5 xl:col-span-5 flex flex-col justify-center order-2 lg:order-1 px-1 lg:px-0 z-10"
+          style={enableScrollFx ? { opacity: textOpacity, y: textY } : undefined}
+          className="hero-text-col lg:col-span-5 xl:col-span-5 flex flex-col justify-center order-1 lg:order-1 px-1 lg:px-0 relative z-20"
         >
           <p className="hero-featured-label mb-3">
             <span className="hero-featured-label-main">
@@ -62,8 +65,8 @@ export function HeroBanner({ ex, onWatch, fromFavorites }: HeroBannerProps) {
           <motion.button
             type="button"
             onClick={() => onWatch(ex)}
-            whileHover={reducedMotion ? undefined : { scale: 1.02 }}
-            whileTap={reducedMotion ? undefined : { scale: 0.98 }}
+            whileHover={reducedMotion || isMobile ? undefined : { scale: 1.02 }}
+            whileTap={reducedMotion || isMobile ? undefined : { scale: 0.98 }}
             className="hero-cta group self-start"
           >
             <span className="hero-cta-icon">
@@ -73,7 +76,7 @@ export function HeroBanner({ ex, onWatch, fromFavorites }: HeroBannerProps) {
           </motion.button>
         </motion.div>
 
-        <div className="lg:col-span-7 xl:col-span-7 order-1 lg:order-2 relative w-full">
+        <div className="hero-cover-col lg:col-span-7 xl:col-span-7 order-2 lg:order-2 relative w-full z-10">
           <button
             type="button"
             onClick={() => onWatch(ex)}
@@ -83,21 +86,26 @@ export function HeroBanner({ ex, onWatch, fromFavorites }: HeroBannerProps) {
             <motion.img
               src={imgSrc}
               alt={ex.name}
-              loading="eager"
+              loading={isMobile ? 'lazy' : 'eager'}
               decoding="async"
+              draggable={false}
               onLoad={handleLoad}
               onError={handleError}
               style={{
                 objectPosition: getCoverObjectPosition(ex),
-                ...(reducedMotion ? {} : { scale: imageScale, x: imageX }),
+                ...(enableScrollFx ? { scale: imageScale, x: imageX } : {}),
               }}
-              className="absolute inset-0 w-full h-full object-cover ease-cinematic duration-cinematic origin-center"
+              className="absolute inset-0 w-full h-full object-cover ease-cinematic duration-cinematic origin-center pointer-events-none select-none"
             />
 
             <div className="absolute inset-0 bg-gradient-to-tr from-black/70 via-black/20 to-transparent pointer-events-none" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
 
-            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 ease-cinematic duration-cinematic pointer-events-none">
+            <div
+              className={`absolute inset-0 flex items-center justify-center ease-cinematic duration-cinematic pointer-events-none ${
+                isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+              }`}
+            >
               <span className="card-play-ring">
                 <Icon name="play" className="w-5 h-5 text-white ml-0.5" strokeWidth={2} />
               </span>

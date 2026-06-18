@@ -212,11 +212,17 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
       }
     },
     requestFullscreen: () => {
-      const el = containerRef.current ?? hostRef.current;
+      const iframe = playerRef.current?.getIframe();
+      const el = iframe ?? containerRef.current ?? hostRef.current;
       if (!el) return;
       const fsEl = el as HTMLElement & { webkitRequestFullscreen?: () => void };
-      if (fsEl.requestFullscreen) fsEl.requestFullscreen();
-      else fsEl.webkitRequestFullscreen?.();
+      if (fsEl.requestFullscreen) {
+        void fsEl.requestFullscreen().catch(() => {
+          /* iOS pode bloquear — usuário usa controles nativos do YouTube */
+        });
+      } else {
+        fsEl.webkitRequestFullscreen?.();
+      }
     },
   }));
 

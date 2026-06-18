@@ -19,7 +19,8 @@ export function PendingAccessScreen({ onLogout }: PendingAccessScreenProps) {
           Caso contrário, aguarde a verificação manual do administrador.
         </p>
         <button
-          onClick={onLogout}
+          type="button"
+          onClick={() => void onLogout()}
           className="relative z-10 w-full glass-panel py-4 rounded-2xl font-black uppercase tracking-widest text-2xs text-white hover:border-white/15 ease-cinematic duration-cinematic"
         >
           Sair e Voltar mais tarde

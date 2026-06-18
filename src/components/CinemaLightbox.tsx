@@ -646,7 +646,7 @@ export function CinemaLightbox({
 
             <div className="cinema-overlay-controls">
               <AnimatePresence>
-                {controlsVisible && (
+                {(controlsVisible || isMobileLayout) && (
                   <motion.button
                     type="button"
                     initial={{ opacity: 0 }}
@@ -654,7 +654,8 @@ export function CinemaLightbox({
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.18 }}
                     className="cinema-fullscreen-btn liquid-glass-btn"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       playerRef.current?.requestFullscreen();
                       resetHideTimer();
                     }}

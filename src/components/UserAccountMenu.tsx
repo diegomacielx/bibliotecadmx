@@ -150,8 +150,8 @@ export function UserAccountMenu({
 
       <button
         type="button"
-        onClick={() => {
-          onClose();
+        onClick={(e) => {
+          e.stopPropagation();
           onLogout();
         }}
         className="menu-item menu-item--danger w-full"

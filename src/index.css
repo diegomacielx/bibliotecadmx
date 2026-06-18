@@ -117,6 +117,23 @@ textarea,
 
 @media (hover: none) and (pointer: coarse) {
   body { overscroll-behavior-y: none; }
+
+  button,
+  a,
+  [role="button"],
+  input,
+  select,
+  textarea,
+  .interactive,
+  .admin-btn,
+  .studio-btn,
+  .theme-toggle-btn,
+  .header-action,
+  .menu-item {
+    transition-property: color, background-color, border-color, box-shadow, opacity;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2940,10 +2957,11 @@ html[data-theme="light"] .cinema-backdrop::before {
   position: absolute;
   top: 0.75rem;
   left: 0.75rem;
-  z-index: 25;
+  z-index: 35;
   pointer-events: auto;
-  width: 2rem;
-  height: 2rem;
+  touch-action: manipulation;
+  width: 2.75rem;
+  height: 2.75rem;
   opacity: 0.72;
 }
 
@@ -3128,9 +3146,9 @@ html[data-theme="light"] .cinema-backdrop::before {
 @media (max-width: 767px) {
   .cinema-lightbox--mobile {
     background: var(--lb-backdrop, rgba(0, 0, 0, 0.92));
-    touch-action: none;
     height: 100dvh;
     max-height: 100dvh;
+    overscroll-behavior: contain;
   }
 
   .cinema-lightbox-mobile-bar {
@@ -3415,6 +3433,27 @@ html[data-theme="light"] .cinema-backdrop::before {
 }
 .hero-cover-wrap {
   overflow: hidden;
+}
+
+@media (max-width: 767px) {
+  .hero-scroll-section {
+    isolation: isolate;
+  }
+
+  .hero-text-col {
+    position: relative;
+    z-index: 20;
+  }
+
+  .hero-cover-col {
+    position: relative;
+    z-index: 10;
+  }
+
+  .hero-cta {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
 }
 
 .hero-cta {

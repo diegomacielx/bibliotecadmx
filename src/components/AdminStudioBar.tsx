@@ -75,12 +75,12 @@ export function AdminStudioBar({
   }));
 
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
+    const handleClickOutside = (e: PointerEvent) => {
       if (filterRef.current && !filterRef.current.contains(e.target as Node)) setShowFilter(false);
       if (manageRef.current && !manageRef.current.contains(e.target as Node)) setShowManage(false);
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('pointerdown', handleClickOutside, true);
+    return () => document.removeEventListener('pointerdown', handleClickOutside, true);
   }, []);
 
   const metricValueClass = (key: typeof METRICS[number]['key'], tone: string) => {
