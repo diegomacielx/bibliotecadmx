@@ -108,6 +108,7 @@ export function MobileShell({
     <div className="m-shell">
       <header className="m-header">
         <img src={CUSTOM_LOGO_URL} alt="Biblioteca DMX" className="m-header-logo" />
+        <span className="m-header-mode">MOBILE SHELL</span>
         <input
           type="search"
           className="m-header-search"

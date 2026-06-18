@@ -96,6 +96,7 @@ const AdminPanel = lazy(() =>
 );
 
 const NAV_CATEGORIES = ['Todos', 'Favoritos', ...CATEGORIES.slice(1)] as const;
+const BUILD_TAG = 'mobile-shell-v3';
 
 export default function App() {
   const isMobileShell = useMobileShell();
@@ -1270,6 +1271,10 @@ export default function App() {
   const pageKey = searchTerm.trim()
     ? `search-${searchTerm.trim().slice(0, 40)}`
     : `browse-${activeCategory}`;
+
+  useEffect(() => {
+    console.info('[DMX] build:', BUILD_TAG, '| mobileShell:', isMobileShell, '| ua:', navigator.userAgent);
+  }, [isMobileShell]);
 
   useEffect(() => {
     if (isCoarsePointer()) return;
