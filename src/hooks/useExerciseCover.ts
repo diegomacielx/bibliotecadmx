@@ -81,18 +81,6 @@ export function useExerciseCover(ex: CoverSource) {
     setIsCoverInstant(false);
   }, [ex.firestoreId, ex.id, ex.thumbnail, ex.youtubeUrl]);
 
-  const handleLoad = useCallback(
-    (e: React.SyntheticEvent<HTMLImageElement>) => {
-      const url = e.currentTarget.currentSrc || e.currentTarget.src;
-      setImgLoaded(true);
-      setIsCoverInstant(true);
-      if (url && !url.includes('imgur.com/rLLYQ3Z')) {
-        setSessionCoverUrl(ex.firestoreId, url);
-      }
-    },
-    [ex.firestoreId]
-  );
-
   const handleError = useCallback(() => {
     clearSessionCoverUrl(ex.firestoreId, imgSrc);
     setImgLoaded(false);
@@ -106,6 +94,37 @@ export function useExerciseCover(ex: CoverSource) {
     setImgLoaded(true);
     setImgSrc(CUSTOM_LOGO_URL);
   }, [ex.firestoreId, imgSrc]);
+
+  const isYouTubePlaceholderThumb = (el: HTMLImageElement, url: string): boolean => {
+    if (!url.includes('ytimg.com') && !url.includes('img.youtube.com/vi/')) return false;
+    return el.naturalWidth > 0 && el.naturalWidth <= 120;
+  };
+
+  const handleLoad = useCallback(
+    (e: React.SyntheticEvent<HTMLImageElement>) => {
+      const el = e.currentTarget;
+      const url = el.currentSrc || el.src;
+      if (isYouTubePlaceholderThumb(el, url)) {
+        clearSessionCoverUrl(ex.firestoreId, url);
+        setImgLoaded(false);
+        const nextIndex = fallbackIndexRef.current + 1;
+        fallbackIndexRef.current = nextIndex;
+        if (nextIndex < fallbacksRef.current.length) {
+          setImgSrc(fallbacksRef.current[nextIndex]);
+          return;
+        }
+        setImgLoaded(true);
+        setImgSrc(CUSTOM_LOGO_URL);
+        return;
+      }
+      setImgLoaded(true);
+      setIsCoverInstant(true);
+      if (url && !url.includes('imgur.com/rLLYQ3Z')) {
+        setSessionCoverUrl(ex.firestoreId, url);
+      }
+    },
+    [ex.firestoreId]
+  );
 
   return {
     imgSrc,

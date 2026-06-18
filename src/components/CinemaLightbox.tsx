@@ -558,6 +558,22 @@ export function CinemaLightbox({
         resetHideTimer();
         return;
       }
+      if ((e.key === 'f' || e.key === 'F') && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        const stage = videoAreaRef.current;
+        const fsTarget = stage as (HTMLElement & { webkitRequestFullscreen?: () => void }) | null;
+        if (fsTarget?.requestFullscreen) {
+          void fsTarget.requestFullscreen().catch(() => {
+            playerRef.current?.requestFullscreen();
+          });
+        } else if (fsTarget?.webkitRequestFullscreen) {
+          fsTarget.webkitRequestFullscreen();
+        } else {
+          playerRef.current?.requestFullscreen();
+        }
+        resetHideTimer();
+        return;
+      }
       if ((e.key === 'f' || e.key === 'F') && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
         if (onToggleFavorite) {
           e.preventDefault();

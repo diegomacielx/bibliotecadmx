@@ -3674,7 +3674,7 @@ html[data-theme="light"] .advanced-filters-segment--active {
     rgba(30, 10, 20, 0.22) 72%,
     rgba(10, 22, 40, 0.18) 100%
   );
-  --lb-backdrop-blur: 32px;
+  --lb-backdrop-blur: 26px;
   --lb-backdrop-saturate: 1.65;
   --lb-backdrop-brightness: 0.955;
   --lb-backdrop-contrast: 1.08;
@@ -3698,7 +3698,7 @@ html[data-theme="light"] .advanced-filters-segment--active {
     rgba(38, 12, 18, 0.42) 100%
   );
   --lb-panel-border: rgba(255, 255, 255, 0.18);
-  --lb-panel-blur: 14px;
+  --lb-panel-blur: 11px;
   --lb-panel-saturate: 1.55;
   --lb-panel-shadow:
     0 24px 64px rgba(0, 0, 0, 0.26),
@@ -3710,8 +3710,8 @@ html[data-theme="light"] .advanced-filters-segment--active {
     rgba(40, 14, 28, 0.5) 48%,
     rgba(34, 12, 20, 0.54) 100%
   );
-  --lb-sidebar-blur: 14px;
-  --lb-glass-blur: 22px;
+  --lb-sidebar-blur: 11px;
+  --lb-glass-blur: 18px;
   --lb-sidebar-inset: rgba(239, 68, 68, 0.14);
   --lb-video-bg: #050506;
   color: var(--lb-fg);
@@ -3725,7 +3725,7 @@ html[data-theme="light"] .cinema-lightbox {
     rgba(210, 236, 255, 0.28) 44%,
     rgba(238, 248, 255, 0.24) 100%
   );
-  --lb-backdrop-blur: 34px;
+  --lb-backdrop-blur: 27px;
   --lb-backdrop-saturate: 1.55;
   --lb-backdrop-brightness: 0.97;
   --lb-backdrop-contrast: 1.06;

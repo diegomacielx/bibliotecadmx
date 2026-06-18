@@ -1,6 +1,6 @@
 import { readJSON, writeJSON } from './storage';
 
-const COVER_CACHE_KEY = 'dmx_cover_hits';
+const COVER_CACHE_KEY = 'dmx_cover_hits_v2';
 const MAX_ENTRIES = 800;
 
 interface CoverHit {

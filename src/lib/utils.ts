@@ -3,7 +3,9 @@ import { getCachedCoverUrl } from './coverCache';
 
 const LEGACY_EXERCISES_PATH = ['artifacts', APP_ID, 'public', 'data', 'exercises'] as const;
 
-export const GITHUB_COVER_BASE = 'https://raw.githubusercontent.com/diegomacielx/dmx/main';
+export const GITHUB_COVER_BASE =
+  (import.meta.env.VITE_GITHUB_COVER_BASE as string | undefined)?.replace(/\/$/, '') ||
+  'https://raw.githubusercontent.com/diegomacielx/bibliotecadmx/main';
 
 /** Logs de depuração — visíveis no console do navegador (filtro: DMX) */
 export const logDebug = (tag: string, ...args: unknown[]) => {
@@ -255,18 +257,14 @@ export const buildExerciseImageFallbacks = (ex: {
   const ytId = !isExerciseIncomplete(ex.youtubeUrl) ? getYouTubeId(ex.youtubeUrl) : null;
   const ytUrls = ytId ? buildYouTubeThumbUrls(ytId) : [];
 
-  // Sem capa customizada: YouTube em máxima qualidade antes de tentar assets no GitHub
-  if (!hasCustomThumbnail && ytUrls.length > 0) {
-    urls.push(...ytUrls);
-  }
-
+  // Capas 4K no GitHub (bibliotecadmx/main) antes do YouTube quando não há thumbnail customizada
   for (const assetId of getExerciseAssetIds(ex.id)) {
     for (const ext of ['png', 'PNG', 'jpg', 'JPG'] as const) {
       urls.push(getExerciseCoverUrl(assetId, ext));
     }
   }
 
-  if (hasCustomThumbnail && ytUrls.length > 0) {
+  if (ytUrls.length > 0) {
     urls.push(...ytUrls);
   }
 

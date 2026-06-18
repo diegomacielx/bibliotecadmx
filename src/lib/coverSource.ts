@@ -9,13 +9,13 @@ import {
 
 export type CoverSourceKind = 'github' | 'youtube' | 'imgur' | 'logo' | 'external' | 'none';
 
-/** URL aponta para capa oficial no repositório GitHub (dmx/main) */
+/** URL aponta para capa oficial no repositório GitHub (bibliotecadmx ou dmx) */
 export function isOfficialGitHubCoverUrl(url: string | null | undefined): boolean {
   if (!url?.trim()) return false;
   const normalized = url.trim().toLowerCase();
   const base = GITHUB_COVER_BASE.toLowerCase();
   if (normalized.startsWith(base)) return true;
-  return /raw\.githubusercontent\.com\/diegomacielx\/dmx\//i.test(normalized);
+  return /raw\.githubusercontent\.com\/diegomacielx\/(bibliotecadmx|dmx)\//i.test(normalized);
 }
 
 export function classifyCoverUrl(url: string | null | undefined): CoverSourceKind {
