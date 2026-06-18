@@ -3797,7 +3797,7 @@ html[data-theme="light"] .advanced-filters-segment--active {
 .cinema-lightbox,
 .cinema-backdrop--portal {
   --lb-backdrop-bg: transparent;
-  --lb-backdrop-blur: 48px;
+  --lb-backdrop-blur: 38px;
   --lb-backdrop-saturate: 1.1;
   --lb-backdrop-brightness: 0.86;
   --lb-backdrop-contrast: 0.94;
@@ -3847,7 +3847,7 @@ html[data-theme="light"] .advanced-filters-segment--active {
 html[data-theme="light"] .cinema-lightbox,
 html[data-theme="light"] .cinema-backdrop--portal {
   --lb-backdrop-bg: transparent;
-  --lb-backdrop-blur: 50px;
+  --lb-backdrop-blur: 40px;
   --lb-backdrop-saturate: 1.08;
   --lb-backdrop-brightness: 0.88;
   --lb-backdrop-contrast: 0.93;
