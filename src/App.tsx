@@ -74,6 +74,7 @@ import { PlaylistBar } from './components/PlaylistBar';
 import { useSearchHistory } from './hooks/useSearchHistory';
 import { useFavorites } from './hooks/useFavorites';
 import { isCoarsePointer, isMobileUi, useMobileUi } from './hooks/useMediaQuery';
+import { isFeatureEnabled } from './lib/mobileCapabilities';
 import { prefetchCoverUrls } from './lib/coverCache';
 import { normalizeNickname, validateNickname } from './lib/nickname';
 import { warmSessionCovers } from './lib/coverImageStore';
@@ -1156,6 +1157,15 @@ export default function App() {
 
   const handleCompare = useCallback(
     (ex: Exercise) => {
+      if (!isFeatureEnabled('compare')) {
+        showToast('Comparador disponível no computador.', 'error');
+        return;
+      }
+      if (isMobileUi()) {
+        showToast('Comparador lado a lado disponível no computador. Abrindo vídeo.', 'success');
+        watchExercise(ex);
+        return;
+      }
       if (!comparePick) {
         setComparePick(ex);
         showToast('Selecione o segundo exercício para comparar');
@@ -1172,7 +1182,7 @@ export default function App() {
       setCompareEx(ex);
       setComparePick(null);
     },
-    [comparePick, addRecent, showToast]
+    [comparePick, addRecent, showToast, watchExercise]
   );
 
   useEffect(() => {
@@ -1447,7 +1457,7 @@ export default function App() {
         favoritesCount={favorites.size}
       />
 
-      {comparePick && (
+      {comparePick && isFeatureEnabled('compareBanner') && (
         <div className="compare-pick-banner cinema-container">
           <Icon name="compare" className="w-4 h-4 text-red-400 shrink-0" />
           <p className="text-xs text-zinc-300 truncate flex-1">
@@ -1544,7 +1554,7 @@ export default function App() {
                 onTogglePlaylist={togglePlaylistItem}
                 isFavorite={isFavorite(ex.firestoreId)}
                 onToggleFavorite={() => toggleFavorite(ex.firestoreId)}
-                onCompare={handleCompare}
+                onCompare={isFeatureEnabled('compare') ? handleCompare : undefined}
                 isComparePick={comparePick?.firestoreId === ex.firestoreId}
               />
             ))}
@@ -1646,7 +1656,7 @@ export default function App() {
                 onTogglePlaylist={togglePlaylistItem}
                 isFavorite={isFavorite(ex.firestoreId)}
                 onToggleFavorite={() => toggleFavorite(ex.firestoreId)}
-                onCompare={handleCompare}
+                onCompare={isFeatureEnabled('compare') ? handleCompare : undefined}
                 isComparePick={comparePick?.firestoreId === ex.firestoreId}
               />
             ))}

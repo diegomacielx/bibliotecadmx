@@ -13,6 +13,7 @@ import { useTilt3D } from '../hooks/useTilt3D';
 import { useExerciseCover } from '../hooks/useExerciseCover';
 import { getSpring, staggerItem } from '../lib/motion';
 import { getCoverObjectPosition, formatCoverFocusYInput } from '../lib/coverFocus';
+import { isTouchUi } from '../hooks/useMediaQuery';
 import { Skeleton } from './Skeleton';
 import { Icon } from './Icon';
 import { YouTubePlayer, preloadYouTubePlayerApi } from './YouTubePlayer';
@@ -41,8 +42,6 @@ interface ExerciseCardProps {
   playlistSequence?: number;
 }
 
-import { isTouchUi } from '../hooks/useMediaQuery';
-
 export function ExerciseCard({
   ex,
   index,
@@ -66,6 +65,7 @@ export function ExerciseCard({
   isComparePick = false,
   playlistSequence,
 }: ExerciseCardProps) {
+  const touchUi = isTouchUi();
   const [showPreview, setShowPreview] = useState(false);
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [mobileExpanded, setMobileExpanded] = useState(false);
@@ -79,6 +79,13 @@ export function ExerciseCard({
   const ytId = getYouTubeId(ex.youtubeUrl);
   const canPreview = !!ytId && !reducedMotion;
   const coverObjectPosition = getCoverObjectPosition(ex);
+  const showMobileActions = touchUi && (mobileExpanded || selectionMode);
+  const showCenterPlay = touchUi && !selectionMode;
+
+  useEffect(() => {
+    if (!selectionMode) return;
+    setMobileExpanded(false);
+  }, [selectionMode]);
 
   useEffect(() => {
     if (!downloadOpen) return;
@@ -92,20 +99,20 @@ export function ExerciseCard({
   }, [downloadOpen]);
 
   useEffect(() => {
-    if (!mobileExpanded) return;
+    if (!mobileExpanded || selectionMode) return;
     const onPointerDown = (e: PointerEvent) => {
       if (coverRef.current?.contains(e.target as Node)) return;
       setMobileExpanded(false);
     };
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [mobileExpanded]);
+  }, [mobileExpanded, selectionMode]);
 
   const handleMouseEnter = useCallback(() => {
     void preloadYouTubePlayerApi();
-    if (!canPreview || isTouchUi()) return;
+    if (!canPreview || touchUi) return;
     previewTimerRef.current = setTimeout(() => setShowPreview(true), 450);
-  }, [canPreview]);
+  }, [canPreview, touchUi]);
 
   const handleMouseLeave = useCallback(() => {
     if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
@@ -146,16 +153,16 @@ export function ExerciseCard({
 
   const handleCoverClick = (e: React.MouseEvent) => {
     if (downloadOpen) return;
+    if ((e.target as HTMLElement).closest('[data-card-play-trigger]')) return;
 
-    if (isTouchUi()) {
-      if ((e.target as HTMLElement).closest('[data-card-play-trigger]')) return;
+    if (touchUi) {
       if (selectionMode && onTogglePlaylist) {
         e.stopPropagation();
         onTogglePlaylist(ex);
         return;
       }
       e.stopPropagation();
-      setMobileExpanded(true);
+      setMobileExpanded((open) => !open);
       return;
     }
 
@@ -185,20 +192,20 @@ export function ExerciseCard({
       ref={tilt.ref}
       variants={staggerItem}
       custom={index}
-      layout={!reducedMotion}
+      layout={!reducedMotion && !touchUi}
       onMouseMove={(e) => {
-        if (isTouchUi()) return;
+        if (touchUi) return;
         handleGlow(e);
         tilt.onMouseMove(e);
       }}
       onMouseLeave={() => {
-        if (isTouchUi()) return;
+        if (touchUi) return;
         tilt.onMouseLeave();
         handleMouseLeave();
       }}
       onMouseEnter={handleMouseEnter}
       style={
-        reducedMotion || isTouchUi()
+        reducedMotion || touchUi
           ? undefined
           : {
               rotateX: tilt.rotateX,
@@ -208,9 +215,9 @@ export function ExerciseCard({
       }
       className={`exercise-card cinematic-card card-grid-item card-3d group relative rounded-cinema-lg border shadow-cinematic hover:shadow-cinematic-red ease-cinematic duration-cinematic ${
         isAdmin ? 'exercise-card--admin' : ''
-      } ${downloadOpen || mobileExpanded ? 'card-actions-pinned z-[50]' : 'z-10'} ${
+      } ${downloadOpen || mobileExpanded || selectionMode ? 'card-actions-pinned z-[50]' : 'z-10'} ${
         mobileExpanded ? 'card-mobile-expanded' : ''
-      } ${
+      } ${selectionMode ? 'card-selection-mode' : ''} ${
         isComparePick
           ? 'border-red-500 ring-2 ring-red-500/40'
           : isInPlaylist
@@ -218,7 +225,7 @@ export function ExerciseCard({
             : 'border-white/5 hover:border-white/10'
       }`}
       whileHover={
-        reducedMotion || isTouchUi() ? undefined : { y: -4, transition: getSpring(reducedMotion) }
+        reducedMotion || touchUi ? undefined : { y: -4, transition: getSpring(reducedMotion) }
       }
     >
       <div className="card-shimmer" aria-hidden="true" />
@@ -230,13 +237,14 @@ export function ExerciseCard({
         onContextMenu={(e) => e.preventDefault()}
         role="button"
         tabIndex={0}
-        aria-label={`Abrir vídeo: ${ex.name}`}
-        aria-expanded={isTouchUi() ? mobileExpanded : undefined}
+        aria-label={`${ex.name}${selectionMode ? ' — toque para adicionar ao treino' : touchUi ? ' — toque para ações' : ''}`}
+        aria-expanded={touchUi ? mobileExpanded || selectionMode : undefined}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
-            if (isTouchUi()) {
-              setMobileExpanded(true);
+            if (touchUi) {
+              if (selectionMode && onTogglePlaylist) onTogglePlaylist(ex);
+              else setMobileExpanded(true);
             } else {
               onWatch(ex);
             }
@@ -262,11 +270,11 @@ export function ExerciseCard({
             } ${mobileExpanded ? 'scale-[0.98]' : ''}`}
             style={{ objectPosition: coverObjectPosition }}
             alt={`Capa do exercício ${ex.name}`}
-            whileHover={reducedMotion || showPreview || isTouchUi() ? undefined : { scale: 1.04 }}
+            whileHover={reducedMotion || showPreview || touchUi ? undefined : { scale: 1.04 }}
             transition={getSpring(reducedMotion)}
           />
 
-          {showPreview && ytId && !isTouchUi() && (
+          {showPreview && ytId && !touchUi && (
             <div className="card-preview-player absolute inset-0 z-[15] pointer-events-none">
               <YouTubePlayer
                 videoId={ytId}
@@ -283,29 +291,35 @@ export function ExerciseCard({
 
           <div className="card-cover-vignette" aria-hidden="true" />
 
-          {!showPreview && (!isTouchUi() || mobileExpanded) && (
-            isTouchUi() ? (
-              <button
-                type="button"
-                data-card-play-trigger
-                className="card-play-trigger absolute inset-0 z-[25] flex items-center justify-center"
-                onClick={handlePlayClick}
-                aria-label={`Reproduzir ${ex.name}`}
-              >
-                <div className="card-play-ring">
-                  <Icon name="play" className="w-5 h-5 text-white ml-0.5" />
-                </div>
-              </button>
-            ) : (
-              <div
-                className="card-play-overlay absolute inset-0 z-[25] flex items-center justify-center pointer-events-none"
-                aria-hidden="true"
-              >
-                <div className="card-play-ring">
-                  <Icon name="play" className="w-5 h-5 text-white ml-0.5" />
-                </div>
+          {touchUi && selectionMode && playlistSequence != null && (
+            <div className="card-selection-order-mobile" aria-label={`${playlistSequence}º no treino`}>
+              {playlistSequence}
+            </div>
+          )}
+
+          {!showPreview && showCenterPlay && (
+            <button
+              type="button"
+              data-card-play-trigger
+              className="card-play-trigger-center"
+              onClick={handlePlayClick}
+              aria-label={`Reproduzir ${ex.name}`}
+            >
+              <div className="card-play-ring">
+                <Icon name="play" className="w-5 h-5 text-white ml-0.5" />
               </div>
-            )
+            </button>
+          )}
+
+          {!showPreview && !touchUi && (
+            <div
+              className="card-play-overlay absolute inset-0 z-[25] flex items-center justify-center pointer-events-none"
+              aria-hidden="true"
+            >
+              <div className="card-play-ring">
+                <Icon name="play" className="w-5 h-5 text-white ml-0.5" />
+              </div>
+            </div>
           )}
         </div>
 
@@ -319,14 +333,19 @@ export function ExerciseCard({
             {isAdmin && isExerciseIncomplete(ex.youtubeUrl) && (
               <span className="card-status-badge card-status-badge--warn">Incompleto</span>
             )}
-            {playlistSequence != null && (
+            {playlistSequence != null && !touchUi && (
               <span className="card-playlist-order" title={`${playlistSequence}º na sequência`}>
                 {playlistSequence}
               </span>
             )}
+            {playlistSequence != null && touchUi && selectionMode && (
+              <span className="card-playlist-order card-playlist-order--selection" title={`${playlistSequence}º na sequência`}>
+                {playlistSequence}º
+              </span>
+            )}
           </div>
 
-          <div className="card-action-strip">
+          <div className={`card-action-strip ${showMobileActions ? 'card-action-strip--visible' : ''}`}>
             {selectionMode && onTogglePlaylist ? (
               <button
                 type="button"
