@@ -1,5 +1,6 @@
 import { APP_ID } from './constants';
 import { getCachedCoverUrl } from './coverCache';
+import { getOfficialGitHubCoverCandidates, isOfficialGitHubCoverUrl } from './coverSource';
 
 const LEGACY_EXERCISES_PATH = ['artifacts', APP_ID, 'public', 'data', 'exercises'] as const;
 
@@ -21,14 +22,6 @@ export function isGenericCoverFallbackUrl(url: string | undefined | null): boole
 export function isYouTubeCoverUrl(url: string): boolean {
   const u = url.toLowerCase();
   return u.includes('ytimg.com') || u.includes('img.youtube.com/vi/') || u.includes('youtube.com/vi/');
-}
-
-function appendGitHubCoverCandidates(urls: string[], exerciseId: string, base: string): void {
-  for (const assetId of getExerciseAssetIds(exerciseId)) {
-    for (const ext of ['jpg', 'JPG', 'png', 'PNG'] as const) {
-      urls.push(`${base}/${assetId}.${ext}`);
-    }
-  }
 }
 
 /** Logs de depuração — visíveis no console do navegador (filtro: DMX) */
@@ -241,60 +234,23 @@ export function openYouTubeExternal(url: string | undefined | null): void {
   openYouTubeWatch(trimmed);
 }
 
-/** URLs do YouTube em ordem de qualidade (maxres primeiro) */
-function buildYouTubeThumbUrls(ytId: string): string[] {
-  return [
-    `https://i.ytimg.com/vi/${ytId}/maxresdefault.webp`,
-    `https://img.youtube.com/vi/${ytId}/maxresdefault.jpg`,
-    `https://i.ytimg.com/vi/${ytId}/sddefault.webp`,
-    `https://img.youtube.com/vi/${ytId}/sddefault.jpg`,
-    `https://i.ytimg.com/vi/${ytId}/hqdefault.webp`,
-    `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`,
-    `https://i.ytimg.com/vi/${ytId}/mqdefault.webp`,
-    `https://img.youtube.com/vi/${ytId}/mqdefault.jpg`,
-    `https://img.youtube.com/vi/${ytId}/0.jpg`,
-  ];
-}
-
-/** Lista ordenada de URLs de capa: cache → thumbnail → YouTube (max) → GitHub → YouTube (fallback) */
-export const buildExerciseImageFallbacks = (ex: {
+/** URLs de capa — somente GitHub (jpg/png), com cache válido priorizado */
+export function buildGitHubCoverUrls(ex: {
   firestoreId?: string;
   id: string;
-  thumbnail?: string;
-  youtubeUrl?: string;
-}): string[] => {
-  const urls: string[] = [];
+}): string[] {
+  const github = getOfficialGitHubCoverCandidates(ex);
+  if (!ex.firestoreId) return github;
 
-  if (ex.firestoreId) {
-    const cached = getCachedCoverUrl(ex.firestoreId);
-    // Não priorizar cache do YouTube — capas 4K no GitHub devem ser tentadas primeiro
-    if (cached && !isYouTubeCoverUrl(cached)) {
-      urls.push(cached);
-    }
+  const cached = getCachedCoverUrl(ex.firestoreId);
+  if (cached && isOfficialGitHubCoverUrl(cached)) {
+    return [cached, ...github.filter((url) => url !== cached)];
   }
+  return github;
+}
 
-  const thumb = ex.thumbnail?.trim();
-  const hasCustomThumbnail =
-    !!thumb && !isPlaceholderYouTubeUrl(thumb) && !PLACEHOLDER_URL_VALUES.has(thumb.toLowerCase());
-
-  if (hasCustomThumbnail) {
-    urls.push(thumb);
-  }
-
-  const ytId = !isExerciseIncomplete(ex.youtubeUrl) ? getYouTubeId(ex.youtubeUrl) : null;
-  const ytUrls = ytId ? buildYouTubeThumbUrls(ytId) : [];
-
-  const githubBases = [...new Set([GITHUB_COVER_BASE, GITHUB_COVER_BASE_FALLBACK])];
-  for (const base of githubBases) {
-    appendGitHubCoverCandidates(urls, ex.id, base);
-  }
-
-  if (ytUrls.length > 0) {
-    urls.push(...ytUrls);
-  }
-
-  return [...new Set(urls)];
-};
+/** @deprecated use buildGitHubCoverUrls — mantido para chamadas legadas */
+export const buildExerciseImageFallbacks = buildGitHubCoverUrls;
 
 export const getPrimaryExerciseImage = (ex: {
   firestoreId?: string;

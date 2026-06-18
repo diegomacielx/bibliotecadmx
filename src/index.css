@@ -988,11 +988,11 @@ button.header-brand:focus-visible {
   overflow: visible;
 }
 
-/* Capa ausente — logo por tema + play discreto */
+/* Capa ausente ou carregando — fundo temático + logo + play */
 .cover-placeholder {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1001,8 +1001,76 @@ button.header-brand:focus-visible {
   border-radius: inherit;
   overflow: hidden;
   background:
-    radial-gradient(ellipse 82% 68% at 50% 28%, var(--cover-placeholder-glow) 0%, transparent 62%),
+    radial-gradient(ellipse 72% 58% at 18% 16%, var(--cover-placeholder-glow, rgba(239, 68, 68, 0.12)) 0%, transparent 58%),
+    radial-gradient(ellipse 68% 52% at 82% 84%, var(--cover-placeholder-accent, rgba(96, 168, 255, 0.1)) 0%, transparent 55%),
     var(--cover-placeholder-bg, var(--dmx-card-cover-bg));
+}
+
+.cover-placeholder--in-card {
+  z-index: 1;
+}
+
+.cover-placeholder--subdued .cover-placeholder__logo,
+.cover-placeholder--subdued .cover-placeholder__play,
+.cover-placeholder--subdued .cover-placeholder__id {
+  opacity: 0.55;
+}
+
+.cover-placeholder__mesh {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.35;
+  background:
+    repeating-linear-gradient(
+      -24deg,
+      transparent 0 14px,
+      rgba(255, 255, 255, 0.018) 14px 15px
+    ),
+    repeating-linear-gradient(
+      66deg,
+      transparent 0 18px,
+      rgba(255, 255, 255, 0.012) 18px 19px
+    );
+}
+
+html[data-theme="light"] .cover-placeholder__mesh {
+  opacity: 0.22;
+  background:
+    repeating-linear-gradient(
+      -24deg,
+      transparent 0 14px,
+      rgba(26, 24, 22, 0.025) 14px 15px
+    ),
+    repeating-linear-gradient(
+      66deg,
+      transparent 0 18px,
+      rgba(26, 24, 22, 0.018) 18px 19px
+    );
+}
+
+.cover-placeholder__id {
+  position: absolute;
+  right: 0.875rem;
+  bottom: 0.75rem;
+  z-index: 2;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.28);
+}
+
+html[data-theme="light"] .cover-placeholder__id {
+  color: rgba(26, 24, 22, 0.28);
+}
+
+.search-suggestion-thumb--art {
+  display: block;
+  flex-shrink: 0;
+  background:
+    radial-gradient(circle at 30% 25%, var(--cover-placeholder-glow, rgba(239, 68, 68, 0.15)) 0%, transparent 62%),
+    var(--dmx-card-cover-bg);
 }
 
 html[data-theme="dark"] .cover-placeholder,

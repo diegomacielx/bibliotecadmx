@@ -1,12 +1,19 @@
 import { getCachedCoverUrl, rememberCoverUrl, forgetCoverUrl } from './coverCache';
+import { isOfficialGitHubCoverUrl } from './coverSource';
 
 /** Capas já resolvidas nesta sessão — evita reload ao trocar categoria */
 const sessionResolved = new Map<string, string>();
 const sessionLoading = new Set<string>();
 
+function isValidCoverUrl(url: string | null | undefined): url is string {
+  return !!url && isOfficialGitHubCoverUrl(url);
+}
+
 export function getSessionCoverUrl(firestoreId: string): string | null {
   if (!firestoreId) return null;
-  return sessionResolved.get(firestoreId) ?? getCachedCoverUrl(firestoreId);
+  const fromSession = sessionResolved.get(firestoreId);
+  if (isValidCoverUrl(fromSession)) return fromSession;
+  return getCachedCoverUrl(firestoreId);
 }
 
 export function isSessionCoverReady(firestoreId: string): boolean {
@@ -14,7 +21,7 @@ export function isSessionCoverReady(firestoreId: string): boolean {
 }
 
 export function setSessionCoverUrl(firestoreId: string, url: string): void {
-  if (!firestoreId || !url) return;
+  if (!firestoreId || !isValidCoverUrl(url)) return;
   sessionResolved.set(firestoreId, url);
   sessionLoading.delete(firestoreId);
   rememberCoverUrl(firestoreId, url);
@@ -32,7 +39,7 @@ export function clearSessionCoverUrl(firestoreId: string, failedUrl?: string): v
 
 /** Pré-carrega e registra capa na sessão */
 export function warmSessionCover(firestoreId: string, url: string): void {
-  if (!firestoreId || !url || sessionResolved.has(firestoreId) || sessionLoading.has(firestoreId)) {
+  if (!firestoreId || !isValidCoverUrl(url) || sessionResolved.has(firestoreId) || sessionLoading.has(firestoreId)) {
     return;
   }
   sessionLoading.add(firestoreId);

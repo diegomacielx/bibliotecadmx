@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { Skeleton } from './Skeleton';
 import { getCoverFrameStyle, type CoverFrameSource } from '../lib/coverFocus';
 import { ExerciseCoverPlaceholder } from './ExerciseCoverPlaceholder';
 
@@ -14,9 +13,10 @@ interface ExerciseCoverImageProps {
   className?: string;
   imgClassName?: string;
   useBlurUp?: boolean;
-  /** Capa indisponível — exibe placeholder com logo + play */
+  /** Capa indisponível no GitHub */
   coverMissing?: boolean;
-  /** Capa já resolvida nesta sessão — exibe sem fade-in */
+  exerciseId?: string;
+  exerciseCategory?: string;
   instantDisplay?: boolean;
   onLoad: (e: React.SyntheticEvent<HTMLImageElement>) => void;
   onError: () => void;
@@ -25,55 +25,43 @@ interface ExerciseCoverImageProps {
 export function ExerciseCoverImage({
   imgSrc,
   imgLoaded,
-  placeholderSrc,
-  webpSrc,
   alt,
   frameSource,
   loading = 'lazy',
   className = '',
   imgClassName = '',
-  useBlurUp = false,
   coverMissing = false,
+  exerciseId,
+  exerciseCategory,
   instantDisplay = false,
   onLoad,
   onError,
 }: ExerciseCoverImageProps) {
   const frame = useMemo(
-    () => (frameSource ? getCoverFrameStyle(frameSource) : getCoverFrameStyle({ name: '', category: '', muscleGroups: [] })),
+    () =>
+      frameSource
+        ? getCoverFrameStyle(frameSource)
+        : getCoverFrameStyle({ name: '', category: '', muscleGroups: [] }),
     [frameSource]
   );
 
-  if (coverMissing) {
-    return <ExerciseCoverPlaceholder className={className} />;
-  }
-
-  const showPlaceholder = useBlurUp && !imgLoaded && placeholderSrc;
-  const showSkeleton = !imgLoaded && !showPlaceholder;
+  const showArt = coverMissing || !imgLoaded;
+  const showImage = !coverMissing && !!imgSrc;
   const rootStyle = frame.cssVars as React.CSSProperties;
   const rootClass = `cover-image-root ${className}`.trim();
 
   return (
     <div className={rootClass} style={rootStyle}>
-      {showSkeleton && (
-        <div className="cover-image-skeleton" aria-hidden="true">
-          <Skeleton className="w-full h-full rounded-none" />
-        </div>
-      )}
-
-      {showPlaceholder && (
-        <img
-          src={placeholderSrc}
-          alt=""
-          aria-hidden="true"
-          decoding="async"
-          draggable={false}
-          className={`cover-image-placeholder ${imgLoaded ? 'cover-image-placeholder--hidden' : ''}`}
-          style={{ objectPosition: frame.objectPosition }}
+      {showArt && (
+        <ExerciseCoverPlaceholder
+          exerciseId={exerciseId}
+          category={exerciseCategory}
+          subdued={!coverMissing && !imgLoaded}
+          className="cover-placeholder--in-card"
         />
       )}
 
-      <picture className="cover-image-picture">
-        {webpSrc && <source srcSet={webpSrc} type="image/webp" />}
+      {showImage && (
         <img
           src={imgSrc}
           alt={alt}
@@ -85,7 +73,7 @@ export function ExerciseCoverImage({
           className={`cover-image-main ${imgLoaded || instantDisplay ? 'cover-image-main--loaded' : ''} ${instantDisplay ? 'cover-image-main--instant' : ''} ${imgClassName}`.trim()}
           style={{ objectPosition: frame.objectPosition }}
         />
-      </picture>
+      )}
     </div>
   );
 }

@@ -84,7 +84,7 @@ export function ExerciseCard({
   const hoverDevice = useMediaQuery('(hover: hover)');
   const [mobileExpanded, setMobileExpanded] = useState(false);
   const coverRef = useRef<HTMLDivElement>(null);
-  const { imgSrc, imgLoaded, isCoverInstant, coverMissing, placeholderSrc, webpSrc, handleLoad, handleError, shouldUseCoverBlurUp } =
+  const { imgSrc, imgLoaded, isCoverInstant, coverMissing, placeholderSrc, webpSrc, handleLoad, handleError } =
     useExerciseCover(ex);
   const handleGlow = useAmbientGlow<HTMLDivElement>();
   const reducedMotion = useReducedMotion();
@@ -330,9 +330,11 @@ export function ExerciseCard({
             webpSrc={webpSrc}
             alt={`Capa do exercício ${ex.name}`}
             frameSource={ex}
+            exerciseId={ex.id}
+            exerciseCategory={ex.category}
             instantDisplay={isCoverInstant}
             coverMissing={coverMissing}
-            useBlurUp={shouldUseCoverBlurUp(reducedMotion) && !isCoverInstant}
+            useBlurUp={false}
             onLoad={handleLoad}
             onError={handleError}
             imgClassName="card-cover-img"

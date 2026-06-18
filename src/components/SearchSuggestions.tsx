@@ -1,8 +1,8 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Exercise } from '../types';
-import { CUSTOM_LOGO_URL } from '../lib/constants';
-import { buildExerciseImageFallbacks } from '../lib/utils';
+import { buildGitHubCoverUrls } from '../lib/utils';
 import { getCoverFrameStyle } from '../lib/coverFocus';
+import { getCoverPlaceholderStyle } from './ExerciseCoverPlaceholder';
 import { Icon } from './Icon';
 
 interface SearchSuggestionsProps {
@@ -39,7 +39,7 @@ export function SearchSuggestions({
           </p>
         ) : (
           suggestions.map((ex) => {
-            const thumb = buildExerciseImageFallbacks(ex)[0] || CUSTOM_LOGO_URL;
+            const thumb = buildGitHubCoverUrls(ex)[0];
             const muscles = ex.muscleGroups?.slice(0, 2).join(', ');
 
             return (
@@ -51,16 +51,26 @@ export function SearchSuggestions({
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => onSelect(ex)}
               >
-                <img
-                  src={thumb}
-                  alt=""
-                  className="search-suggestion-thumb"
-                  style={{
-                    objectPosition: getCoverFrameStyle(ex).objectPosition,
-                    ...(getCoverFrameStyle(ex).cssVars as React.CSSProperties),
-                  }}
-                  loading="lazy"
-                />
+                {thumb ? (
+                  <img
+                    src={thumb}
+                    alt=""
+                    className="search-suggestion-thumb"
+                    style={{
+                      objectPosition: getCoverFrameStyle(ex).objectPosition,
+                      ...(getCoverFrameStyle(ex).cssVars as React.CSSProperties),
+                    }}
+                    loading="lazy"
+                    decoding="async"
+                    draggable={false}
+                  />
+                ) : (
+                  <span
+                    className="search-suggestion-thumb search-suggestion-thumb--art"
+                    style={getCoverPlaceholderStyle(ex.id, ex.category)}
+                    aria-hidden="true"
+                  />
+                )}
                 <div className="search-suggestion-body">
                   <p className="search-suggestion-title">{ex.name}</p>
                   <p className="search-suggestion-meta">

@@ -128,6 +128,8 @@ function HeroBannerDesktop({ hero, onWatch, onCampaignClick }: HeroBannerProps) 
                 webpSrc={isCampaign ? null : webpSrc}
                 alt={hero.title}
                 frameSource={hero.frameSource}
+                exerciseId={hero.exercise?.id}
+                exerciseCategory={hero.exercise?.category ?? hero.categoryLabel}
                 loading="eager"
                 coverMissing={!isCampaign && coverMissing}
                 useBlurUp={!isCampaign && !reducedMotion}

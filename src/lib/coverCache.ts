@@ -1,6 +1,7 @@
 import { readJSON, writeJSON } from './storage';
+import { isOfficialGitHubCoverUrl } from './coverSource';
 
-const COVER_CACHE_KEY = 'dmx_cover_hits_v3';
+const COVER_CACHE_KEY = 'dmx_cover_hits_v4';
 const MAX_ENTRIES = 800;
 
 interface CoverHit {
@@ -12,18 +13,18 @@ function readMap(): Record<string, CoverHit> {
   return readJSON<Record<string, CoverHit>>(COVER_CACHE_KEY, {});
 }
 
-/** URL de capa que funcionou na última visita — carregamento instantâneo */
+/** URL de capa GitHub que funcionou na última visita */
 export function getCachedCoverUrl(firestoreId: string): string | null {
   if (!firestoreId) return null;
   const hit = readMap()[firestoreId];
-  return hit?.url ?? null;
+  if (!hit?.url || !isOfficialGitHubCoverUrl(hit.url)) return null;
+  return hit.url;
 }
 
-/** Persiste a URL que carregou com sucesso para priorizar no próximo login */
+/** Persiste capa GitHub que carregou com sucesso */
 export function rememberCoverUrl(firestoreId: string, url: string): void {
   if (!firestoreId || !url || url.startsWith('blob:')) return;
-  const lower = url.toLowerCase();
-  if (lower.includes('ytimg.com') || lower.includes('img.youtube.com/vi/')) return;
+  if (!isOfficialGitHubCoverUrl(url)) return;
 
   const map = readMap();
   map[firestoreId] = { url, ts: Date.now() };
@@ -54,7 +55,7 @@ export function forgetCoverUrl(firestoreId: string, failedUrl?: string): void {
 export function prefetchCoverUrls(urls: string[]): void {
   if (typeof window === 'undefined') return;
   for (const url of urls) {
-    if (!url) continue;
+    if (!url || !isOfficialGitHubCoverUrl(url)) continue;
     const img = new Image();
     img.decoding = 'async';
     img.src = url;

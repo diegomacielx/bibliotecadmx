@@ -209,6 +209,8 @@ export function HeroSpotlightSection({
               webpSrc={mode === 'campaign' ? null : webpSrc}
               alt=""
               coverMissing={mode !== 'campaign' && coverMissing}
+              exerciseId={selectedExercise?.id}
+              exerciseCategory={selectedExercise?.category}
               frameSource={{
                 ...previewFrame,
                 coverFocusX: displayX,

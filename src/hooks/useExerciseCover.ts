@@ -1,17 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import {
-  buildExerciseImageFallbacks,
-  isGenericCoverFallbackUrl,
-  isYouTubeCoverUrl,
-} from '../lib/utils';
+import { buildGitHubCoverUrls } from '../lib/utils';
+import { isOfficialGitHubCoverUrl } from '../lib/coverSource';
 import {
   getSessionCoverUrl,
   isSessionCoverReady,
   setSessionCoverUrl,
   clearSessionCoverUrl,
 } from '../lib/coverImageStore';
-import { getCachedCoverUrl } from '../lib/coverCache';
-import { getCoverPlaceholderUrl, getCoverWebpCompanion, shouldUseCoverBlurUp } from '../lib/coverImage';
 
 interface CoverSource {
   firestoreId: string;
@@ -20,161 +15,114 @@ interface CoverSource {
   youtubeUrl?: string;
 }
 
-function markCoverMissing(
-  setCoverMissing: (v: boolean) => void,
-  setImgSrc: (v: string) => void,
-  setImgLoaded: (v: boolean) => void,
-  setIsCoverInstant: (v: boolean) => void
-) {
-  setCoverMissing(true);
-  setImgSrc('');
-  setImgLoaded(true);
-  setIsCoverInstant(true);
-}
+const COVER_LOAD_TIMEOUT_MS = 7000;
 
 export function useExerciseCover(ex: CoverSource) {
-  const fallbacksRef = useRef(buildExerciseImageFallbacks(ex));
-  const fallbackIndexRef = useRef(0);
+  const urlsRef = useRef(buildGitHubCoverUrls(ex));
+  const indexRef = useRef(0);
 
   const resolveInitial = useCallback(() => {
-    fallbacksRef.current = buildExerciseImageFallbacks(ex);
-    if (fallbacksRef.current.length === 0) {
+    urlsRef.current = buildGitHubCoverUrls(ex);
+    indexRef.current = 0;
+
+    if (urlsRef.current.length === 0) {
       return { src: '', loaded: true, missing: true };
     }
 
     const sessionUrl = getSessionCoverUrl(ex.firestoreId);
-    if (sessionUrl && isGenericCoverFallbackUrl(sessionUrl)) {
-      clearSessionCoverUrl(ex.firestoreId, sessionUrl);
-    } else if (sessionUrl && isSessionCoverReady(ex.firestoreId)) {
-      const idx = fallbacksRef.current.indexOf(sessionUrl);
-      fallbackIndexRef.current = idx >= 0 ? idx : 0;
-      return { src: sessionUrl, loaded: true, missing: false };
-    } else if (sessionUrl) {
-      const idx = fallbacksRef.current.indexOf(sessionUrl);
-      fallbackIndexRef.current = idx >= 0 ? idx : 0;
-      const fromDisk = getCachedCoverUrl(ex.firestoreId) === sessionUrl;
-      return { src: sessionUrl, loaded: fromDisk, missing: false };
+    if (sessionUrl && isOfficialGitHubCoverUrl(sessionUrl)) {
+      const idx = urlsRef.current.indexOf(sessionUrl);
+      if (idx >= 0) indexRef.current = idx;
+      const ready = isSessionCoverReady(ex.firestoreId);
+      return { src: sessionUrl, loaded: ready, missing: false };
     }
 
-    fallbackIndexRef.current = 0;
-    return {
-      src: fallbacksRef.current[0] ?? '',
-      loaded: false,
-      missing: false,
-    };
+    return { src: urlsRef.current[0] ?? '', loaded: false, missing: false };
   }, [ex]);
 
   const initial = resolveInitial();
   const [coverMissing, setCoverMissing] = useState(initial.missing);
   const [imgSrc, setImgSrc] = useState(initial.src);
   const [imgLoaded, setImgLoaded] = useState(initial.loaded);
-  const [isCoverInstant, setIsCoverInstant] = useState(
-    initial.missing ||
-      isSessionCoverReady(ex.firestoreId) ||
-      (initial.loaded && getCachedCoverUrl(ex.firestoreId) === initial.src)
-  );
-
-  const placeholderSrc = coverMissing ? null : getCoverPlaceholderUrl(ex);
-  const webpSrc = coverMissing ? null : getCoverWebpCompanion(imgSrc);
 
   useEffect(() => {
-    const sessionUrl = getSessionCoverUrl(ex.firestoreId);
-    fallbacksRef.current = buildExerciseImageFallbacks(ex);
+    urlsRef.current = buildGitHubCoverUrls(ex);
+    indexRef.current = 0;
 
-    if (fallbacksRef.current.length === 0) {
-      markCoverMissing(setCoverMissing, setImgSrc, setImgLoaded, setIsCoverInstant);
-      return;
-    }
-
-    if (sessionUrl && isGenericCoverFallbackUrl(sessionUrl)) {
-      clearSessionCoverUrl(ex.firestoreId, sessionUrl);
-    } else if (sessionUrl && isSessionCoverReady(ex.firestoreId)) {
-      const idx = fallbacksRef.current.indexOf(sessionUrl);
-      fallbackIndexRef.current = idx >= 0 ? idx : 0;
-      setCoverMissing(false);
-      setImgSrc(sessionUrl);
+    if (urlsRef.current.length === 0) {
+      setCoverMissing(true);
+      setImgSrc('');
       setImgLoaded(true);
-      setIsCoverInstant(true);
       return;
     }
 
-    if (sessionUrl && !isGenericCoverFallbackUrl(sessionUrl)) {
-      const idx = fallbacksRef.current.indexOf(sessionUrl);
-      fallbackIndexRef.current = idx >= 0 ? idx : 0;
+    const sessionUrl = getSessionCoverUrl(ex.firestoreId);
+    if (sessionUrl && isOfficialGitHubCoverUrl(sessionUrl)) {
+      const idx = urlsRef.current.indexOf(sessionUrl);
+      indexRef.current = idx >= 0 ? idx : 0;
       setCoverMissing(false);
       setImgSrc(sessionUrl);
-      const cachedHit = getCachedCoverUrl(ex.firestoreId) === sessionUrl;
-      setImgLoaded(isSessionCoverReady(ex.firestoreId) || cachedHit);
-      setIsCoverInstant(isSessionCoverReady(ex.firestoreId) || cachedHit);
+      setImgLoaded(isSessionCoverReady(ex.firestoreId));
       return;
     }
 
-    fallbackIndexRef.current = 0;
     setCoverMissing(false);
-    setImgSrc(fallbacksRef.current[0] ?? '');
+    setImgSrc(urlsRef.current[0] ?? '');
     setImgLoaded(false);
-    setIsCoverInstant(false);
-  }, [ex.firestoreId, ex.id, ex.thumbnail, ex.youtubeUrl]);
+  }, [ex.firestoreId, ex.id]);
 
-  const advanceFallback = useCallback(() => {
-    const nextIndex = fallbackIndexRef.current + 1;
-    fallbackIndexRef.current = nextIndex;
-    if (nextIndex < fallbacksRef.current.length) {
+  const markMissing = useCallback(() => {
+    setCoverMissing(true);
+    setImgSrc('');
+    setImgLoaded(true);
+  }, []);
+
+  const tryNextUrl = useCallback(() => {
+    const next = indexRef.current + 1;
+    indexRef.current = next;
+    if (next < urlsRef.current.length) {
       setCoverMissing(false);
-      setImgLoaded(isSessionCoverReady(ex.firestoreId));
-      setImgSrc(fallbacksRef.current[nextIndex]);
-      return true;
+      setImgLoaded(false);
+      setImgSrc(urlsRef.current[next] ?? '');
+      return;
     }
-    markCoverMissing(setCoverMissing, setImgSrc, setImgLoaded, setIsCoverInstant);
-    return false;
-  }, [ex.firestoreId]);
+    markMissing();
+  }, [markMissing]);
 
   const handleError = useCallback(() => {
-    clearSessionCoverUrl(ex.firestoreId, imgSrc);
-    setImgLoaded(false);
-    advanceFallback();
-  }, [ex.firestoreId, imgSrc, advanceFallback]);
-
-  const isYouTubePlaceholderThumb = (el: HTMLImageElement, url: string): boolean => {
-    if (!url.includes('ytimg.com') && !url.includes('img.youtube.com/vi/')) return false;
-    return el.naturalWidth > 0 && el.naturalWidth <= 120;
-  };
+    if (imgSrc) clearSessionCoverUrl(ex.firestoreId, imgSrc);
+    tryNextUrl();
+  }, [ex.firestoreId, imgSrc, tryNextUrl]);
 
   const handleLoad = useCallback(
     (e: React.SyntheticEvent<HTMLImageElement>) => {
-      const el = e.currentTarget;
-      const url = el.currentSrc || el.src;
-      if (isGenericCoverFallbackUrl(url)) {
-        clearSessionCoverUrl(ex.firestoreId, url);
-        advanceFallback();
-        return;
-      }
-      if (isYouTubePlaceholderThumb(el, url)) {
-        clearSessionCoverUrl(ex.firestoreId, url);
-        setImgLoaded(false);
-        advanceFallback();
+      const url = e.currentTarget.currentSrc || e.currentTarget.src;
+      if (!isOfficialGitHubCoverUrl(url)) {
+        handleError();
         return;
       }
       setCoverMissing(false);
       setImgLoaded(true);
-      setIsCoverInstant(true);
-      if (url && !isYouTubeCoverUrl(url)) {
-        setSessionCoverUrl(ex.firestoreId, url);
-      }
+      setSessionCoverUrl(ex.firestoreId, url);
     },
-    [ex.firestoreId, advanceFallback]
+    [ex.firestoreId, handleError]
   );
+
+  useEffect(() => {
+    if (coverMissing || !imgSrc || imgLoaded) return;
+    const timer = window.setTimeout(handleError, COVER_LOAD_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [coverMissing, imgSrc, imgLoaded, handleError]);
 
   return {
     imgSrc,
     imgLoaded,
-    isCoverInstant,
+    isCoverInstant: imgLoaded,
     coverMissing,
-    placeholderSrc,
-    webpSrc,
+    placeholderSrc: null,
+    webpSrc: null,
     handleLoad,
     handleError,
-    shouldUseCoverBlurUp: (reducedMotion: boolean) =>
-      !coverMissing && shouldUseCoverBlurUp(placeholderSrc, imgSrc, imgLoaded, reducedMotion),
+    shouldUseCoverBlurUp: () => false,
   };
 }

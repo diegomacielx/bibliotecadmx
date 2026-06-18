@@ -1,5 +1,5 @@
 import type { Exercise } from '../types';
-import { buildExerciseImageFallbacks } from './utils';
+import { buildGitHubCoverUrls } from './utils';
 import { prefetchCoverUrls } from './coverCache';
 import { isSessionCoverReady, warmSessionCover } from './coverImageStore';
 
@@ -23,7 +23,7 @@ export function prefetchExerciseCover(ex: CoverSource): void {
   if (typeof window === 'undefined' || !ex.firestoreId) return;
   if (isSessionCoverReady(ex.firestoreId)) return;
 
-  const primaryUrl = buildExerciseImageFallbacks(ex)[0];
+  const primaryUrl = buildGitHubCoverUrls(ex)[0];
   if (!primaryUrl || prefetchedUrls.has(primaryUrl)) return;
 
   prefetchedUrls.add(primaryUrl);
