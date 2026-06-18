@@ -1753,13 +1753,11 @@ export default function App() {
         )}
           </div>
         ) : (
-        <AnimatePresence mode="wait">
           <motion.div
             key={pageKey}
             variants={pageTransition}
             initial="initial"
             animate="animate"
-            exit="exit"
           >
         {!searchTerm && activeCategory === 'Todos' && heroDisplay && (
           <HeroBanner
@@ -1842,7 +1840,6 @@ export default function App() {
           </motion.div>
         )}
           </motion.div>
-        </AnimatePresence>
         )}
       </main>
 
