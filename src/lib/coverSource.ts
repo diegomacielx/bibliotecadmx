@@ -35,13 +35,19 @@ export function classifyCoverUrl(url: string | null | undefined): CoverSourceKin
   return 'external';
 }
 
-/** URLs candidatas oficiais no GitHub para o ID do exercício */
+/** URLs candidatas oficiais no GitHub — ordem otimizada, sem duplicar extensão maiúscula */
 export function getOfficialGitHubCoverCandidates(ex: { id: string }): string[] {
   const urls: string[] = [];
   const bases = [...new Set([GITHUB_COVER_BASE, GITHUB_COVER_BASE_FALLBACK])];
+  const assetIds = getExerciseAssetIds(ex.id).sort((a, b) => {
+    if (/^\d{4}$/.test(a) && !/^\d{4}$/.test(b)) return -1;
+    if (/^\d{4}$/.test(b) && !/^\d{4}$/.test(a)) return 1;
+    return a.length - b.length;
+  });
+
   for (const base of bases) {
-    for (const assetId of getExerciseAssetIds(ex.id)) {
-      for (const ext of ['jpg', 'JPG', 'png', 'PNG'] as const) {
+    for (const assetId of assetIds) {
+      for (const ext of ['png', 'jpg'] as const) {
         urls.push(`${base}/${assetId}.${ext}`);
       }
     }

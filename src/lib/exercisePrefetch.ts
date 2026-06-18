@@ -1,11 +1,9 @@
 import type { Exercise } from '../types';
-import { buildGitHubCoverUrls } from './utils';
-import { prefetchCoverUrls } from './coverCache';
-import { isSessionCoverReady, warmSessionCover } from './coverImageStore';
+import { resolveExerciseCoverUrl } from './coverResolver';
 
 type CoverSource = Pick<Exercise, 'firestoreId' | 'id' | 'thumbnail' | 'youtubeUrl'>;
 
-const prefetchedUrls = new Set<string>();
+const prefetchedIds = new Set<string>();
 
 let cinemaLightboxChunkStarted = false;
 
@@ -18,17 +16,13 @@ function scheduleIdle(task: () => void): void {
   setTimeout(task, 0);
 }
 
-/** Pré-carrega capa de um exercício (deduplicado por URL e sessão) */
+/** Pré-carrega capa de um exercício (deduplicado por firestoreId) */
 export function prefetchExerciseCover(ex: CoverSource): void {
   if (typeof window === 'undefined' || !ex.firestoreId) return;
-  if (isSessionCoverReady(ex.firestoreId)) return;
+  if (prefetchedIds.has(ex.firestoreId)) return;
 
-  const primaryUrl = buildGitHubCoverUrls(ex)[0];
-  if (!primaryUrl || prefetchedUrls.has(primaryUrl)) return;
-
-  prefetchedUrls.add(primaryUrl);
-  warmSessionCover(ex.firestoreId, primaryUrl);
-  prefetchCoverUrls([primaryUrl]);
+  prefetchedIds.add(ex.firestoreId);
+  void resolveExerciseCoverUrl(ex);
 }
 
 /** Hover no card — capa atual + vizinhos na grid, prioridade baixa nos peers */

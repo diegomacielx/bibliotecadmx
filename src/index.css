@@ -3796,11 +3796,11 @@ html[data-theme="light"] .advanced-filters-segment--active {
 /* ─── Cinema lightbox — UI cinema escura em ambos os temas; backdrop “liquid” adapta ─── */
 .cinema-lightbox,
 .cinema-backdrop--portal {
-  --lb-backdrop-bg: rgba(0, 0, 0, 0.97);
-  --lb-backdrop-blur: 59px;
-  --lb-backdrop-saturate: 1;
-  --lb-backdrop-brightness: 0.52;
-  --lb-backdrop-contrast: 0.88;
+  --lb-backdrop-bg: transparent;
+  --lb-backdrop-blur: 48px;
+  --lb-backdrop-saturate: 1.1;
+  --lb-backdrop-brightness: 0.86;
+  --lb-backdrop-contrast: 0.94;
 }
 
 .cinema-lightbox {
@@ -3846,11 +3846,11 @@ html[data-theme="light"] .advanced-filters-segment--active {
 
 html[data-theme="light"] .cinema-lightbox,
 html[data-theme="light"] .cinema-backdrop--portal {
-  --lb-backdrop-bg: rgba(0, 0, 0, 0.95);
-  --lb-backdrop-blur: 61px;
-  --lb-backdrop-saturate: 1;
-  --lb-backdrop-brightness: 0.56;
-  --lb-backdrop-contrast: 0.9;
+  --lb-backdrop-bg: transparent;
+  --lb-backdrop-blur: 50px;
+  --lb-backdrop-saturate: 1.08;
+  --lb-backdrop-brightness: 0.88;
+  --lb-backdrop-contrast: 0.93;
 }
 
 /* Impede overrides globais do tema claro dentro do lightbox cinema */
@@ -3964,12 +3964,12 @@ html[data-theme="light"] .cinema-backdrop--portal {
 
 .cinema-backdrop,
 .cinema-backdrop--portal {
-  --lb-backdrop-scrim: rgba(0, 0, 0, 0.77);
+  --lb-backdrop-scrim: rgba(0, 0, 0, 0.34);
   position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: auto;
-  background: var(--lb-backdrop-scrim), var(--lb-backdrop-bg);
+  background: var(--lb-backdrop-scrim);
   isolation: auto;
 }
 
@@ -3981,12 +3981,12 @@ html[data-theme="light"] .cinema-backdrop--portal {
   -webkit-transform: translateZ(0);
 }
 
-/* Blur uniforme — camada fosca plana, sem feixes ou gradientes */
+/* Blur uniforme — só desfoque + leve véu, página continua visível */
 .cinema-backdrop--portal .cinema-backdrop__fx {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: rgba(0, 0, 0, 0.92);
+  background: rgba(0, 0, 0, 0.1);
 }
 
 .cinema-backdrop--portal::before,
@@ -3996,11 +3996,11 @@ html[data-theme="light"] .cinema-backdrop--portal {
 }
 
 html[data-theme='light'] .cinema-backdrop--portal {
-  --lb-backdrop-scrim: rgba(0, 0, 0, 0.95);
+  --lb-backdrop-scrim: rgba(0, 0, 0, 0.28);
 }
 
 html[data-theme='light'] .cinema-backdrop--portal .cinema-backdrop__fx {
-  background: rgba(0, 0, 0, 0.9);
+  background: rgba(0, 0, 0, 0.08);
 }
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -4019,7 +4019,7 @@ html[data-theme='light'] .cinema-backdrop--portal .cinema-backdrop__fx {
 
 html[data-theme='light'] .cinema-backdrop,
 html[data-theme='light'] .cinema-backdrop--portal {
-  --lb-backdrop-scrim: rgba(0, 0, 0, 0.95);
+  --lb-backdrop-scrim: rgba(0, 0, 0, 0.28);
 }
 
 .cinema-backdrop::before {

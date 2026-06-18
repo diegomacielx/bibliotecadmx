@@ -29,7 +29,6 @@ import {
   getSettingsPath,
   getUserProfilePath,
   getUserNotifSettingsPath,
-  buildExerciseImageFallbacks,
   logDebug,
   logError,
   logWarn,
@@ -84,10 +83,9 @@ import { useSearchHistory } from './hooks/useSearchHistory';
 import { useFavorites } from './hooks/useFavorites';
 import { isCoarsePointer, isMobileUi, useTouchLayoutClass } from './hooks/useMediaQuery';
 import { isFeatureEnabled } from './lib/mobileCapabilities';
-import { prefetchCoverUrls } from './lib/coverCache';
+import { prefetchExerciseCovers } from './lib/coverResolver';
 import { getGridPrefetchPeers } from './lib/exercisePrefetch';
 import { normalizeNickname, validateNickname } from './lib/nickname';
-import { warmSessionCovers } from './lib/coverImageStore';
 import { sendTransactionalEmail } from './lib/email';
 import { AdvancedFiltersBar } from './components/AdvancedFiltersBar';
 import { useAdvancedFilters } from './hooks/useAdvancedFilters';
@@ -1467,30 +1465,23 @@ export default function App() {
   useEffect(() => {
     if (loading || publicExercises.length === 0 || isCoarsePointer()) return;
     const limit = isMobileUi() ? 6 : 80;
-    const warmItems = publicExercises
-      .slice(0, limit)
-      .map((ex) => ({
+    prefetchExerciseCovers(
+      publicExercises.slice(0, limit).map((ex) => ({
         firestoreId: ex.firestoreId,
-        url: buildExerciseImageFallbacks(ex)[0],
+        id: ex.id,
       }))
-      .filter((item) => item.url);
-    warmSessionCovers(warmItems);
-    if (!isMobileUi()) {
-      prefetchCoverUrls(warmItems.map((i) => i.url));
-    }
+    );
   }, [loading, publicExercises]);
 
   useEffect(() => {
     if (loading || gridExercises.length === 0 || isCoarsePointer()) return;
     const limit = isMobileUi() ? 4 : 48;
-    const warmItems = gridExercises.slice(0, limit).map((ex) => ({
-      firestoreId: ex.firestoreId,
-      url: buildExerciseImageFallbacks(ex)[0],
-    })).filter((item) => item.url);
-    warmSessionCovers(warmItems);
-    if (!isMobileUi()) {
-      prefetchCoverUrls(warmItems.map((i) => i.url));
-    }
+    prefetchExerciseCovers(
+      gridExercises.slice(0, limit).map((ex) => ({
+        firestoreId: ex.firestoreId,
+        id: ex.id,
+      }))
+    );
   }, [loading, gridExercises]);
 
   if (authLoading) {

@@ -25,13 +25,35 @@ export function probeImageUrl(url: string): Promise<boolean> {
   });
 }
 
-/** Testa PNG/JPG oficiais no GitHub — para no primeiro hit */
+/** Testa URLs em paralelo — retorna a primeira que carregar */
+export async function findFirstWorkingCoverUrl(urls: string[]): Promise<string | null> {
+  const unique = [...new Set(urls.filter(Boolean))];
+  if (unique.length === 0) return null;
+
+  return new Promise((resolve) => {
+    let settled = false;
+    let remaining = unique.length;
+
+    for (const url of unique) {
+      void probeImageUrl(url).then((ok) => {
+        if (settled) return;
+        if (ok) {
+          settled = true;
+          resolve(url);
+          return;
+        }
+        remaining -= 1;
+        if (remaining === 0) resolve(null);
+      });
+    }
+  });
+}
+
+/** Testa PNG/JPG oficiais no GitHub — candidatos em paralelo */
 export async function probeExerciseGitHubCover(ex: { id: string }): Promise<boolean> {
   const candidates = getOfficialGitHubCoverCandidates(ex);
-  for (const url of candidates) {
-    if (await probeImageUrl(url)) return true;
-  }
-  return false;
+  const hit = await findFirstWorkingCoverUrl(candidates);
+  return hit !== null;
 }
 
 const CONCURRENCY = 10;
