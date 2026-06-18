@@ -1,0 +1,14 @@
+---
+description: Mudanças de UI/UX são exclusivamente para mobile; desktop permanece intocável
+alwaysApply: true
+---
+
+# Mobile-only por padrão
+
+- A versão **web/desktop** está considerada pronta e **não deve ser alterada** salvo pedido explícito do usuário.
+- Toda solicitação de mudança assume **versão mobile** (touch / viewport estreito), a menos que o usuário diga "ambas", "desktop" ou "web".
+- Implementar mobile com branch/componentes/CSS dedicados quando possível:
+  - `HeroBannerMobile.tsx`, `mobile-shell.css`, `useTouchLayout()` / `useMobileUi()`
+  - Media queries `(hover: none) and (pointer: coarse)` ou `(max-width: 767px)`
+- Evitar Framer Motion scroll fx, `mix-blend-mode`, `contain`, `backdrop-filter` pesado e overlays globais fixos no mobile — causam bugs no iOS (tela preta, texto sumindo).
+- Não refatorar ou "melhorar" código desktop ao corrigir mobile.

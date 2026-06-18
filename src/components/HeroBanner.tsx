@@ -6,63 +6,12 @@ import { getCoverObjectPosition } from '../lib/coverFocus';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useTouchLayout } from '../hooks/useMediaQuery';
 import { Icon } from './Icon';
+import { HeroBannerMobile } from './HeroBannerMobile';
 
 interface HeroBannerProps {
   ex: Exercise;
   onWatch: (ex: Exercise) => void;
   fromFavorites?: boolean;
-}
-
-function HeroBannerMobile({ ex, onWatch, fromFavorites }: HeroBannerProps) {
-  const { imgSrc, handleLoad, handleError } = useExerciseCover(ex);
-
-  return (
-    <section className="hero-mobile w-full mb-fluid-lg" aria-labelledby="hero-mobile-title">
-      <div className="hero-mobile-copy">
-        <p className="hero-mobile-label">
-          <span className="hero-mobile-label-main">
-            {fromFavorites ? 'Seu treino do dia' : 'Destaque do dia'}
-          </span>
-          <span className="hero-mobile-label-sep" aria-hidden="true">
-            ·
-          </span>
-          <span className="hero-mobile-label-category">{ex.category}</span>
-        </p>
-        <p className="hero-mobile-id">#{ex.id}</p>
-        <h1 id="hero-mobile-title" className="hero-mobile-title">
-          {ex.name}
-        </h1>
-        <button type="button" onClick={() => onWatch(ex)} className="hero-mobile-cta">
-          <span className="hero-mobile-cta-icon">
-            <Icon name="play" className="w-4 h-4 ml-0.5" strokeWidth={2} />
-          </span>
-          Assistir execução
-        </button>
-      </div>
-
-      <button
-        type="button"
-        onClick={() => onWatch(ex)}
-        aria-label={`Assistir ${ex.name}`}
-        className="hero-mobile-cover"
-      >
-        <img
-          src={imgSrc}
-          alt={ex.name}
-          loading="lazy"
-          decoding="async"
-          draggable={false}
-          onLoad={handleLoad}
-          onError={handleError}
-          style={{ objectPosition: getCoverObjectPosition(ex) }}
-          className="hero-mobile-cover-img"
-        />
-        <span className="hero-mobile-cover-play" aria-hidden="true">
-          <Icon name="play" className="w-5 h-5 text-white ml-0.5" strokeWidth={2} />
-        </span>
-      </button>
-    </section>
-  );
 }
 
 function HeroBannerDesktop({ ex, onWatch, fromFavorites }: HeroBannerProps) {

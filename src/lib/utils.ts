@@ -195,6 +195,14 @@ export const isExerciseIncomplete = (url: string | undefined | null): boolean =>
 export const getYouTubeId = (url: string | undefined | null): string | null =>
   resolveYouTubeVideoId(url);
 
+/** Abre o vídeo no YouTube (nova aba) — usado no mobile em vez do player embutido */
+export function openYouTubeWatch(url: string | undefined | null): void {
+  const id = getYouTubeId(url);
+  const href = id ? `https://www.youtube.com/watch?v=${id}` : url?.trim();
+  if (!href) return;
+  window.open(href, '_blank', 'noopener,noreferrer');
+}
+
 /** Lista ordenada de URLs de capa: cache → thumbnail → GitHub → YouTube */
 export const buildExerciseImageFallbacks = (ex: {
   firestoreId?: string;

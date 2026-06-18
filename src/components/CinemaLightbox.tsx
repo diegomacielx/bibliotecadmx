@@ -4,10 +4,13 @@ import type { Exercise } from '../types';
 import {
   getYouTubeId,
   isYouTubeShort,
+  openYouTubeWatch,
   resolveVideoOrientation,
 } from '../lib/utils';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useTouchLayout } from '../hooks/useMediaQuery';
+import { useExerciseCover } from '../hooks/useExerciseCover';
+import { getCoverObjectPosition } from '../lib/coverFocus';
 import { YouTubePlayer, type YouTubePlayerHandle } from './YouTubePlayer';
 import { Icon } from './Icon';
 import { MuscleGroupList } from './MuscleGroupList';
@@ -255,6 +258,37 @@ function ExerciseDetails({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function MobileWatchPanel({ ex }: { ex: Exercise }) {
+  const { imgSrc, handleLoad, handleError } = useExerciseCover(ex);
+
+  return (
+    <div className="cinema-mobile-watch-panel">
+      <img
+        src={imgSrc}
+        alt=""
+        loading="eager"
+        decoding="async"
+        draggable={false}
+        onLoad={handleLoad}
+        onError={handleError}
+        style={{ objectPosition: getCoverObjectPosition(ex) }}
+        className="cinema-mobile-watch-poster"
+      />
+      <div className="cinema-mobile-watch-gradient" aria-hidden="true" />
+      <button
+        type="button"
+        className="cinema-mobile-watch-btn"
+        onClick={() => openYouTubeWatch(ex.youtubeUrl)}
+      >
+        <span className="cinema-mobile-watch-btn-icon" aria-hidden="true">
+          <Icon name="play" className="w-5 h-5 ml-0.5" strokeWidth={2} />
+        </span>
+        Assistir no YouTube
+      </button>
     </div>
   );
 }
@@ -620,18 +654,22 @@ export function CinemaLightbox({
             )}
 
             {ytId ? (
-              <YouTubePlayer
-                ref={playerRef}
-                videoId={ytId}
-                title={ex.name}
-                autoplay
-                mute={false}
-                controls
-                preferMaxQuality
-                isShort={isShort}
-                largeSurface
-                onEnded={onVideoEnded}
-              />
+              isMobileLayout ? (
+                <MobileWatchPanel ex={ex} />
+              ) : (
+                <YouTubePlayer
+                  ref={playerRef}
+                  videoId={ytId}
+                  title={ex.name}
+                  autoplay
+                  mute={false}
+                  controls
+                  preferMaxQuality
+                  isShort={isShort}
+                  largeSurface
+                  onEnded={onVideoEnded}
+                />
+              )
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 glass-panel">
                 <Icon name="youtube" className="w-10 h-10 text-zinc-500" strokeWidth={1} />
