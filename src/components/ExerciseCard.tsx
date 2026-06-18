@@ -153,20 +153,22 @@ export function ExerciseCard({
     setShowAdminPanel(true);
   };
 
-  const handleCoverClick = (e: React.MouseEvent) => {
+  const handleCoverActivate = (e: React.SyntheticEvent) => {
     if (downloadOpen) return;
     if ((e.target as HTMLElement).closest('[data-card-play-trigger]')) return;
+    if ((e.target as HTMLElement).closest('[data-card-action]')) return;
+    if ((e.target as HTMLElement).closest('.card-download-menu')) return;
 
     if (touchLayout) {
       if (selectionMode && onTogglePlaylist) {
         e.stopPropagation();
+        e.preventDefault();
         onTogglePlaylist(ex);
         return;
       }
       e.stopPropagation();
-      if (!mobileExpanded) {
-        setMobileExpanded(true);
-      }
+      e.preventDefault();
+      setMobileExpanded(true);
       return;
     }
 
@@ -175,12 +177,22 @@ export function ExerciseCard({
       onTogglePlaylist(ex);
       return;
     }
-    if (e.shiftKey && onCompare) {
+    const me = e as React.MouseEvent;
+    if (me.shiftKey && onCompare) {
       e.stopPropagation();
       onCompare(ex);
       return;
     }
     onWatch(ex);
+  };
+
+  const handleCoverClick = (e: React.MouseEvent) => {
+    handleCoverActivate(e);
+  };
+
+  const handleCoverPointerUp = (e: React.PointerEvent) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    handleCoverActivate(e);
   };
 
   const handlePlayClick = (e: React.MouseEvent) => {
@@ -241,7 +253,8 @@ export function ExerciseCard({
       <div
         ref={coverRef}
         className="exercise-card-cover aspect-card-poster relative cursor-pointer touch-manipulation select-none"
-        onClick={handleCoverClick}
+        onClick={touchLayout ? undefined : handleCoverClick}
+        onPointerUp={touchLayout ? handleCoverPointerUp : undefined}
         onContextMenu={(e) => e.preventDefault()}
         role="button"
         tabIndex={0}

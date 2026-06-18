@@ -1,9 +1,34 @@
 /**
- * Correções globais para touch / mobile.
- * Não altera layout desktop (min-width: 768px + hover fino).
+ * Correções globais para touch / mobile browser (Safari, Brave, etc.)
  */
 
-@media (hover: none) and (pointer: coarse), (max-width: 767px) {
+/* Detecção via JS — funciona mesmo quando media queries falham no iOS */
+html[data-touch-layout='true'] body::after,
+html[data-touch-layout='true'] .page-canvas::before {
+  display: none !important;
+  content: none !important;
+}
+
+html[data-touch-layout='true'] .page-canvas {
+  isolation: isolate;
+}
+
+html[data-touch-layout='true'] body {
+  -webkit-overflow-scrolling: touch;
+}
+
+html[data-touch-layout='true'] .site-header {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html[data-touch-layout='true'] main.cinema-container,
+html[data-touch-layout='true'] .cinema-container {
+  position: relative;
+  z-index: 1;
+}
+
+@media (hover: none) and (pointer: coarse), (max-width: 1024px) {
   /* mix-blend-mode: overlay no iOS deixa a tela preta ao scroll/pinch */
   body::after {
     display: none !important;
@@ -40,15 +65,18 @@
 }
 
 /* ─── Destaque do dia (mobile) — classes globais, sem @media aninhado ─── */
-@media (hover: none) and (pointer: coarse), (max-width: 767px) {
+@media (hover: none) and (pointer: coarse), (max-width: 1024px) {
   .m-hero {
     display: flex;
     flex-direction: column;
     gap: 0.875rem;
     margin-bottom: 1.5rem;
     position: relative;
-    z-index: 2;
+    z-index: 5;
     width: 100%;
+    contain: none;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
   }
 
   .m-hero__text-block {
@@ -58,6 +86,15 @@
     padding: 0.125rem 0.125rem 0;
     background-color: var(--color-canvas, #131316);
     border-radius: 0.5rem;
+    position: relative;
+    z-index: 10;
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: none !important;
+    filter: none !important;
+    mix-blend-mode: normal !important;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
   }
 
   html[data-theme="light"] .m-hero__text-block {
@@ -158,21 +195,15 @@
     background: rgba(255, 255, 255, 0.2);
   }
 
-  .m-hero__cover-btn {
+  .m-hero__cover {
     display: block;
     position: relative;
     width: 100%;
-    margin: 0;
-    padding: 0;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 0.875rem;
     overflow: hidden;
     background-color: #101012;
     aspect-ratio: 16 / 9;
-    cursor: pointer;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
-    transition: none;
   }
 
   .m-hero__cover-img {
@@ -201,7 +232,7 @@
 }
 
 /* ─── Cards mobile: expandir capa (como hover desktop) ─── */
-@media (hover: none) and (pointer: coarse), (max-width: 767px) {
+@media (hover: none) and (pointer: coarse), (max-width: 1024px) {
   .exercise-card.card-mobile-expanded {
     --card-vignette-opacity: 0.38;
     --card-reveal-brightness: 1.06;
@@ -273,67 +304,154 @@
   html[data-theme='light'] .card-mobile-details .lightbox-muscle-list {
     color: #44403c;
   }
+
+  html[data-touch-layout='true'] .exercise-card-cover .card-meta-footer {
+    pointer-events: auto;
+  }
 }
 
-/* ─── Lightbox mobile: info visível, sem YouTube API ─── */
-@media (hover: none) and (pointer: coarse), (max-width: 767px) {
-  .cinema-lightbox-sidebar--mobile {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    background-color: var(--color-canvas, #131316) !important;
-    color: var(--dmx-fg, #f5f5f6);
-    flex-shrink: 0;
-    min-height: min-content;
-    display: flex !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-  }
-
-  html[data-theme='light'] .cinema-lightbox-sidebar--mobile {
-    background-color: var(--color-canvas, #f4f2ee) !important;
-    color: #1c1917;
-  }
-
-  .cinema-lightbox-sidebar--mobile .lightbox-kicker,
-  .cinema-lightbox-sidebar--mobile .lightbox-section-label {
-    color: #9898a0;
-  }
-
-  .cinema-lightbox-sidebar--mobile .lightbox-title {
-    color: var(--dmx-fg, #f5f5f6);
-  }
-
-  html[data-theme='light'] .cinema-lightbox-sidebar--mobile .lightbox-title {
-    color: #1c1917;
-  }
-
-  .cinema-lightbox-sidebar--mobile .lightbox-muscle-list {
-    color: var(--dmx-fg, #e4e4e7);
+/* ─── Lightbox mobile: ficha do exercício (info primeiro, sem YouTube embutido) ─── */
+@media (hover: none) and (pointer: coarse), (max-width: 1024px) {
+  .cinema-lightbox--mobile {
+    background: var(--color-canvas, #131316);
+    touch-action: pan-y;
+    overscroll-behavior: contain;
   }
 
   .cinema-lightbox-panel--mobile {
-    justify-content: flex-start;
+    display: flex;
+    flex-direction: column;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    overflow: hidden !important;
+    background: var(--color-canvas, #131316);
   }
 
-  .cinema-video-area--mobile {
-    max-height: min(42vh, 280px);
-    aspect-ratio: 16 / 9;
-    height: auto;
+  .cinema-mobile-sheet {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    width: 100%;
+  }
+
+  .cinema-mobile-sheet-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-shrink: 0;
+    padding: max(0.625rem, env(safe-area-inset-top)) max(0.875rem, env(safe-area-inset-right))
+      0.625rem max(0.75rem, env(safe-area-inset-left));
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--color-canvas, #131316);
+    z-index: 20;
+  }
+
+  html[data-theme='light'] .cinema-mobile-sheet-header {
+    border-bottom-color: rgba(0, 0, 0, 0.08);
+  }
+
+  .cinema-mobile-sheet-header-label {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #a1a1aa;
+  }
+
+  .cinema-mobile-back-btn--inline {
+    position: static;
     flex-shrink: 0;
   }
 
-  .cinema-video-area--mobile-vertical {
-    max-height: min(52vh, 360px);
-    aspect-ratio: 9 / 16;
+  .cinema-mobile-sheet-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    padding: 1rem 1rem max(1.25rem, env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .cinema-mobile-sheet-body .lightbox-title {
+    color: var(--dmx-fg, #f5f5f6);
+    font-size: 1.25rem;
+  }
+
+  html[data-theme='light'] .cinema-mobile-sheet-body .lightbox-title {
+    color: #1c1917;
+  }
+
+  .cinema-mobile-sheet-body .lightbox-kicker,
+  .cinema-mobile-sheet-body .lightbox-section-label {
+    color: #9898a0;
+  }
+
+  .cinema-mobile-sheet-body .lightbox-muscle-list {
+    color: var(--dmx-fg, #e4e4e7);
+  }
+
+  .cinema-mobile-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 0.5rem 0;
+  }
+
+  .cinema-mobile-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 9999px;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    touch-action: manipulation;
+  }
+
+  .cinema-mobile-nav-btn:disabled {
+    opacity: 0.35;
+  }
+
+  .cinema-mobile-nav-counter {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #a1a1aa;
+    min-width: 4rem;
+    text-align: center;
   }
 
   .cinema-mobile-watch-panel {
     position: relative;
     width: 100%;
-    height: 100%;
-    min-height: 0;
-    background: #0a0a0a;
+    aspect-ratio: 16 / 9;
+    max-height: 220px;
+    flex-shrink: 0;
+    border-radius: 0.875rem;
     overflow: hidden;
+    background: #0a0a0a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .cinema-mobile-watch-panel--empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 8rem;
   }
 
   .cinema-mobile-watch-poster {
@@ -353,7 +471,7 @@
   .cinema-mobile-watch-btn {
     position: absolute;
     left: 50%;
-    bottom: 1rem;
+    bottom: 0.875rem;
     transform: translateX(-50%);
     z-index: 5;
     display: inline-flex;
@@ -389,5 +507,11 @@
   .cinema-lightbox--mobile .lightbox-btn {
     min-height: 2.75rem;
     touch-action: manipulation;
+  }
+
+  .cinema-lightbox-sidebar--mobile {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background-color: var(--color-canvas, #131316) !important;
   }
 }

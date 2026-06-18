@@ -73,7 +73,7 @@ import { CategoryNav } from './components/CategoryNav';
 import { PlaylistBar } from './components/PlaylistBar';
 import { useSearchHistory } from './hooks/useSearchHistory';
 import { useFavorites } from './hooks/useFavorites';
-import { isCoarsePointer, isMobileUi, useMobileUi } from './hooks/useMediaQuery';
+import { isCoarsePointer, isMobileUi, useTouchLayoutClass } from './hooks/useMediaQuery';
 import { isFeatureEnabled } from './lib/mobileCapabilities';
 import { prefetchCoverUrls } from './lib/coverCache';
 import { normalizeNickname, validateNickname } from './lib/nickname';
@@ -96,7 +96,7 @@ const AdminPanel = lazy(() =>
 const NAV_CATEGORIES = ['Todos', 'Favoritos', ...CATEGORIES.slice(1)] as const;
 
 export default function App() {
-  const isMobileLayout = useMobileUi();
+  const isMobileLayout = useTouchLayoutClass();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [loginEmail, setLoginEmail] = useState('');

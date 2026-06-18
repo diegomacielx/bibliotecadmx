@@ -293,6 +293,111 @@ function MobileWatchPanel({ ex }: { ex: Exercise }) {
   );
 }
 
+function MobileExerciseSheet({
+  ex,
+  ytId,
+  onClose,
+  isCopied,
+  onCopy,
+  onDownload,
+  onDownloadUnavailable,
+  isFavorite,
+  onToggleFavorite,
+  isAdmin,
+  hasNav,
+  navIndex,
+  navTotal,
+  onNavPrev,
+  onNavNext,
+  navPrevDisabled,
+  navNextDisabled,
+}: {
+  ex: Exercise;
+  ytId: string | null;
+  onClose: () => void;
+  isCopied: boolean;
+  onCopy: () => void;
+  onDownload: (quality: string) => void;
+  onDownloadUnavailable?: (quality: string) => void;
+  isFavorite?: boolean;
+  onToggleFavorite?: () => void;
+  isAdmin?: boolean;
+  hasNav: boolean;
+  navIndex: number;
+  navTotal: number;
+  onNavPrev: () => void;
+  onNavNext: () => void;
+  navPrevDisabled: boolean;
+  navNextDisabled: boolean;
+}) {
+  return (
+    <div className="cinema-mobile-sheet">
+      <header className="cinema-mobile-sheet-header">
+        <button
+          type="button"
+          onClick={onClose}
+          className="cinema-mobile-back-btn cinema-mobile-back-btn--inline"
+          aria-label="Voltar para início"
+        >
+          <Icon name="left" className="w-4 h-4" strokeWidth={2.25} />
+        </button>
+        <span className="cinema-mobile-sheet-header-label">Execução</span>
+      </header>
+
+      <div className="cinema-mobile-sheet-body">
+        <ExerciseDetails
+          ex={ex}
+          isCopied={isCopied}
+          onCopy={onCopy}
+          onClose={onClose}
+          onDownload={onDownload}
+          onDownloadUnavailable={onDownloadUnavailable}
+          isFavorite={isFavorite}
+          onToggleFavorite={onToggleFavorite}
+          isAdmin={isAdmin}
+        />
+
+        {hasNav && (
+          <div className="cinema-mobile-nav">
+            <button
+              type="button"
+              onClick={onNavPrev}
+              disabled={navPrevDisabled}
+              className="cinema-mobile-nav-btn"
+              aria-label="Exercício anterior"
+            >
+              <Icon name="skipback" className="w-4 h-4" />
+            </button>
+            <span className="cinema-mobile-nav-counter tabular-nums">
+              {navIndex + 1} / {navTotal}
+            </span>
+            <button
+              type="button"
+              onClick={onNavNext}
+              disabled={navNextDisabled}
+              className="cinema-mobile-nav-btn"
+              aria-label="Próximo exercício"
+            >
+              <Icon name="skipforward" className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {ytId ? (
+          <MobileWatchPanel ex={ex} />
+        ) : (
+          <div className="cinema-mobile-watch-panel cinema-mobile-watch-panel--empty">
+            <Icon name="youtube" className="w-10 h-10 text-zinc-500" strokeWidth={1} />
+            <p className="text-2xs font-medium uppercase tracking-cinematic-wide text-zinc-500">
+              Execução pendente
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ComparePanel({
   ex,
   label,
@@ -347,19 +452,23 @@ function ComparePanel({
         style={videoSizeStyle}
       >
         {ytId ? (
-          <YouTubePlayer
-            ref={playerRef}
-            videoId={ytId}
-            title={ex.name}
-            autoplay
-            deferAutoplay
-            mute={false}
-            controls
-            preferMaxQuality
-            isShort={isShort}
-            largeSurface
-            onReady={onPlayerReady}
-          />
+          mobileLayout ? (
+            <MobileWatchPanel ex={ex} />
+          ) : (
+            <YouTubePlayer
+              ref={playerRef}
+              videoId={ytId}
+              title={ex.name}
+              autoplay
+              deferAutoplay
+              mute={false}
+              controls
+              preferMaxQuality
+              isShort={isShort}
+              largeSurface
+              onReady={onPlayerReady}
+            />
+          )
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-zinc-500 text-xs">
             Pendente
@@ -435,10 +544,23 @@ export function CinemaLightbox({
 
   useEffect(() => {
     if (!isMobileLayout) return;
-    const prev = document.body.style.overflow;
+    const scrollY = window.scrollY;
+    const prev = {
+      overflow: document.body.style.overflow,
+      position: document.body.style.position,
+      top: document.body.style.top,
+      width: document.body.style.width,
+    };
     document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.overflow = prev.overflow;
+      document.body.style.position = prev.position;
+      document.body.style.top = prev.top;
+      document.body.style.width = prev.width;
+      window.scrollTo(0, scrollY);
     };
   }, [isMobileLayout]);
 
@@ -564,7 +686,8 @@ export function CinemaLightbox({
       ? { height: VIDEO_H, aspectRatio: '9 / 16' }
       : { height: VIDEO_H, aspectRatio: '16 / 9' };
 
-  const showSidebar = isMobileLayout || sidebarVisible;
+  const showMobileSheet = isMobileLayout && !isCompare;
+  const showSidebar = showMobileSheet ? false : isMobileLayout || sidebarVisible;
 
   return (
     <motion.div
@@ -602,7 +725,31 @@ export function CinemaLightbox({
           isMobileLayout ? 'cinema-lightbox-panel--mobile' : ''
         } ${isCompare ? 'compare-lightbox-panel' : ''}`}
       >
-        {isCompare && compareEx ? (
+        {isMobileLayout && !isCompare ? (
+          <MobileExerciseSheet
+            ex={ex}
+            ytId={ytId}
+            onClose={onClose}
+            isCopied={isCopied}
+            onCopy={() => copyLink(ex.youtubeUrl, ex.firestoreId)}
+            onDownload={(quality) => onDownload(ex, quality)}
+            onDownloadUnavailable={
+              onDownloadUnavailable
+                ? (quality) => onDownloadUnavailable(ex, quality)
+                : undefined
+            }
+            isFavorite={isFavorite}
+            onToggleFavorite={onToggleFavorite}
+            isAdmin={isAdmin}
+            hasNav={hasNav}
+            navIndex={effectiveNavIndex}
+            navTotal={effectiveNavList.length}
+            onNavPrev={handleNavPrev}
+            onNavNext={handleNavNext}
+            navPrevDisabled={effectiveNavIndex <= 0}
+            navNextDisabled={effectiveNavIndex >= effectiveNavList.length - 1}
+          />
+        ) : isCompare && compareEx ? (
           <div
             className={
               isMobileLayout

@@ -37,12 +37,7 @@ export function HeroBannerMobile({ ex, onWatch, fromFavorites }: HeroBannerMobil
         </button>
       </div>
 
-      <button
-        type="button"
-        className="m-hero__cover-btn"
-        onClick={() => onWatch(ex)}
-        aria-label={`Assistir ${ex.name}`}
-      >
+      <div className="m-hero__cover" aria-hidden="true">
         <img
           src={imgSrc}
           alt=""
@@ -54,10 +49,7 @@ export function HeroBannerMobile({ ex, onWatch, fromFavorites }: HeroBannerMobil
           style={{ objectPosition: getCoverObjectPosition(ex) }}
           className="m-hero__cover-img"
         />
-        <span className="m-hero__cover-play" aria-hidden="true">
-          <Icon name="play" className="w-5 h-5 text-white ml-0.5" strokeWidth={2} />
-        </span>
-      </button>
+      </div>
     </article>
   );
 }
