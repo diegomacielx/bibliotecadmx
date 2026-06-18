@@ -73,9 +73,7 @@ import { CategoryNav } from './components/CategoryNav';
 import { PlaylistBar } from './components/PlaylistBar';
 import { useSearchHistory } from './hooks/useSearchHistory';
 import { useFavorites } from './hooks/useFavorites';
-import { isCoarsePointer, isMobileUi } from './hooks/useMediaQuery';
-import { useMobileShell } from './mobile/useMobileShell';
-import { MobileShell } from './mobile/MobileShell';
+import { isCoarsePointer, isMobileUi, useTouchLayoutClass } from './hooks/useMediaQuery';
 import { isFeatureEnabled } from './lib/mobileCapabilities';
 import { prefetchCoverUrls } from './lib/coverCache';
 import { normalizeNickname, validateNickname } from './lib/nickname';
@@ -98,7 +96,7 @@ const AdminPanel = lazy(() =>
 const NAV_CATEGORIES = ['Todos', 'Favoritos', ...CATEGORIES.slice(1)] as const;
 
 export default function App() {
-  const isMobileShell = useMobileShell();
+  const isMobileLayout = useTouchLayoutClass();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [loginEmail, setLoginEmail] = useState('');
@@ -1342,92 +1340,6 @@ export default function App() {
     return <PendingAccessScreen onLogout={handleLogout} />;
   }
 
-  if (isMobileShell) {
-    return (
-      <>
-        <Toast toast={toast} onClose={() => setToast({ show: false, msg: '', type: 'success' })} />
-        {showRequestModal && (
-          <RequestModal
-            requestForm={requestForm}
-            setRequestForm={setRequestForm}
-            onSubmit={handleRequestSubmit}
-            onClose={() => setShowRequestModal(false)}
-          />
-        )}
-        <MobileShell
-          searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
-          onSearchCommit={() => searchTerm.trim() && addSearch(searchTerm)}
-          categories={NAV_CATEGORIES}
-          activeCategory={activeCategory}
-          onCategoryChange={setActiveCategory}
-          favoritesCount={favorites.size}
-          exercises={gridExercises}
-          featuredExercise={featuredExercise}
-          featuredFromFavorites={featuredFromFavorites}
-          loading={loading}
-          copiedId={copiedId}
-          onCopy={copyLink}
-          onDownload={downloadExercise}
-          onLogout={handleLogout}
-          isFavorite={isFavorite}
-          onToggleFavorite={toggleFavorite}
-          selectionMode={selectionMode}
-          onToggleSelectionMode={() => setSelectionMode((v) => !v)}
-          playlist={playlist}
-          playlistOrder={playlistOrder}
-          onTogglePlaylist={togglePlaylistItem}
-          onEndSelectionMode={() => setSelectionMode(false)}
-          onClearPlaylist={() => setPlaylistOrder([])}
-          showAdminUI={showAdminUI}
-          adminUserPreview={adminUserPreview}
-          onExitAdminPreview={() => setAdminUserPreview(false)}
-          onOpenAdmin={() => openAdminTab('single')}
-          navList={lightboxNavList}
-        />
-        {showAdminPanel && showAdminUI && (
-          <Suspense fallback={null}>
-            <AdminPanel
-              adminTab={adminTab}
-              setAdminTab={setAdminTab}
-              editingId={editingId}
-              form={form}
-              setForm={setForm}
-              onClose={closeAdminPanel}
-              onSave={handleSave}
-              sendNotification={sendNotification}
-              setSendNotification={setSendNotification}
-              sendEmail={sendEmail}
-              setSendEmail={setSendEmail}
-              batchInput={batchInput}
-              setBatchInput={setBatchInput}
-              syncing={syncing}
-              onBatchImport={handleBatchImport}
-              exerciseRequests={exerciseRequests}
-              onMarkRequestDone={markRequestAsDoneAndNotify}
-              onDeleteRequest={deleteRequest}
-              authorizedEmails={authorizedEmails}
-              newAuthEmail={newAuthEmail}
-              setNewAuthEmail={setNewAuthEmail}
-              onAddAuthEmail={handleAddAuthEmail}
-              onRemoveAuthEmail={handleRemoveAuthEmail}
-              appUsers={appUsers}
-              onToggleUserStatus={toggleUserStatus}
-              isAuditing={isAuditing}
-              auditProgress={auditProgress}
-              auditCurrentItem={auditCurrentItem}
-              auditStats={auditStats}
-              onRunCloudAudit={runCloudAudit}
-              appSettings={appSettings}
-              setAppSettings={setAppSettings}
-              onSaveSettings={saveSettings}
-            />
-          </Suspense>
-        )}
-      </>
-    );
-  }
-
   return (
     <div className="page-canvas min-h-screen flex flex-col relative font-sans text-[var(--dmx-fg)]">
       <AnimatePresence>
@@ -1559,6 +1471,93 @@ export default function App() {
       )}
 
       <main className="cinema-container w-full flex-1 pb-fluid-xl relative z-10">
+        {isMobileLayout ? (
+          <div key={pageKey}>
+        {!searchTerm && activeCategory === 'Todos' && featuredExercise && (
+          <HeroBanner
+            ex={featuredExercise}
+            onWatch={watchExercise}
+            fromFavorites={featuredFromFavorites}
+          />
+        )}
+        {searchTerm.trim() && !loading && filteredExercises.length > 0 && (
+          <p className="search-results-summary mb-fluid-md">
+            <span className="search-results-count">{filteredExercises.length}</span>
+            {filteredExercises.length === 1 ? ' resultado' : ' resultados'}
+            <span className="search-results-meta"> · ordenados por relevância</span>
+          </p>
+        )}
+        {loading ? (
+          <div className="py-fluid-2xl">
+            <GridSkeleton count={isMobileLayout ? 6 : 12} />
+            {slowConnection && (
+              <p className="text-2xs text-red-500 uppercase font-black mt-fluid-md text-center bg-accent-muted px-4 py-2 rounded-xl mx-auto w-fit border border-red-900/30">
+                A conexão parece lenta. Aguarde...
+              </p>
+            )}
+          </div>
+        ) : filteredExercises.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-fluid-2xl px-fluid-md">
+            <div className="w-20 h-20 bg-surface rounded-full flex items-center justify-center mb-fluid-md text-zinc-600 shadow-cinematic">
+              <Icon name="search" className="w-10 h-10" />
+            </div>
+            <h3 className="font-display text-xl font-black text-white mb-2 text-center uppercase italic leading-title">
+              Nenhum resultado
+            </h3>
+            <p className="text-body text-sm text-zinc-400 text-center max-w-md mb-fluid-lg">
+              Não encontrámos nenhum exercício correspondente à sua busca.
+            </p>
+            {searchTerm.trim() && (
+              <button
+                type="button"
+                onClick={() => {
+                  setRequestForm({ name: searchTerm, details: '' });
+                  setShowRequestModal(true);
+                }}
+                className="cta-pill font-black uppercase tracking-widest text-2xs hover:bg-red-600 hover:text-white shadow-cinematic"
+              >
+                <Icon name="lightbulb" className="w-5 h-5" /> Sugerir a gravação de &quot;{searchTerm}&quot;
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-fluid-md @container">
+            {gridExercises.map((ex, index) => (
+              <ExerciseCard
+                key={ex.firestoreId}
+                ex={ex}
+                index={index}
+                isAdmin={showAdminUI}
+                isExerciseIncomplete={isExerciseIncomplete}
+                handleDownloadCheck={handleDownloadCheck}
+                showToast={showToast}
+                setForm={setForm}
+                setEditingId={setEditingId}
+                setAdminTab={setAdminTab}
+                setShowAdminPanel={setShowAdminPanel}
+                copyLink={copyLink}
+                copiedId={copiedId}
+                onWatch={watchExercise}
+                selectionMode={selectionMode}
+                isInPlaylist={playlistOrder.includes(ex.firestoreId)}
+                playlistSequence={
+                  selectionMode
+                    ? playlistOrder.indexOf(ex.firestoreId) >= 0
+                      ? playlistOrder.indexOf(ex.firestoreId) + 1
+                      : undefined
+                    : undefined
+                }
+                onTogglePlaylist={togglePlaylistItem}
+                isFavorite={isFavorite(ex.firestoreId)}
+                onToggleFavorite={() => toggleFavorite(ex.firestoreId)}
+                onCompare={isFeatureEnabled('compare') ? handleCompare : undefined}
+                isComparePick={comparePick?.firestoreId === ex.firestoreId}
+              />
+            ))}
+          </div>
+        )}
+          </div>
+        ) : (
         <AnimatePresence mode="wait">
           <motion.div
             key={pageKey}
@@ -1661,6 +1660,7 @@ export default function App() {
         )}
           </motion.div>
         </AnimatePresence>
+        )}
       </main>
 
       <PlaylistBar
