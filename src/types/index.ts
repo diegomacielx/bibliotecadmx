@@ -128,6 +128,10 @@ export interface ToastState {
 }
 
 export type AuthMode = 'login' | 'register' | 'forgot' | 'forgot-sent';
+
+export interface UserPlaybackSettings {
+  videoLoop: boolean;
+}
 export type AdminTab = 'single' | 'batch' | 'requests' | 'authorized' | 'audit' | 'users' | 'settings';
 export type AdminFilter =
   | 'all'

@@ -17,6 +17,8 @@ interface SiteHeaderProps {
   userProfile: UserProfile | null;
   onUpdateNickname: (nickname: string) => Promise<void>;
   onResendVerification?: () => Promise<void>;
+  videoLoop?: boolean;
+  onToggleVideoLoop?: (enabled: boolean) => void;
   searchTerm: string;
   onSearchChange: (value: string) => void;
   onSearchCommit?: (term: string) => void;
@@ -64,6 +66,8 @@ export function SiteHeader({
   userProfile,
   onUpdateNickname,
   onResendVerification,
+  videoLoop = false,
+  onToggleVideoLoop,
   searchTerm,
   onSearchChange,
   onSearchCommit,
@@ -414,6 +418,8 @@ export function SiteHeader({
                       userProfile={userProfile}
                       onUpdateNickname={onUpdateNickname}
                       onResendVerification={onResendVerification}
+                      videoLoop={videoLoop}
+                      onToggleVideoLoop={onToggleVideoLoop}
                       onSuggest={onSuggest}
                       onLogout={() => {
                         setShowUserMenu(false);

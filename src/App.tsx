@@ -29,6 +29,7 @@ import {
   getSettingsPath,
   getUserProfilePath,
   getUserNotifSettingsPath,
+  getUserPlaybackSettingsPath,
   logDebug,
   logError,
   logWarn,
@@ -90,6 +91,11 @@ import { getGridPrefetchPeers } from './lib/exercisePrefetch';
 import { normalizeNickname, validateNickname } from './lib/nickname';
 import { sendTransactionalEmail } from './lib/email';
 import { requestPasswordReset, requestEmailVerification, type AuthEmailResult } from './lib/authEmail';
+import {
+  getEmailPasswordLoginMessage,
+  isLoginCredentialError,
+  lookupAuthEmail,
+} from './lib/authLogin';
 import { parseAuthActionParams, clearAuthActionParams } from './lib/authActionParams';
 import { ensureUserProfile, getUserProfileIfExists } from './lib/authProfile';
 import { AdvancedFiltersBar } from './components/AdvancedFiltersBar';
@@ -126,6 +132,7 @@ export default function App() {
   const [authActionParams, setAuthActionParams] = useState(() => parseAuthActionParams());
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [loading, setLoading] = useState(true);
   const [slowConnection, setSlowConnection] = useState(false);
@@ -170,6 +177,7 @@ export default function App() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [lastReadAt, setLastReadAt] = useState<string | null>(null);
   const [clearedAt, setClearedAt] = useState<string | null>(null);
+  const [videoLoop, setVideoLoop] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [sendNotification, setSendNotification] = useState(true);
   const [sendEmail, setSendEmail] = useState(false);
@@ -265,14 +273,17 @@ export default function App() {
     }
     const unsubscribe = fb.onAuthStateChanged(auth, (u) => {
       if (u) {
+        const admin = ADMIN_EMAILS.includes(u.email || '');
         setIsLoggedIn(true);
         setUser(u);
-        setIsAdmin(ADMIN_EMAILS.includes(u.email || ''));
+        setIsAdmin(admin);
+        setProfileLoading(!admin);
       } else {
         setIsLoggedIn(false);
         setUser(null);
         setUserProfile(null);
         setIsAdmin(false);
+        setProfileLoading(false);
       }
       setAuthLoading(false);
     });
@@ -281,28 +292,33 @@ export default function App() {
 
   useEffect(() => {
     if (!isLoggedIn || !user) return;
+    setProfileLoading(!isAdmin);
     const userProfileRef = fbDoc(db, ...getUserProfilePath(user.uid));
     const unsubProfile = onSnapshot(userProfileRef, async (docSnap) => {
-      if (docSnap.exists()) {
-        const profile = docSnap.data() as UserProfile;
-        setUserProfile(profile);
-        if (!isAdmin && profile.status === 'pending' && user) {
-          try {
-            const synced = await syncUserAccess(user, profile);
-            if (synced.status !== profile.status) {
-              setUserProfile(synced);
+      try {
+        if (docSnap.exists()) {
+          const profile = docSnap.data() as UserProfile;
+          setUserProfile(profile);
+          if (!isAdmin && profile.status === 'pending' && user) {
+            try {
+              const synced = await syncUserAccess(user, profile);
+              if (synced.status !== profile.status) {
+                setUserProfile(synced);
+              }
+            } catch (e) {
+              console.error('Erro ao sincronizar acesso', e);
             }
+          }
+        } else if (!isAdmin && user) {
+          try {
+            const profile = await ensureUserProfile(user);
+            setUserProfile(profile);
           } catch (e) {
-            console.error('Erro ao sincronizar acesso', e);
+            console.error('Erro ao criar perfil do usuário', e);
           }
         }
-      } else if (!isAdmin && user) {
-        try {
-          const profile = await ensureUserProfile(user);
-          setUserProfile(profile);
-        } catch (e) {
-          console.error('Erro ao criar perfil do usuário', e);
-        }
+      } finally {
+        if (!isAdmin) setProfileLoading(false);
       }
     });
     return () => unsubProfile();
@@ -457,10 +473,21 @@ export default function App() {
         setClearedAt(now);
       }
     });
+
+    const playbackDocRef = fbDoc(db, ...getUserPlaybackSettingsPath(user.uid));
+    const unsubPlayback = onSnapshot(playbackDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setVideoLoop(Boolean(docSnap.data().videoLoop));
+      } else {
+        setVideoLoop(false);
+      }
+    });
+
     return () => {
       unsubExercises();
       unsubNotif();
       unsubUser();
+      unsubPlayback();
     };
   }, [isLoggedIn, user, exercisesPath, normalizeExerciseDoc, isAdmin]);
 
@@ -860,14 +887,17 @@ export default function App() {
         const userCredential = await fb.createUserWithEmailAndPassword(auth, email, loginPassword);
         await fb.updateProfile(userCredential.user, { displayName: registerName.trim() });
         const userProfileRef = fbDoc(db, ...getUserProfilePath(userCredential.user.uid));
-        await setDoc(userProfileRef, {
+        const newProfile: UserProfile = {
           uid: userCredential.user.uid,
           email,
           name: registerName.trim(),
           nickname: normalizedNickname,
           status: finalStatus,
           createdAt: new Date().toISOString(),
-        });
+        };
+        await setDoc(userProfileRef, newProfile);
+        setUserProfile(newProfile);
+        setProfileLoading(false);
         void requestEmailVerification(email, registerName.trim());
         showToast(
           isPreAuthorized
@@ -876,17 +906,23 @@ export default function App() {
         );
       }
     } catch (err) {
-      showToast(
-        getAuthErrorMessage(
-          getAuthErrorCode(err),
-          authMode === 'login'
-            ? 'E-mail ou senha incorretos.'
-            : authMode === 'forgot'
-              ? 'Erro ao tentar enviar e-mail. Verifique o endereço.'
-              : 'Erro ao criar conta. Tente novamente.'
-        ),
-        'error'
-      );
+      const code = getAuthErrorCode(err);
+      if (authMode === 'login' && isLoginCredentialError(code)) {
+        const lookup = await lookupAuthEmail(email);
+        showToast(getEmailPasswordLoginMessage(lookup), 'error');
+      } else {
+        showToast(
+          getAuthErrorMessage(
+            code,
+            authMode === 'login'
+              ? 'E-mail ou senha incorretos.'
+              : authMode === 'forgot'
+                ? 'Erro ao tentar enviar e-mail. Verifique o endereço.'
+                : 'Erro ao criar conta. Tente novamente.'
+          ),
+          'error'
+        );
+      }
     } finally {
       setAuthSubmitting(false);
     }
@@ -910,6 +946,8 @@ export default function App() {
       } else {
         showToast('Conta conectada! Aguarde liberação manual do acesso.');
       }
+      setUserProfile(profile);
+      if (profile.status !== 'approved') setProfileLoading(false);
       if (!result.user.emailVerified && result.user.email) {
         void requestEmailVerification(result.user.email, result.user.displayName || undefined);
       }
@@ -919,6 +957,20 @@ export default function App() {
       setGoogleSubmitting(false);
     }
   };
+
+  const handleUpdateVideoLoop = useCallback(
+    async (enabled: boolean) => {
+      if (!user) return;
+      setVideoLoop(enabled);
+      try {
+        const playbackDocRef = fbDoc(db, ...getUserPlaybackSettingsPath(user.uid));
+        await setDoc(playbackDocRef, { videoLoop: enabled }, { merge: true });
+      } catch {
+        showToast('Não foi possível salvar a preferência de reprodução.', 'error');
+      }
+    },
+    [user, showToast]
+  );
 
   const handleResendVerification = useCallback(async () => {
     if (!user?.email) throw new Error('Sem e-mail');
@@ -1575,7 +1627,7 @@ export default function App() {
     prefetchExerciseCovers(viewportItems, 'critical');
   }, [loading, publicExercises, gridExercises, heroDisplay?.exercise?.firestoreId, showAdminUI]);
 
-  if (authLoading) {
+  if (authLoading || (isLoggedIn && !isAdmin && profileLoading)) {
     return <LoadingScreen slowConnection={slowConnection} />;
   }
 
@@ -1625,8 +1677,12 @@ export default function App() {
     );
   }
 
-  if (!isAdmin && userProfile && userProfile.status !== 'approved') {
+  if (!isAdmin && userProfile?.status === 'pending') {
     return <PendingAccessScreen onLogout={handleLogout} />;
+  }
+
+  if (!isAdmin && !userProfile) {
+    return <LoadingScreen slowConnection={slowConnection} />;
   }
 
   return (
@@ -1662,6 +1718,7 @@ export default function App() {
             isFavorite={isFavorite(activeVideo.firestoreId)}
             onToggleFavorite={() => toggleFavorite(activeVideo.firestoreId)}
             isAdmin={showAdminUI}
+            videoLoop={videoLoop}
           />
         )}
       </AnimatePresence>
@@ -1680,6 +1737,8 @@ export default function App() {
         userProfile={userProfile}
         onUpdateNickname={handleUpdateNickname}
         onResendVerification={handleResendVerification}
+        videoLoop={videoLoop}
+        onToggleVideoLoop={(enabled) => void handleUpdateVideoLoop(enabled)}
         searchTerm={searchTerm}
         onSearchChange={handleSearchChange}
         onSearchCommit={addSearch}

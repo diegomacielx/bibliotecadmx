@@ -328,6 +328,9 @@ export const getUserProfilePath = (uid: string): string[] =>
 export const getUserNotifSettingsPath = (uid: string): string[] =>
   ['artifacts', APP_ID, 'users', uid, 'settings', 'notifications'];
 
+export const getUserPlaybackSettingsPath = (uid: string): string[] =>
+  ['artifacts', APP_ID, 'users', uid, 'settings', 'playback'];
+
 export const GCS_VIDEO_BUCKET = 'biblioteca-dmx-videos-oficiais';
 
 export function sanitizeDownloadFilename(name: string, quality: string): string {

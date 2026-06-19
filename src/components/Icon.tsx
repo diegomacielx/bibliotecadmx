@@ -4,7 +4,7 @@ import {
   EyeOff, Download, Cloud, Server, Bell, Users, Settings, Mail, 
   Lightbulb, ListTodo, Play, MoreHorizontal, SlidersHorizontal, LayoutDashboard,
   Heart, Columns2, ListVideo, Pause, Maximize, SkipForward, SkipBack, Clock, GitCompare,
-  Moon, Sun, CircleHelp, Inbox, Shield
+  Moon, Sun, CircleHelp, Inbox, Shield, RotateCw
 } from 'lucide-react';
 
 const iconMap: Record<string, React.ComponentType<any>> = {
@@ -53,6 +53,7 @@ const iconMap: Record<string, React.ComponentType<any>> = {
   help: CircleHelp,
   inbox: Inbox,
   shield: Shield,
+  replay: RotateCw,
 };
 
 interface IconProps {

@@ -40,6 +40,7 @@ interface CinemaLightboxProps {
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
   isAdmin?: boolean;
+  videoLoop?: boolean;
 }
 
 const VIDEO_H = 'min(92vh, 900px)';
@@ -428,6 +429,7 @@ export function CinemaLightbox({
   isFavorite,
   onToggleFavorite,
   isAdmin = false,
+  videoLoop = false,
 }: CinemaLightboxProps) {
   const reducedMotion = useReducedMotion();
   const isMobileLayout = useTouchLayout();
@@ -442,6 +444,7 @@ export function CinemaLightbox({
   const [controlsVisible, setControlsVisible] = useState(true);
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [playerReadyToken, setPlayerReadyToken] = useState(0);
+  const [showReplay, setShowReplay] = useState(false);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const orientation = useMemo(
@@ -513,7 +516,12 @@ export function CinemaLightbox({
     compareReadyRef.current = { primary: false, secondary: false };
     compareSyncStartedRef.current = false;
     setPlayerReadyToken(0);
+    setShowReplay(false);
   }, [ex.firestoreId, compareEx?.firestoreId]);
+
+  useEffect(() => {
+    setShowReplay(false);
+  }, [videoLoop]);
 
   const startComparePlayback = useCallback(() => {
     if (compareSyncStartedRef.current) return;
@@ -558,6 +566,25 @@ export function CinemaLightbox({
     effectiveNavNext?.();
     resetHideTimer();
   }, [effectiveNavNext, resetHideTimer]);
+
+  const handlePlayerEnded = useCallback(() => {
+    if (videoLoop) return;
+
+    if (playlist.length > 1 && playlistIndex < playlist.length - 1 && onVideoEnded) {
+      onVideoEnded();
+      return;
+    }
+
+    setShowReplay(true);
+    resetHideTimer();
+  }, [videoLoop, playlist.length, playlistIndex, onVideoEnded, resetHideTimer]);
+
+  const handleReplay = useCallback(() => {
+    playerRef.current?.seekTo(0);
+    playerRef.current?.playVideo();
+    setShowReplay(false);
+    resetHideTimer();
+  }, [resetHideTimer]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -811,21 +838,42 @@ export function CinemaLightbox({
                       autoplay
                       mute={false}
                       controls={false}
+                      loop={videoLoop}
                       largeSurface
                       onReady={handlePrimaryPlayerReady}
-                      onEnded={onVideoEnded}
+                      onEnded={handlePlayerEnded}
+                      onPlayStateChange={(playing) => {
+                        if (playing) setShowReplay(false);
+                      }}
                     />
                   </div>
-                  <button
-                    type="button"
-                    className="cinema-play-catch absolute inset-0 z-[2]"
-                    aria-label="Reproduzir ou pausar"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      playerRef.current?.togglePlay();
-                      resetHideTimer();
-                    }}
-                  />
+                  {!showReplay && (
+                    <button
+                      type="button"
+                      className="cinema-play-catch absolute inset-0 z-[2]"
+                      aria-label="Reproduzir ou pausar"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        playerRef.current?.togglePlay();
+                        resetHideTimer();
+                      }}
+                    />
+                  )}
+                  {showReplay && (
+                    <div className="cinema-replay-overlay absolute inset-0 z-[3] flex items-center justify-center">
+                      <button
+                        type="button"
+                        className="cinema-replay-btn"
+                        aria-label="Reproduzir novamente"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleReplay();
+                        }}
+                      >
+                        <Icon name="replay" className="w-7 h-7" strokeWidth={2} />
+                      </button>
+                    </div>
+                  )}
                 </>
               )
             ) : (

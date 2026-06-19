@@ -4227,6 +4227,50 @@ html[data-theme="light"] .cinema-backdrop::before {
   outline: none;
 }
 
+.cinema-replay-overlay {
+  background: linear-gradient(
+    180deg,
+    rgba(52, 16, 22, 0.72) 0%,
+    rgba(40, 14, 28, 0.68) 48%,
+    rgba(34, 12, 20, 0.74) 100%
+  );
+  backdrop-filter: blur(8px) saturate(1.2);
+  -webkit-backdrop-filter: blur(8px) saturate(1.2);
+}
+
+.cinema-replay-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 4.25rem;
+  height: 4.25rem;
+  border-radius: 9999px;
+  color: #f5f5f6;
+  background: var(--lb-sidebar-bg);
+  border: 1px solid var(--lb-sidebar-inset);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  transition:
+    transform 220ms var(--ease-cinematic),
+    box-shadow 220ms var(--ease-cinematic),
+    border-color 220ms var(--ease-cinematic);
+}
+
+.cinema-replay-btn:hover {
+  transform: scale(1.06);
+  border-color: rgba(239, 68, 68, 0.45);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.4),
+    0 0 24px rgba(239, 68, 68, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.cinema-replay-btn:active {
+  transform: scale(0.98);
+}
+
 /* Barra de progresso customizada — única UI sobre o vídeo */
 .cinema-seekbar {
   position: absolute;

@@ -10,6 +10,8 @@ interface UserAccountMenuProps {
   userProfile: UserProfile | null;
   onUpdateNickname: (nickname: string) => Promise<void>;
   onResendVerification?: () => Promise<void>;
+  videoLoop?: boolean;
+  onToggleVideoLoop?: (enabled: boolean) => void;
   onSuggest: () => void;
   onLogout: () => void;
   onClose: () => void;
@@ -20,6 +22,8 @@ export function UserAccountMenu({
   userProfile,
   onUpdateNickname,
   onResendVerification,
+  videoLoop = false,
+  onToggleVideoLoop,
   onSuggest,
   onLogout,
   onClose,
@@ -136,6 +140,29 @@ export function UserAccountMenu({
       </div>
 
       <div className="account-menu-divider" />
+
+      {onToggleVideoLoop && (
+        <>
+          <div className="account-menu-section">
+            <p className="account-menu-label">Reprodução</p>
+            <button
+              type="button"
+              className={`account-menu-switch ${videoLoop ? 'account-menu-switch--active' : ''}`}
+              onClick={() => onToggleVideoLoop(!videoLoop)}
+              aria-pressed={videoLoop}
+            >
+              <span>Repetir vídeos em loop</span>
+              <span className="text-2xs font-bold uppercase tracking-widest opacity-80">
+                {videoLoop ? 'Ligado' : 'Desligado'}
+              </span>
+            </button>
+            <p className="account-menu-switch__hint">
+              Quando ativo, o vídeo reinicia automaticamente ao terminar.
+            </p>
+          </div>
+          <div className="account-menu-divider" />
+        </>
+      )}
 
       <div className="account-menu-section">
         <p className="account-menu-label">Aparência</p>
