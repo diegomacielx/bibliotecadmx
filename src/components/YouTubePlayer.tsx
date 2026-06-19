@@ -282,12 +282,14 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
         },
         events: {
           onReady: (event) => {
-            if (preferMaxQuality) {
-              forceMaximumQuality(event.target, 'onReady');
-              cleanupQualityRef.current = startQualityEnforcer(event.target, isShort);
-            }
             if (autoplay && !deferAutoplay) event.target.playVideo();
             onReadyRef.current?.();
+            if (preferMaxQuality) {
+              requestAnimationFrame(() => {
+                forceMaximumQuality(event.target, 'onReady');
+                cleanupQualityRef.current = startQualityEnforcer(event.target, isShort);
+              });
+            }
           },
           onPlaybackQualityChange: (event) => {
             if (preferMaxQuality) forceMaximumQuality(event.target, 'onQualityChange');

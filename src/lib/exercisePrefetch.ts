@@ -1,11 +1,10 @@
 import type { Exercise } from '../types';
 import { resolveExerciseCoverUrl } from './coverResolver';
+import { primeVideoPlaybackIntent } from './videoPlaybackPrime';
 
 type CoverSource = Pick<Exercise, 'firestoreId' | 'id' | 'thumbnail' | 'youtubeUrl'>;
 
 const prefetchedIds = new Set<string>();
-
-let cinemaLightboxChunkStarted = false;
 
 function scheduleIdle(task: () => void): void {
   if (typeof window === 'undefined') return;
@@ -25,14 +24,16 @@ export function prefetchExerciseCover(ex: CoverSource, priority: 'critical' | 'h
   void resolveExerciseCoverUrl(ex, priority);
 }
 
-/** Hover no card — capa atual + vizinhos na grid, prioridade baixa nos peers */
+/** Hover no card — capa atual + vizinhos + aquecimento de vídeo */
 export function prefetchExerciseHoverBundle(ex: CoverSource, peers: CoverSource[] = []): void {
+  primeVideoPlaybackIntent(ex);
   prefetchExerciseCover(ex, 'critical');
   if (peers.length === 0) return;
 
   scheduleIdle(() => {
     for (const peer of peers) {
       prefetchExerciseCover(peer, 'high');
+      primeVideoPlaybackIntent(peer);
     }
   });
 }
@@ -45,19 +46,14 @@ export function prefetchExerciseNeighbors(list: Exercise[], activeIndex: number)
   if (activeIndex > 0) targets.push(list[activeIndex - 1]);
   if (activeIndex < list.length - 1) targets.push(list[activeIndex + 1]);
 
+  for (const ex of targets) {
+    primeVideoPlaybackIntent(ex);
+  }
+
   scheduleIdle(() => {
     for (const ex of targets) {
       prefetchExerciseCover(ex, 'high');
     }
-  });
-}
-
-/** Chunk do player cinema — abertura do lightbox mais rápida após hover */
-export function prefetchCinemaLightboxChunk(): void {
-  if (cinemaLightboxChunkStarted || typeof window === 'undefined') return;
-  cinemaLightboxChunkStarted = true;
-  scheduleIdle(() => {
-    void import('../components/CinemaLightbox');
   });
 }
 

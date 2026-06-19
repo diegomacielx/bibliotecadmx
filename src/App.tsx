@@ -66,7 +66,8 @@ import { Toast } from './components/Toast';
 import { LoadingScreen } from './components/LoadingScreen';
 import { LoginScreen } from './components/LoginScreen';
 import { PendingAccessScreen } from './components/PendingAccessScreen';
-import { preloadYouTubePlayerApi } from './components/YouTubePlayer';
+import { primeVideoPlaybackIntent, primeYouTubePlayerApi } from './lib/videoPlaybackPrime';
+import { CinemaLightbox } from './components/CinemaLightbox';
 import { HeroBanner } from './components/HeroBanner';
 import { ExerciseCard } from './components/ExerciseCard';
 import { RequestModal } from './components/RequestModal';
@@ -99,9 +100,6 @@ import {
   syncUserAccess,
 } from './lib/accessControl';
 
-const CinemaLightbox = lazy(() =>
-  import('./components/CinemaLightbox').then((m) => ({ default: m.CinemaLightbox }))
-);
 const AdminPanel = lazy(() =>
   import('./components/AdminPanel').then((m) => ({ default: m.AdminPanel }))
 );
@@ -1334,6 +1332,7 @@ export default function App() {
 
   const watchExercise = useCallback(
     (ex: Exercise) => {
+      primeVideoPlaybackIntent(ex);
       setCompareEx(null);
       setActiveVideo(ex);
       addRecent(ex);
@@ -1460,12 +1459,16 @@ export default function App() {
     : `browse-${activeCategory}`;
 
   useEffect(() => {
-    if (isCoarsePointer()) return;
-    const timer = window.setTimeout(() => {
-      void preloadYouTubePlayerApi();
-    }, 20000);
+    if (loading || !isLoggedIn || isCoarsePointer()) return;
+
+    const run = () => primeYouTubePlayerApi();
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(run, { timeout: 1200 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const timer = window.setTimeout(run, 800);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [loading, isLoggedIn]);
 
   useEffect(() => {
     if (loading || publicExercises.length === 0) return;
@@ -1533,7 +1536,6 @@ export default function App() {
       )}
       <AnimatePresence>
         {activeVideo && (
-          <Suspense fallback={null}>
             <CinemaLightbox
             key={compareEx ? 'compare' : 'cinema'}
             ex={activeVideo}
@@ -1555,7 +1557,6 @@ export default function App() {
             onToggleFavorite={() => toggleFavorite(activeVideo.firestoreId)}
             isAdmin={showAdminUI}
           />
-          </Suspense>
         )}
       </AnimatePresence>
       <Toast toast={toast} onClose={() => setToast({ show: false, msg: '', type: 'success' })} />

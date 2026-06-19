@@ -616,9 +616,9 @@ export function CinemaLightbox({
     handleNavPrev,
   ]);
 
-  const spring = reducedMotion
-    ? { duration: 0.08 }
-    : { type: 'spring' as const, stiffness: 520, damping: 40, mass: 0.62 };
+  const panelOpenTransition = reducedMotion
+    ? { duration: 0 }
+    : { duration: 0.06, ease: [0.22, 1, 0.36, 1] as const };
 
   const sidebarTransition = reducedMotion
     ? { duration: 0.1 }
@@ -687,7 +687,7 @@ export function CinemaLightbox({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 0.1, ease: [0.22, 1, 0.36, 1] }}
+        transition={panelOpenTransition}
         className={`cinema-lightbox fixed inset-0 z-[200] flex overflow-hidden ${
           isMobileLayout
             ? 'cinema-lightbox--mobile pointer-events-auto flex-col p-0'
@@ -700,18 +700,10 @@ export function CinemaLightbox({
         onWheel={isMobileLayout ? undefined : resetHideTimer}
       >
         <motion.div
-        initial={
-          reducedMotion
-            ? { opacity: 0 }
-            : { opacity: 0, scale: 0.985, y: 6 }
-        }
-        animate={
-          reducedMotion
-            ? { opacity: 1 }
-            : { opacity: 1, scale: 1, y: 0 }
-        }
-        exit={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.99, y: 4 }}
-        transition={spring}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={panelOpenTransition}
         className={`cinema-lightbox-panel pointer-events-auto relative z-10 mx-auto flex flex-col md:flex-row md:items-stretch max-h-[94vh] overflow-hidden rounded-cinema ${
           isCompare ? 'compare-lightbox-panel' : 'w-fit max-w-[calc(100vw-1rem)]'
         } ${

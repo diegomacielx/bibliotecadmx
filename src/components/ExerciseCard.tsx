@@ -23,7 +23,8 @@ import { MuscleGroupList } from './MuscleGroupList';
 import { ExerciseCoverImage } from './ExerciseCoverImage';
 import { Icon } from './Icon';
 import { CardVideoPreview } from './CardVideoPreview';
-import { prefetchCinemaLightboxChunk, prefetchExerciseHoverBundle } from '../lib/exercisePrefetch';
+import { prefetchExerciseHoverBundle } from '../lib/exercisePrefetch';
+import { primeVideoPlaybackIntent } from '../lib/videoPlaybackPrime';
 import {
   CARD_PREVIEW_HOVER_DELAY_MS,
   isCardPreviewVertical,
@@ -129,7 +130,7 @@ export function ExerciseCard({
     onHoverStart: () => {
       startPreviewWarmup();
       if (!touchLayout) {
-        prefetchCinemaLightboxChunk();
+        primeVideoPlaybackIntent(ex);
         prefetchExerciseHoverBundle(ex, prefetchPeers);
       }
     },
@@ -207,6 +208,11 @@ export function ExerciseCard({
     setShowAdminPanel(true);
   };
 
+  const handleCoverPointerDown = (e: React.PointerEvent) => {
+    if (touchLayout || e.button !== 0) return;
+    primeVideoPlaybackIntent(ex);
+  };
+
   const handleCoverActivate = (e: React.SyntheticEvent) => {
     if ((e.target as HTMLElement).closest('[data-card-play-trigger]')) return;
     if ((e.target as HTMLElement).closest('[data-card-action]')) return;
@@ -236,6 +242,7 @@ export function ExerciseCard({
       return;
     }
     deactivatePreview();
+    primeVideoPlaybackIntent(ex);
     onWatch(ex);
   };
 
@@ -255,6 +262,7 @@ export function ExerciseCard({
       openYouTubeWatch(ex.youtubeUrl);
       return;
     }
+    primeVideoPlaybackIntent(ex);
     onWatch(ex);
   };
 
@@ -304,6 +312,7 @@ export function ExerciseCard({
         ref={coverRef}
         className="exercise-card-cover card-catalog-cover aspect-card-poster relative cursor-pointer touch-manipulation select-none"
         onClick={touchLayout ? undefined : handleCoverClick}
+        onPointerDown={touchLayout ? undefined : handleCoverPointerDown}
         onPointerUp={touchLayout ? handleCoverPointerUp : undefined}
         onContextMenu={(e) => e.preventDefault()}
         role="button"
