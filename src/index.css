@@ -4118,7 +4118,7 @@ html[data-theme="light"] .cinema-backdrop::before {
   top: 0;
   left: 50%;
   height: 100%;
-  width: max(1280px, calc(100% * 256 / 81));
+  width: max(1920px, calc(100% * 256 / 81));
   transform: translateX(-50%);
 }
 
@@ -4129,6 +4129,111 @@ html[data-theme="light"] .cinema-backdrop::before {
 
 .cinema-video-stage--vertical {
   flex-shrink: 0;
+}
+
+/* Camada transparente para play/pause com clique (controles nativos desativados) */
+.cinema-play-catch {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+}
+
+/* Barra de progresso customizada — única UI sobre o vídeo */
+.cinema-seekbar {
+  position: absolute;
+  left: 50%;
+  bottom: 0.9rem;
+  transform: translateX(-50%);
+  z-index: 24;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: min(86%, 640px);
+  padding: 0.5rem 0.85rem;
+  border-radius: 9999px;
+  background: rgba(10, 9, 10, 0.42);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+.cinema-seekbar--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cinema-seekbar__time {
+  flex-shrink: 0;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.82);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  min-width: 2.4ch;
+  text-align: center;
+}
+
+.cinema-seekbar__track {
+  position: relative;
+  flex: 1;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.cinema-seekbar__track::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.cinema-seekbar__buffered {
+  position: absolute;
+  left: 0;
+  height: 4px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.32);
+}
+
+.cinema-seekbar__played {
+  position: absolute;
+  left: 0;
+  height: 4px;
+  border-radius: 9999px;
+  background: #ef4444;
+}
+
+.cinema-seekbar__thumb {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  transform: translate(-50%, -50%) scale(0.6);
+  opacity: 0;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.cinema-seekbar:hover .cinema-seekbar__thumb,
+.cinema-seekbar__track.is-scrubbing .cinema-seekbar__thumb {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
 }
 
 .video-quality-select {

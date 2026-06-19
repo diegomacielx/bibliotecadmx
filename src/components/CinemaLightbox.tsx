@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { Exercise } from '../types';
 import {
   getYouTubeId,
-  isYouTubeShort,
   openYouTubeWatch,
   resolveVideoOrientation,
 } from '../lib/utils';
@@ -17,7 +16,7 @@ import { useExerciseCover } from '../hooks/useExerciseCover';
 import { getCoverFrameStyle } from '../lib/coverFocus';
 import { ExerciseCoverPlaceholder } from './ExerciseCoverPlaceholder';
 import { YouTubePlayer, type YouTubePlayerHandle } from './YouTubePlayer';
-import { VideoQualitySelect } from './VideoQualitySelect';
+import { VideoProgressBar } from './VideoProgressBar';
 import { Icon } from './Icon';
 import { MuscleGroupList } from './MuscleGroupList';
 
@@ -334,7 +333,6 @@ function ComparePanel({
   playerRef,
   onSyncPlay,
   onPlayerReady,
-  isShort,
   mobileLayout = false,
 }: {
   ex: Exercise;
@@ -342,7 +340,6 @@ function ComparePanel({
   playerRef: React.RefObject<YouTubePlayerHandle | null>;
   onSyncPlay: () => void;
   onPlayerReady: () => void;
-  isShort: boolean;
   mobileLayout?: boolean;
 }) {
   const ytId = getYouTubeId(ex.youtubeUrl);
@@ -397,9 +394,6 @@ function ComparePanel({
                 deferAutoplay
                 mute={false}
                 controls
-                preferMaxQuality
-                allowQualitySelection
-                isShort={isShort}
                 largeSurface
                 onReady={onPlayerReady}
               />
@@ -461,7 +455,6 @@ export function CinemaLightbox({
 
   const isVertical = orientation === 'vertical';
   const ytId = getYouTubeId(ex.youtubeUrl);
-  const isShort = isYouTubeShort(ex.youtubeUrl);
   const isCopied = copiedId === ex.firestoreId;
   const effectiveNavList = navList.length > 1 ? navList : playlist.length > 1 ? playlist : [];
   const effectiveNavIndex = navList.length > 1 ? navIndex : playlistIndex;
@@ -766,7 +759,6 @@ export function CinemaLightbox({
               playerRef={playerRef}
               onSyncPlay={syncCompare}
               onPlayerReady={handleComparePrimaryReady}
-              isShort={isShort}
               mobileLayout={isMobileLayout}
             />
             <ComparePanel
@@ -775,7 +767,6 @@ export function CinemaLightbox({
               playerRef={comparePlayerRef}
               onSyncPlay={syncCompare}
               onPlayerReady={handleCompareSecondaryReady}
-              isShort={isYouTubeShort(compareEx.youtubeUrl)}
               mobileLayout={isMobileLayout}
             />
           </div>
@@ -819,15 +810,22 @@ export function CinemaLightbox({
                       title={ex.name}
                       autoplay
                       mute={false}
-                      controls
-                      preferMaxQuality
-                      allowQualitySelection
-                      isShort={isShort}
+                      controls={false}
                       largeSurface
                       onReady={handlePrimaryPlayerReady}
                       onEnded={onVideoEnded}
                     />
                   </div>
+                  <button
+                    type="button"
+                    className="cinema-play-catch absolute inset-0 z-[2]"
+                    aria-label="Reproduzir ou pausar"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      playerRef.current?.togglePlay();
+                      resetHideTimer();
+                    }}
+                  />
                 </>
               )
             ) : (
@@ -882,6 +880,15 @@ export function CinemaLightbox({
                     )}
                   </AnimatePresence>
                 </div>
+              )}
+
+              {ytId && !isMobileLayout && (
+                <VideoProgressBar
+                  playerRef={playerRef}
+                  readyToken={playerReadyToken}
+                  visible={controlsVisible}
+                  onInteract={resetHideTimer}
+                />
               )}
             </div>
           </div>
@@ -948,9 +955,6 @@ export function CinemaLightbox({
                 </div>
               ) : (
                 <div className="flex flex-col min-h-full">
-                  {!isCompare && ytId && !isMobileLayout && (
-                    <VideoQualitySelect playerRef={playerRef} readyToken={playerReadyToken} />
-                  )}
                   <ExerciseDetails
                     ex={ex}
                     isCopied={isCopied}
