@@ -2,11 +2,13 @@ import { initializeApp } from 'firebase/app';
 import {
   getAuth,
   signInWithEmailAndPassword,
+  signInWithPopup,
   signOut,
   onAuthStateChanged,
-  sendPasswordResetEmail,
   createUserWithEmailAndPassword,
   updateProfile,
+  GoogleAuthProvider,
+  sendPasswordResetEmail,
   type User,
 } from 'firebase/auth';
 import {
@@ -59,7 +61,11 @@ if (!isFirebaseValid) {
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+auth.languageCode = 'pt-BR';
 export const db = getFirestore(app);
+
+export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 console.log('[DMX:Firebase] Inicializado', {
   projectId: firebaseConfig.projectId,
@@ -105,9 +111,11 @@ export const fb = {
   auth,
   isValid: isFirebaseValid,
   signInWithEmailAndPassword,
+  signInWithPopup,
   signOut,
   onAuthStateChanged,
-  sendPasswordResetEmail,
   createUserWithEmailAndPassword,
   updateProfile,
+  googleProvider,
+  sendPasswordResetEmail,
 };

@@ -16,6 +16,7 @@ interface SiteHeaderProps {
   user: User | null;
   userProfile: UserProfile | null;
   onUpdateNickname: (nickname: string) => Promise<void>;
+  onResendVerification?: () => Promise<void>;
   searchTerm: string;
   onSearchChange: (value: string) => void;
   onSearchCommit?: (term: string) => void;
@@ -62,6 +63,7 @@ export function SiteHeader({
   user,
   userProfile,
   onUpdateNickname,
+  onResendVerification,
   searchTerm,
   onSearchChange,
   onSearchCommit,
@@ -411,6 +413,7 @@ export function SiteHeader({
                       user={user}
                       userProfile={userProfile}
                       onUpdateNickname={onUpdateNickname}
+                      onResendVerification={onResendVerification}
                       onSuggest={onSuggest}
                       onLogout={() => {
                         setShowUserMenu(false);

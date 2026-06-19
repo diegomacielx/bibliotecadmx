@@ -396,6 +396,35 @@ input:focus, select:focus, textarea:focus {
   filter: drop-shadow(0 2px 12px rgba(239, 68, 68, 0.15));
 }
 
+.auth-reset-sent__icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 9999px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  box-shadow: 0 0 24px rgba(239, 68, 68, 0.15);
+}
+
+.auth-reset-sent__email {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875rem;
+  letter-spacing: 0.02em;
+  padding: 0.75rem 1rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--dmx-border-subtle);
+}
+
+.auth-reset-sent__tips {
+  padding: 1rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--dmx-border-subtle);
+}
+
 .modal-backdrop {
   background: var(--dmx-modal-backdrop);
   backdrop-filter: blur(20px);

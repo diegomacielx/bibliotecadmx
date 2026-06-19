@@ -127,7 +127,7 @@ export interface ToastState {
   type: ToastType;
 }
 
-export type AuthMode = 'login' | 'register' | 'forgot';
+export type AuthMode = 'login' | 'register' | 'forgot' | 'forgot-sent';
 export type AdminTab = 'single' | 'batch' | 'requests' | 'authorized' | 'audit' | 'users' | 'settings';
 export type AdminFilter =
   | 'all'

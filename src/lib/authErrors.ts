@@ -19,6 +19,17 @@ export function getAuthErrorMessage(code: string | undefined, fallback: string):
       return 'Senha fraca. Use pelo menos 6 caracteres.';
     case 'auth/operation-not-allowed':
       return 'Cadastro temporariamente indisponível.';
+    case 'auth/popup-closed-by-user':
+      return 'Login com Google cancelado.';
+    case 'auth/popup-blocked':
+      return 'O navegador bloqueou a janela do Google. Permita pop-ups e tente novamente.';
+    case 'auth/account-exists-with-different-credential':
+      return 'Este e-mail já está cadastrado com outro método. Use e-mail e senha ou recupere a senha.';
+    case 'auth/invalid-action-code':
+    case 'auth/expired-action-code':
+      return 'Este link expirou ou já foi usado. Solicite um novo.';
+    case 'auth/missing-email':
+      return 'Informe um e-mail válido.';
     default:
       return fallback;
   }

@@ -9,6 +9,7 @@ interface UserAccountMenuProps {
   user: User | null;
   userProfile: UserProfile | null;
   onUpdateNickname: (nickname: string) => Promise<void>;
+  onResendVerification?: () => Promise<void>;
   onSuggest: () => void;
   onLogout: () => void;
   onClose: () => void;
@@ -18,6 +19,7 @@ export function UserAccountMenu({
   user,
   userProfile,
   onUpdateNickname,
+  onResendVerification,
   onSuggest,
   onLogout,
   onClose,
@@ -33,6 +35,9 @@ export function UserAccountMenu({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [resending, setResending] = useState(false);
+
+  const emailUnverified = user && !user.emailVerified;
 
   useEffect(() => {
     setNicknameDraft(userProfile?.nickname || displayNickname);
@@ -71,7 +76,29 @@ export function UserAccountMenu({
       <div className="px-3 py-2.5 border-b border-white/[0.06]">
         <p className="text-sm font-semibold text-white truncate">{displayNickname}</p>
         <p className="text-[10px] text-zinc-500 truncate mt-0.5">{user?.email}</p>
+        {emailUnverified && (
+          <p className="text-[10px] text-amber-400/90 mt-1">E-mail ainda não verificado</p>
+        )}
       </div>
+
+      {emailUnverified && onResendVerification && (
+        <div className="account-menu-section">
+          <button
+            type="button"
+            className="menu-item w-full text-amber-300/90"
+            disabled={resending}
+            onClick={() => {
+              setResending(true);
+              void onResendVerification()
+                .catch(() => undefined)
+                .finally(() => setResending(false));
+            }}
+          >
+            <Icon name="mail" className="w-4 h-4" />
+            {resending ? 'Enviando…' : 'Reenviar verificação de e-mail'}
+          </button>
+        </div>
+      )}
 
       <div className="account-menu-section">
         <p className="account-menu-label">Apelido</p>

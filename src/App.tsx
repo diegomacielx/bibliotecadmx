@@ -65,6 +65,7 @@ import { Icon } from './components/Icon';
 import { Toast } from './components/Toast';
 import { LoadingScreen } from './components/LoadingScreen';
 import { LoginScreen } from './components/LoginScreen';
+import { AuthActionScreen } from './components/AuthActionScreen';
 import { PendingAccessScreen } from './components/PendingAccessScreen';
 import { primeVideoPlaybackIntent, primeYouTubePlayerApi } from './lib/videoPlaybackPrime';
 import { CinemaLightbox } from './components/CinemaLightbox';
@@ -88,6 +89,9 @@ import { primeCoversFromExerciseList, prefetchExerciseCovers } from './lib/cover
 import { getGridPrefetchPeers } from './lib/exercisePrefetch';
 import { normalizeNickname, validateNickname } from './lib/nickname';
 import { sendTransactionalEmail } from './lib/email';
+import { requestPasswordReset, requestEmailVerification, type AuthEmailResult } from './lib/authEmail';
+import { parseAuthActionParams, clearAuthActionParams } from './lib/authActionParams';
+import { ensureUserProfile } from './lib/authProfile';
 import { AdvancedFiltersBar } from './components/AdvancedFiltersBar';
 import { useAdvancedFilters } from './hooks/useAdvancedFilters';
 import { applyAdvancedFilters, hasActiveAdvancedFilters } from './lib/exerciseFilters';
@@ -118,6 +122,9 @@ export default function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
+  const [passwordResetResending, setPasswordResetResending] = useState(false);
+  const [authActionParams, setAuthActionParams] = useState(() => parseAuthActionParams());
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -784,6 +791,36 @@ export default function App() {
     }
   };
 
+  const deliverPasswordResetEmail = useCallback(async (email: string): Promise<AuthEmailResult> => {
+    const result = await requestPasswordReset(email);
+    if (result.ok) return result;
+    await fb.sendPasswordResetEmail(auth, email, {
+      url: `${window.location.origin}/`,
+      handleCodeInApp: true,
+    });
+    return {
+      ok: true,
+      message:
+        'Se o e-mail estiver cadastrado, enviamos o link de recuperação. Verifique a caixa de entrada e o spam.',
+    };
+  }, []);
+
+  const handleResendPasswordReset = useCallback(async () => {
+    const email = loginEmail.trim().toLowerCase();
+    if (!email || passwordResetResending) return;
+    setPasswordResetResending(true);
+    try {
+      const result = await deliverPasswordResetEmail(email);
+      if (!result.ok) {
+        showToast(result.error || 'Não foi possível reenviar o e-mail.', 'error');
+      }
+    } catch {
+      showToast('Não foi possível reenviar o e-mail. Tente novamente.', 'error');
+    } finally {
+      setPasswordResetResending(false);
+    }
+  }, [loginEmail, passwordResetResending, deliverPasswordResetEmail, showToast]);
+
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (authSubmitting) return;
@@ -799,12 +836,12 @@ export default function App() {
       if (authMode === 'login') {
         await fb.signInWithEmailAndPassword(auth, email, loginPassword);
       } else if (authMode === 'forgot') {
-        await fb.sendPasswordResetEmail(auth, email, {
-          url: `${window.location.origin}/`,
-          handleCodeInApp: false,
-        });
-        showToast('Se o e-mail estiver cadastrado, enviamos o link de recuperação. Verifique a caixa de entrada e o spam.');
-        setAuthMode('login');
+        const result = await deliverPasswordResetEmail(email);
+        if (result.ok) {
+          setAuthMode('forgot-sent');
+        } else {
+          showToast(result.error || 'Não foi possível enviar o e-mail.', 'error');
+        }
       } else {
         if (!registerName.trim()) {
           showToast('Por favor, digite o seu nome completo.', 'error');
@@ -841,10 +878,11 @@ export default function App() {
           status: finalStatus,
           createdAt: new Date().toISOString(),
         });
+        void requestEmailVerification(email, registerName.trim());
         showToast(
           isPreAuthorized
-            ? 'Acesso liberado instantaneamente! Bons treinos.'
-            : 'Conta criada com sucesso! Aguarde liberação manual.'
+            ? 'Acesso liberado! Enviamos um e-mail para confirmar seu endereço.'
+            : 'Conta criada! Confirme seu e-mail e aguarde liberação manual.'
         );
       }
     } catch (err) {
@@ -863,6 +901,38 @@ export default function App() {
       setAuthSubmitting(false);
     }
   };
+
+  const handleGoogleSignIn = async () => {
+    if (googleSubmitting || authSubmitting) return;
+    setGoogleSubmitting(true);
+    try {
+      const result = await fb.signInWithPopup(auth, fb.googleProvider);
+      const profile = await ensureUserProfile(result.user);
+      if (profile.status === 'approved') {
+        showToast('Login com Google realizado com sucesso!');
+      } else {
+        showToast('Conta conectada! Aguarde liberação manual do acesso.');
+      }
+      if (!result.user.emailVerified && result.user.email) {
+        void requestEmailVerification(result.user.email, result.user.displayName || undefined);
+      }
+    } catch (err) {
+      showToast(getAuthErrorMessage(getAuthErrorCode(err), 'Erro ao entrar com Google.'), 'error');
+    } finally {
+      setGoogleSubmitting(false);
+    }
+  };
+
+  const handleResendVerification = useCallback(async () => {
+    if (!user?.email) throw new Error('Sem e-mail');
+    const result = await requestEmailVerification(user.email, user.displayName || userProfile?.name);
+    if (result.ok) {
+      showToast(result.message || 'E-mail de verificação enviado. Verifique a caixa de entrada.');
+    } else {
+      showToast(result.error || 'Não foi possível enviar o e-mail.', 'error');
+      throw new Error(result.error);
+    }
+  }, [user, userProfile?.name, showToast]);
 
   const handleUpdateNickname = useCallback(
     async (nickname: string) => {
@@ -1512,6 +1582,22 @@ export default function App() {
     return <LoadingScreen slowConnection={slowConnection} />;
   }
 
+  if (authActionParams) {
+    return (
+      <>
+        <Toast toast={toast} onClose={() => setToast({ show: false, msg: '', type: 'success' })} />
+        <AuthActionScreen
+          params={authActionParams}
+          onDone={() => {
+            clearAuthActionParams();
+            setAuthActionParams(null);
+            setAuthMode('login');
+          }}
+        />
+      </>
+    );
+  }
+
   if (!isLoggedIn) {
     return (
       <>
@@ -1533,6 +1619,10 @@ export default function App() {
           setShowPassword={setShowPassword}
           submitting={authSubmitting}
           onSubmit={handleAuthSubmit}
+          onGoogleSignIn={handleGoogleSignIn}
+          googleSubmitting={googleSubmitting}
+          onResendPasswordReset={handleResendPasswordReset}
+          passwordResetResending={passwordResetResending}
         />
       </>
     );
@@ -1592,6 +1682,7 @@ export default function App() {
         user={user}
         userProfile={userProfile}
         onUpdateNickname={handleUpdateNickname}
+        onResendVerification={handleResendVerification}
         searchTerm={searchTerm}
         onSearchChange={handleSearchChange}
         onSearchCommit={addSearch}

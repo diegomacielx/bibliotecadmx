@@ -2,6 +2,25 @@
   "firestore": {
     "rules": "firestore.rules"
   },
+  "auth": {
+    "providers": {
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Biblioteca DMX",
+        "supportEmail": "diego.maciel.965@gmail.com",
+        "authorizedRedirectUris": [
+          "https://bibliotecadmx.vercel.app",
+          "http://localhost:5173"
+        ]
+      }
+    },
+    "authorizedDomains": [
+      "bibliotecadmx.vercel.app",
+      "localhost",
+      "biblioteca-dmx.firebaseapp.com",
+      "biblioteca-dmx.web.app"
+    ]
+  },
   "functions": [
     {
       "source": "functions",
