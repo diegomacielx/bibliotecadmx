@@ -113,7 +113,7 @@ function HeroBannerDesktop({ hero, onWatch, onCampaignClick }: HeroBannerProps) 
             type="button"
             onClick={handleCoverClick}
             aria-label={isCampaign ? hero.title : `Assistir ${hero.title}`}
-            className="cinematic-card hero-cover-wrap card-catalog-cover relative w-full aspect-hero rounded-cinema-lg overflow-hidden group cursor-pointer border border-white/5 shadow-cinematic-lg hover:border-white/10 hover:shadow-cinematic-red ease-cinematic duration-cinematic"
+            className="cinematic-card hero-cover-wrap card-catalog-cover relative w-full aspect-hero rounded-cinema-lg overflow-hidden group cursor-pointer shadow-cinematic-lg hover:shadow-cinematic-red ease-cinematic duration-cinematic focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/45 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--dmx-page-bg,#050506)]"
           >
             <motion.div
               style={{

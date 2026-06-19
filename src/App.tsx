@@ -410,11 +410,10 @@ export default function App() {
         logDebug('Firestore', `${withYoutube}/${data.length} com YouTube válido`);
 
         setExercises(data);
-        primeCoversFromExerciseList(
-          data
-            .filter((ex) => !isExerciseIncomplete(ex.youtubeUrl))
-            .map((ex) => ({ firestoreId: ex.firestoreId, id: ex.id }))
-        );
+        const publicReady = data
+          .filter((ex) => !isExerciseIncomplete(ex.youtubeUrl))
+          .map((ex) => ({ firestoreId: ex.firestoreId, id: ex.id }));
+        primeCoversFromExerciseList(isAdmin ? publicReady.slice(0, 24) : publicReady);
         setLoading(false);
       },
       (err) => {
@@ -466,7 +465,7 @@ export default function App() {
       unsubNotif();
       unsubUser();
     };
-  }, [isLoggedIn, user, exercisesPath, normalizeExerciseDoc]);
+  }, [isLoggedIn, user, exercisesPath, normalizeExerciseDoc, isAdmin]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -498,7 +497,15 @@ export default function App() {
   }, [isAdmin]);
 
   useEffect(() => {
-    if (!isAdmin || exercises.length === 0 || isCoarsePointer()) return;
+    const cloudAuditActive =
+      isAdmin &&
+      !adminUserPreview &&
+      (adminFilter === 'missing_cloud' || adminFilter === 'upados_cloud');
+
+    if (!cloudAuditActive || exercises.length === 0 || isCoarsePointer()) return;
+
+    let cancelled = false;
+
     const processQueue = async () => {
       if (backgroundAuditRunning.current) return;
       backgroundAuditRunning.current = true;
@@ -509,6 +516,7 @@ export default function App() {
           !pendingAuditQueue.current.has(ex.id)
       );
       for (const ex of needsCheck) {
+        if (cancelled) break;
         pendingAuditQueue.current.add(ex.id);
         const gcpApiUrl = `https://storage.googleapis.com/storage/v1/b/biblioteca-dmx-videos-oficiais/o/${ex.id}_4K.mp4`;
         let isUpado = false;
@@ -530,12 +538,20 @@ export default function App() {
             /* ignore */
           }
         }
-        await new Promise((r) => setTimeout(r, 4000));
+        await new Promise((r) => setTimeout(r, 6000));
       }
       backgroundAuditRunning.current = false;
     };
-    processQueue();
-  }, [exercises, isAdmin]);
+
+    const timer = window.setTimeout(() => {
+      void processQueue();
+    }, 2500);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [exercises, isAdmin, adminFilter, adminUserPreview]);
 
   const visibleNotifications = useMemo(
     () => notifications.filter((n) => !clearedAt || n.createdAt > clearedAt),
@@ -1473,21 +1489,24 @@ export default function App() {
   useEffect(() => {
     if (loading || publicExercises.length === 0) return;
 
+    const viewportLimit = isMobileUi() ? 10 : 28;
+    const viewportItems = gridExercises.slice(0, viewportLimit).map((ex) => ({
+      firestoreId: ex.firestoreId,
+      id: ex.id,
+    }));
+
+    if (showAdminUI) {
+      prefetchExerciseCovers(viewportItems, 'critical');
+      return;
+    }
+
     const heroId = heroDisplay?.exercise?.firestoreId ?? null;
     primeCoversFromExerciseList(
       publicExercises.map((ex) => ({ firestoreId: ex.firestoreId, id: ex.id })),
       { heroFirestoreId: heroId }
     );
-
-    const viewportLimit = isMobileUi() ? 10 : 28;
-    prefetchExerciseCovers(
-      gridExercises.slice(0, viewportLimit).map((ex) => ({
-        firestoreId: ex.firestoreId,
-        id: ex.id,
-      })),
-      'critical'
-    );
-  }, [loading, publicExercises, gridExercises, heroDisplay?.exercise?.firestoreId]);
+    prefetchExerciseCovers(viewportItems, 'critical');
+  }, [loading, publicExercises, gridExercises, heroDisplay?.exercise?.firestoreId, showAdminUI]);
 
   if (authLoading) {
     return <LoadingScreen slowConnection={slowConnection} />;

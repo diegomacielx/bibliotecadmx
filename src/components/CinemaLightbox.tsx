@@ -392,6 +392,7 @@ function ComparePanel({
               mute={false}
               controls
               preferMaxQuality
+              allowQualitySelection
               isShort={isShort}
               largeSurface
               onReady={onPlayerReady}
@@ -794,6 +795,7 @@ export function CinemaLightbox({
                       mute={false}
                       controls
                       preferMaxQuality
+                      allowQualitySelection
                       isShort={isShort}
                       largeSurface
                       onReady={handlePrimaryPlayerReady}

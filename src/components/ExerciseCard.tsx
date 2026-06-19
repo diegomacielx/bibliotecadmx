@@ -300,8 +300,8 @@ export function ExerciseCard({
           ? 'border-red-500 ring-2 ring-red-500/40'
           : isInPlaylist
             ? 'border-emerald-500/50 ring-1 ring-emerald-500/30'
-            : 'border-white/5 hover:border-white/10'
-      }`}
+            : 'border-transparent hover:border-white/10'
+      } focus-within:outline-none`}
       whileHover={
         tiltEnabled ? { y: -4, transition: getSpring(reducedMotion) } : undefined
       }
@@ -310,7 +310,7 @@ export function ExerciseCard({
 
       <div
         ref={coverRef}
-        className="exercise-card-cover card-catalog-cover aspect-card-poster relative cursor-pointer touch-manipulation select-none"
+        className="exercise-card-cover card-catalog-cover aspect-card-poster relative cursor-pointer touch-manipulation select-none focus:outline-none"
         onClick={touchLayout ? undefined : handleCoverClick}
         onPointerDown={touchLayout ? undefined : handleCoverPointerDown}
         onPointerUp={touchLayout ? handleCoverPointerUp : undefined}

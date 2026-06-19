@@ -1314,11 +1314,15 @@ html[data-theme="light"] .cover-placeholder__sheen {
 
 .cover-image-main--loaded {
   opacity: 1;
+  transform: scale(calc(1.025 * var(--cover-zoom, 1)));
+  transform-origin: var(--cover-x, 50%) var(--cover-y, 50%);
 }
 
 .cover-image-main--instant {
   opacity: 1;
   transition: none;
+  transform: scale(calc(1.025 * var(--cover-zoom, 1)));
+  transform-origin: var(--cover-x, 50%) var(--cover-y, 50%);
 }
 
 .cover-image-root--mobile-expanded .cover-image-main,
@@ -4658,6 +4662,23 @@ html[data-theme="light"] .cinema-backdrop::before {
 }
 .hero-cover-wrap {
   overflow: hidden;
+  border: none;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.exercise-card.cinematic-card,
+.exercise-card-cover,
+.hero-cover-wrap {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.exercise-card.cinematic-card:focus,
+.exercise-card.cinematic-card:focus-within,
+.exercise-card-cover:focus,
+.exercise-card-cover:focus-visible,
+.hero-cover-wrap:focus:not(:focus-visible) {
+  outline: none;
 }
 
 .hero-cta {

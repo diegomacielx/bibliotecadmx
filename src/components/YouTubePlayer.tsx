@@ -133,6 +133,8 @@ interface YouTubePlayerProps {
   controls?: boolean;
   loop?: boolean;
   preferMaxQuality?: boolean;
+  /** Permite escolher qualidade no menu nativo do YouTube (⋮) sem forçar máxima */
+  allowQualitySelection?: boolean;
   isShort?: boolean;
   /** Player grande (lightbox) — YouTube libera qualidades mais altas */
   largeSurface?: boolean;
@@ -153,6 +155,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
     controls = true,
     loop = false,
     preferMaxQuality = true,
+    allowQualitySelection = false,
     isShort = false,
     largeSurface = false,
     onEnded,
@@ -237,7 +240,8 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
       }
     },
     requestFullscreen: () => {
-      const el = containerRef.current ?? playerRef.current?.getIframe();
+      const iframe = playerRef.current?.getIframe?.() as HTMLElement | undefined;
+      const el = iframe ?? containerRef.current ?? hostRef.current;
       if (!el) return;
       const fsEl = el as HTMLElement & { webkitRequestFullscreen?: () => void };
       if (fsEl.requestFullscreen) {
@@ -260,6 +264,9 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
       playerRef.current?.destroy();
       playerRef.current = null;
 
+      const lockQuality = preferMaxQuality && !allowQualitySelection;
+      const showControls = controls || allowQualitySelection;
+
       const player = new window.YT.Player(hostRef.current, {
         videoId,
         width: '100%',
@@ -267,17 +274,17 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
         playerVars: {
           autoplay: autoplay ? 1 : 0,
           mute: mute ? 1 : 0,
-          controls: controls ? 1 : 0,
+          controls: showControls ? 1 : 0,
           modestbranding: 1,
           rel: 0,
           playsinline: 1,
           enablejsapi: 1,
           origin: window.location.origin,
           iv_load_policy: 3,
-          fs: controls ? 1 : 0,
-          disablekb: controls ? 0 : 1,
+          fs: showControls ? 1 : 0,
+          disablekb: showControls ? 0 : 1,
           cc_load_policy: 0,
-          ...(preferMaxQuality ? { vq: 'highres' } : {}),
+          ...(preferMaxQuality && !allowQualitySelection ? { vq: 'highres' } : {}),
           ...(loop ? { loop: 1, playlist: videoId } : {}),
         },
         events: {
@@ -287,18 +294,20 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
             if (preferMaxQuality) {
               requestAnimationFrame(() => {
                 forceMaximumQuality(event.target, 'onReady');
-                cleanupQualityRef.current = startQualityEnforcer(event.target, isShort);
+                if (lockQuality) {
+                  cleanupQualityRef.current = startQualityEnforcer(event.target, isShort);
+                }
               });
             }
           },
           onPlaybackQualityChange: (event) => {
-            if (preferMaxQuality) forceMaximumQuality(event.target, 'onQualityChange');
+            if (lockQuality) forceMaximumQuality(event.target, 'onQualityChange');
           },
           onStateChange: (event) => {
             if (event.data === 0) onEndedRef.current?.();
             if (event.data === 1) onPlayStateChangeRef.current?.(true);
             if (event.data === 2) onPlayStateChangeRef.current?.(false);
-            if (!preferMaxQuality) return;
+            if (!lockQuality) return;
             if (event.data === 1 || event.data === 3) {
               forceMaximumQuality(event.target, event.data === 3 ? 'onBuffer' : 'onPlay');
               if (!cleanupQualityRef.current) {
@@ -330,6 +339,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
     controls,
     loop,
     preferMaxQuality,
+    allowQualitySelection,
     isShort,
     deferAutoplay,
   ]);
