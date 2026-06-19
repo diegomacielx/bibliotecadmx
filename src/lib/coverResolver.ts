@@ -15,14 +15,14 @@ const PRIORITY_RANK: Record<CoverPriority, number> = {
 
 const inflight = new Map<string, Promise<string | null>>();
 
-interface QueueItem<T> {
+interface QueueItem {
   rank: number;
-  run: () => Promise<T>;
-  resolve: (value: T) => void;
+  run: () => Promise<unknown>;
+  resolve: (value: unknown) => void;
   reject: (reason: unknown) => void;
 }
 
-const queue: QueueItem<unknown>[] = [];
+const queue: QueueItem[] = [];
 let active = 0;
 const MAX_CONCURRENT = 32;
 
@@ -45,7 +45,12 @@ function drainQueue(): void {
 
 function schedule<T>(priority: CoverPriority, fn: () => Promise<T>): Promise<T> {
   return new Promise((resolve, reject) => {
-    queue.push({ rank: PRIORITY_RANK[priority], run: fn, resolve, reject });
+    queue.push({
+      rank: PRIORITY_RANK[priority],
+      run: fn as () => Promise<unknown>,
+      resolve: (value) => resolve(value as T),
+      reject,
+    });
     drainQueue();
   });
 }
