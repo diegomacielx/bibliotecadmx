@@ -10,12 +10,14 @@ declare namespace YT {
     | 'hd1440'
     | 'highres'
     | 'auto'
-    | 'default';
+    | 'default'
+    | 'tiny';
 
   interface PlayerOptions {
     videoId?: string;
     width?: string | number;
     height?: string | number;
+    host?: string;
     playerVars?: Record<string, string | number>;
     events?: PlayerEvents;
   }

@@ -17,6 +17,7 @@ import { useExerciseCover } from '../hooks/useExerciseCover';
 import { getCoverFrameStyle } from '../lib/coverFocus';
 import { ExerciseCoverPlaceholder } from './ExerciseCoverPlaceholder';
 import { YouTubePlayer, type YouTubePlayerHandle } from './YouTubePlayer';
+import { VideoQualitySelect } from './VideoQualitySelect';
 import { Icon } from './Icon';
 import { MuscleGroupList } from './MuscleGroupList';
 
@@ -393,6 +394,7 @@ function ComparePanel({
               controls
               preferMaxQuality
               allowQualitySelection
+              forceClassicPlayer
               isShort={isShort}
               largeSurface
               onReady={onPlayerReady}
@@ -440,6 +442,7 @@ export function CinemaLightbox({
   const videoAreaRef = useRef<HTMLDivElement>(null);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [playerReadyToken, setPlayerReadyToken] = useState(0);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const orientation = useMemo(
@@ -478,6 +481,7 @@ export function CinemaLightbox({
 
   const handlePrimaryPlayerReady = useCallback(() => {
     resetHideTimer();
+    setPlayerReadyToken((n) => n + 1);
     playerRef.current?.playVideo();
   }, [resetHideTimer]);
 
@@ -510,6 +514,7 @@ export function CinemaLightbox({
   useEffect(() => {
     compareReadyRef.current = { primary: false, secondary: false };
     compareSyncStartedRef.current = false;
+    setPlayerReadyToken(0);
   }, [ex.firestoreId, compareEx?.firestoreId]);
 
   const startComparePlayback = useCallback(() => {
@@ -656,9 +661,11 @@ export function CinemaLightbox({
 
   const videoSizeStyle: CSSProperties = isMobileLayout
     ? {}
-    : isVertical
-      ? { height: VIDEO_H, aspectRatio: '9 / 16' }
-      : { height: VIDEO_H, aspectRatio: '16 / 9' };
+    : {
+        height: VIDEO_H,
+        aspectRatio: '16 / 9',
+        minWidth: 'min(100%, 720px)',
+      };
 
   const showMobileSheet = isMobileLayout && !isCompare;
   const showSidebar = showMobileSheet ? false : isMobileLayout || sidebarVisible;
@@ -786,7 +793,7 @@ export function CinemaLightbox({
                 <MobileWatchPanel ex={ex} />
               ) : (
                 <>
-                  <div className="cinema-player-layer absolute inset-0 z-[1]">
+                  <div className="cinema-player-layer cinema-player-layer--classic-watch absolute inset-0 z-[1]">
                     <YouTubePlayer
                       ref={playerRef}
                       videoId={ytId}
@@ -796,6 +803,7 @@ export function CinemaLightbox({
                       controls
                       preferMaxQuality
                       allowQualitySelection
+                      forceClassicPlayer
                       isShort={isShort}
                       largeSurface
                       onReady={handlePrimaryPlayerReady}
@@ -922,6 +930,9 @@ export function CinemaLightbox({
                 </div>
               ) : (
                 <div className="flex flex-col min-h-full">
+                  {!isCompare && ytId && !isMobileLayout && (
+                    <VideoQualitySelect playerRef={playerRef} readyToken={playerReadyToken} />
+                  )}
                   <ExerciseDetails
                     ex={ex}
                     isCopied={isCopied}

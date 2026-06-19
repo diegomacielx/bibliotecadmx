@@ -1,14 +1,6 @@
 import { useEffect, useRef, useId, forwardRef, useImperativeHandle } from 'react';
 import { logDebug } from '../lib/utils';
-
-const MAX_QUALITY_ORDER: YT.PlaybackQuality[] = [
-  'highres',
-  'hd1440',
-  'hd1080',
-  'hd720',
-  'large',
-  'medium',
-];
+import { applyInitialMaxQuality } from '../lib/youtubeQuality';
 
 let apiPromise: Promise<void> | null = null;
 
@@ -52,20 +44,9 @@ function forceMaximumQuality(player: YT.Player, label: string) {
   try {
     const available = player.getAvailableQualityLevels?.() ?? [];
     logDebug('YouTubePlayer', `${label} qualidades:`, available);
-
-    for (const quality of MAX_QUALITY_ORDER) {
-      if (available.includes(quality)) {
-        player.setPlaybackQuality(quality);
-        logDebug('YouTubePlayer', `${label} → ${quality}`);
-        return quality;
-      }
-    }
-
-    player.setPlaybackQuality('highres');
-    return 'highres' as YT.PlaybackQuality;
+    applyInitialMaxQuality(player);
   } catch (e) {
     logDebug('YouTubePlayer', 'forceMaximumQuality falhou', e);
-    return null;
   }
 }
 
@@ -122,6 +103,9 @@ export interface YouTubePlayerHandle {
   getVideoLoadedFraction: () => number;
   getPlayerState: () => number;
   requestFullscreen: () => void;
+  getAvailableQualityLevels: () => YT.PlaybackQuality[];
+  getPlaybackQuality: () => YT.PlaybackQuality;
+  setPlaybackQuality: (quality: YT.PlaybackQuality) => void;
 }
 
 interface YouTubePlayerProps {
@@ -135,6 +119,8 @@ interface YouTubePlayerProps {
   preferMaxQuality?: boolean;
   /** Permite escolher qualidade no menu nativo do YouTube (⋮) sem forçar máxima */
   allowQualitySelection?: boolean;
+  /** Player watch clássico 16:9 — evita UI Shorts sem seletor de qualidade no desktop */
+  forceClassicPlayer?: boolean;
   isShort?: boolean;
   /** Player grande (lightbox) — YouTube libera qualidades mais altas */
   largeSurface?: boolean;
@@ -156,6 +142,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
     loop = false,
     preferMaxQuality = true,
     allowQualitySelection = false,
+    forceClassicPlayer = false,
     isShort = false,
     largeSurface = false,
     onEnded,
@@ -169,6 +156,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YT.Player | null>(null);
   const cleanupQualityRef = useRef<(() => void) | null>(null);
+  const userPickedQualityRef = useRef(false);
   const onReadyRef = useRef(onReady);
   const onEndedRef = useRef(onEnded);
   const onPlayStateChangeRef = useRef(onPlayStateChange);
@@ -252,10 +240,33 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
         fsEl.webkitRequestFullscreen?.();
       }
     },
+    getAvailableQualityLevels: () => {
+      try {
+        return playerRef.current?.getAvailableQualityLevels?.() ?? [];
+      } catch {
+        return [];
+      }
+    },
+    getPlaybackQuality: () => {
+      try {
+        return playerRef.current?.getPlaybackQuality?.() ?? 'auto';
+      } catch {
+        return 'auto';
+      }
+    },
+    setPlaybackQuality: (quality: YT.PlaybackQuality) => {
+      userPickedQualityRef.current = true;
+      try {
+        playerRef.current?.setPlaybackQuality(quality);
+      } catch {
+        /* ignore */
+      }
+    },
   }));
 
   useEffect(() => {
     let cancelled = false;
+    userPickedQualityRef.current = false;
 
     loadYouTubeIframeAPI().then(() => {
       if (cancelled || !hostRef.current || !window.YT?.Player) return;
@@ -271,6 +282,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
         videoId,
         width: '100%',
         height: '100%',
+        host: 'https://www.youtube.com',
         playerVars: {
           autoplay: autoplay ? 1 : 0,
           mute: mute ? 1 : 0,
@@ -290,8 +302,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
         events: {
           onReady: (event) => {
             if (autoplay && !deferAutoplay) event.target.playVideo();
-            onReadyRef.current?.();
-            if (preferMaxQuality) {
+            if (preferMaxQuality && !userPickedQualityRef.current) {
               requestAnimationFrame(() => {
                 forceMaximumQuality(event.target, 'onReady');
                 if (lockQuality) {
@@ -299,16 +310,18 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
                 }
               });
             }
+            onReadyRef.current?.();
           },
           onPlaybackQualityChange: (event) => {
-            if (lockQuality) forceMaximumQuality(event.target, 'onQualityChange');
+            if (lockQuality && !userPickedQualityRef.current) {
+              forceMaximumQuality(event.target, 'onQualityChange');
+            }
           },
           onStateChange: (event) => {
             if (event.data === 0) onEndedRef.current?.();
             if (event.data === 1) onPlayStateChangeRef.current?.(true);
             if (event.data === 2) onPlayStateChangeRef.current?.(false);
-            if (!lockQuality) return;
-            if (event.data === 1 || event.data === 3) {
+            if (lockQuality && !userPickedQualityRef.current && (event.data === 1 || event.data === 3)) {
               forceMaximumQuality(event.target, event.data === 3 ? 'onBuffer' : 'onPlay');
               if (!cleanupQualityRef.current) {
                 cleanupQualityRef.current = startQualityEnforcer(event.target, isShort);
@@ -340,21 +353,26 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
     loop,
     preferMaxQuality,
     allowQualitySelection,
+    forceClassicPlayer,
     isShort,
     deferAutoplay,
   ]);
 
+  const hostClass = [
+    'dmx-yt-host',
+    largeSurface ? 'dmx-yt-host--large' : '',
+    forceClassicPlayer ? 'dmx-yt-host--classic-watch' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
     <div
       ref={containerRef}
-      className={`dmx-yt-root ${className}`.trim()}
+      className={`dmx-yt-root ${forceClassicPlayer ? 'dmx-yt-root--classic-watch' : ''} ${className}`.trim()}
       aria-label={title}
     >
-      <div
-        ref={hostRef}
-        id={`yt-${domId}`}
-        className={`dmx-yt-host ${largeSurface ? 'dmx-yt-host--large' : ''}`.trim()}
-      />
+      <div ref={hostRef} id={`yt-${domId}`} className={hostClass} />
     </div>
   );
 });
