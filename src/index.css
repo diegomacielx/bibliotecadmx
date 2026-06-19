@@ -4107,24 +4107,28 @@ html[data-theme="light"] .cinema-backdrop::before {
   border: 0;
 }
 
-/* Player watch clássico 16:9 — desativa UI Shorts (sem menu de qualidade no desktop) */
-.dmx-yt-root--classic-watch {
+/* Vídeo vertical no lightbox — iframe 16:9 amplo recortado (HD + sem barras pretas) */
+.cinema-player-layer--vertical-theater {
+  overflow: hidden;
   background: #050506;
 }
 
-.dmx-yt-host--classic-watch {
-  width: 100%;
+.cinema-player-layer--vertical-theater .dmx-yt-root {
+  position: absolute;
+  top: 0;
+  left: 50%;
   height: 100%;
-  min-width: 640px;
-  min-height: 360px;
-  aspect-ratio: 16 / 9;
+  width: max(1280px, calc(100% * 256 / 81));
+  transform: translateX(-50%);
 }
 
-.cinema-player-layer--classic-watch {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #050506;
+.cinema-lightbox-panel--single {
+  width: fit-content;
+  max-width: min(calc(100vw - 2rem), 100%);
+}
+
+.cinema-video-stage--vertical {
+  flex-shrink: 0;
 }
 
 .video-quality-select {

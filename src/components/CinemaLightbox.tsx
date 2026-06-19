@@ -384,21 +384,26 @@ function ComparePanel({
           mobileLayout ? (
             <MobileWatchPanel ex={ex} />
           ) : (
-            <YouTubePlayer
-              ref={playerRef}
-              videoId={ytId}
-              title={ex.name}
-              autoplay
-              deferAutoplay
-              mute={false}
-              controls
-              preferMaxQuality
-              allowQualitySelection
-              forceClassicPlayer
-              isShort={isShort}
-              largeSurface
-              onReady={onPlayerReady}
-            />
+            <div
+              className={`absolute inset-0 ${
+                isVertical ? 'cinema-player-layer cinema-player-layer--vertical-theater' : ''
+              }`}
+            >
+              <YouTubePlayer
+                ref={playerRef}
+                videoId={ytId}
+                title={ex.name}
+                autoplay
+                deferAutoplay
+                mute={false}
+                controls
+                preferMaxQuality
+                allowQualitySelection
+                isShort={isShort}
+                largeSurface
+                onReady={onPlayerReady}
+              />
+            </div>
           )
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-zinc-500 text-xs">
@@ -661,11 +666,19 @@ export function CinemaLightbox({
 
   const videoSizeStyle: CSSProperties = isMobileLayout
     ? {}
-    : {
-        height: VIDEO_H,
-        aspectRatio: '16 / 9',
-        minWidth: 'min(100%, 720px)',
-      };
+    : isVertical
+      ? {
+          height: VIDEO_H,
+          width: `min(calc(${VIDEO_H} * 9 / 16), calc(100vw - 24rem))`,
+          aspectRatio: '9 / 16',
+          flexShrink: 0,
+        }
+      : {
+          height: VIDEO_H,
+          width: `min(calc(${VIDEO_H} * 16 / 9), calc(100vw - 24rem))`,
+          aspectRatio: '16 / 9',
+          flexShrink: 0,
+        };
 
   const showMobileSheet = isMobileLayout && !isCompare;
   const showSidebar = showMobileSheet ? false : isMobileLayout || sidebarVisible;
@@ -713,7 +726,7 @@ export function CinemaLightbox({
         exit={{ opacity: 0 }}
         transition={panelOpenTransition}
         className={`cinema-lightbox-panel pointer-events-auto relative z-10 mx-auto flex flex-col md:flex-row md:items-stretch max-h-[94vh] overflow-hidden rounded-cinema ${
-          isCompare ? 'compare-lightbox-panel' : 'w-fit max-w-[calc(100vw-1rem)]'
+          isCompare ? 'compare-lightbox-panel' : 'cinema-lightbox-panel--single w-fit max-w-[min(calc(100vw-2rem),100%)]'
         } ${
           isMobileLayout ? 'cinema-lightbox-panel--mobile' : ''
         } ${isCompare ? 'compare-lightbox-panel' : ''}`}
@@ -771,7 +784,9 @@ export function CinemaLightbox({
             ref={videoAreaRef}
             className={`cinema-video-stage relative shrink-0 w-full md:w-auto overflow-hidden cinema-video-area ${
               isMobileLayout ? 'cinema-video-area--mobile' : ''
-            } ${isVertical && isMobileLayout ? 'cinema-video-area--mobile-vertical' : ''}`}
+            } ${!isMobileLayout && isVertical ? 'cinema-video-stage--vertical' : ''} ${
+              isVertical && isMobileLayout ? 'cinema-video-area--mobile-vertical' : ''
+            }`}
             style={isMobileLayout ? undefined : videoSizeStyle}
           >
             {isMobileLayout && (
@@ -793,7 +808,11 @@ export function CinemaLightbox({
                 <MobileWatchPanel ex={ex} />
               ) : (
                 <>
-                  <div className="cinema-player-layer cinema-player-layer--classic-watch absolute inset-0 z-[1]">
+                  <div
+                    className={`cinema-player-layer absolute inset-0 z-[1] ${
+                      isVertical ? 'cinema-player-layer--vertical-theater' : ''
+                    }`}
+                  >
                     <YouTubePlayer
                       ref={playerRef}
                       videoId={ytId}
@@ -803,7 +822,6 @@ export function CinemaLightbox({
                       controls
                       preferMaxQuality
                       allowQualitySelection
-                      forceClassicPlayer
                       isShort={isShort}
                       largeSurface
                       onReady={handlePrimaryPlayerReady}

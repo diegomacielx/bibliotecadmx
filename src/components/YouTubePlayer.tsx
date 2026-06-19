@@ -119,8 +119,6 @@ interface YouTubePlayerProps {
   preferMaxQuality?: boolean;
   /** Permite escolher qualidade no menu nativo do YouTube (⋮) sem forçar máxima */
   allowQualitySelection?: boolean;
-  /** Player watch clássico 16:9 — evita UI Shorts sem seletor de qualidade no desktop */
-  forceClassicPlayer?: boolean;
   isShort?: boolean;
   /** Player grande (lightbox) — YouTube libera qualidades mais altas */
   largeSurface?: boolean;
@@ -142,7 +140,6 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
     loop = false,
     preferMaxQuality = true,
     allowQualitySelection = false,
-    forceClassicPlayer = false,
     isShort = false,
     largeSurface = false,
     onEnded,
@@ -353,25 +350,14 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
     loop,
     preferMaxQuality,
     allowQualitySelection,
-    forceClassicPlayer,
     isShort,
     deferAutoplay,
   ]);
 
-  const hostClass = [
-    'dmx-yt-host',
-    largeSurface ? 'dmx-yt-host--large' : '',
-    forceClassicPlayer ? 'dmx-yt-host--classic-watch' : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
+  const hostClass = ['dmx-yt-host', largeSurface ? 'dmx-yt-host--large' : ''].filter(Boolean).join(' ');
 
   return (
-    <div
-      ref={containerRef}
-      className={`dmx-yt-root ${forceClassicPlayer ? 'dmx-yt-root--classic-watch' : ''} ${className}`.trim()}
-      aria-label={title}
-    >
+    <div ref={containerRef} className={`dmx-yt-root ${className}`.trim()} aria-label={title}>
       <div ref={hostRef} id={`yt-${domId}`} className={hostClass} />
     </div>
   );

@@ -22,8 +22,13 @@ export function VideoQualitySelect({ playerRef, readyToken = 0 }: VideoQualitySe
 
   useEffect(() => {
     refresh();
-    const timer = window.setInterval(refresh, 1200);
-    return () => window.clearInterval(timer);
+    const delays = [0, 400, 1200, 2500, 5000];
+    const timers = delays.map((ms) => window.setTimeout(refresh, ms));
+    const timer = window.setInterval(refresh, 1500);
+    return () => {
+      timers.forEach((t) => window.clearTimeout(t));
+      window.clearInterval(timer);
+    };
   }, [refresh, readyToken]);
 
   useEffect(() => {
@@ -46,7 +51,20 @@ export function VideoQualitySelect({ playerRef, readyToken = 0 }: VideoQualitySe
     setOpen(false);
   };
 
-  if (levels.length === 0) return null;
+  if (levels.length === 0) {
+    if (readyToken === 0) return null;
+    return (
+      <div className="video-quality-select" data-quality-menu>
+        <button type="button" className="lightbox-btn lightbox-btn--ghost w-full justify-between" disabled>
+          <span className="inline-flex items-center gap-2">
+            <Icon name="settings" className="w-3.5 h-3.5" strokeWidth={1.75} />
+            Qualidade do vídeo
+          </span>
+          <span className="text-zinc-500 text-xs font-medium">Carregando…</span>
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="video-quality-select" data-quality-menu>
