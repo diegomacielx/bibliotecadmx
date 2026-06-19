@@ -13,6 +13,7 @@ export function VideoQualitySelect({ playerRef, readyToken = 0 }: VideoQualitySe
   const [levels, setLevels] = useState<YoutubeQualityLevel[]>([]);
   const [current, setCurrent] = useState<string>('auto');
   const [open, setOpen] = useState(false);
+  const qualityOptions = Array.from(new Set<YoutubeQualityLevel | 'auto'>(['auto', ...levels]));
 
   const refresh = useCallback(() => {
     const snapshot = readYouTubeQualities(playerRef.current);
@@ -41,7 +42,7 @@ export function VideoQualitySelect({ playerRef, readyToken = 0 }: VideoQualitySe
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
 
-  const handlePick = (quality: YoutubeQualityLevel) => {
+  const handlePick = (quality: YoutubeQualityLevel | 'auto') => {
     try {
       playerRef.current?.setPlaybackQuality(quality);
       setCurrent(quality);
@@ -89,7 +90,7 @@ export function VideoQualitySelect({ playerRef, readyToken = 0 }: VideoQualitySe
 
       {open && (
         <ul className="video-quality-select__menu" role="listbox" aria-label="Qualidade do vídeo">
-          {levels.map((quality) => (
+          {qualityOptions.map((quality) => (
             <li key={quality}>
               <button
                 type="button"

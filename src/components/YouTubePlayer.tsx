@@ -105,7 +105,7 @@ export interface YouTubePlayerHandle {
   requestFullscreen: () => void;
   getAvailableQualityLevels: () => YT.PlaybackQuality[];
   getPlaybackQuality: () => YT.PlaybackQuality;
-  setPlaybackQuality: (quality: YT.PlaybackQuality) => void;
+  setPlaybackQuality: (quality: YT.PlaybackQuality | 'auto') => void;
 }
 
 interface YouTubePlayerProps {
@@ -153,11 +153,62 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YT.Player | null>(null);
   const cleanupQualityRef = useRef<(() => void) | null>(null);
+  const qualityStickIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const userPickedQualityRef = useRef(false);
+  const requestedQualityRef = useRef<YT.PlaybackQuality | 'auto' | null>(null);
   const onReadyRef = useRef(onReady);
   const onEndedRef = useRef(onEnded);
   const onPlayStateChangeRef = useRef(onPlayStateChange);
   const domId = useId().replace(/:/g, '');
+
+  const stopQualityStick = () => {
+    if (qualityStickIntervalRef.current) {
+      clearInterval(qualityStickIntervalRef.current);
+      qualityStickIntervalRef.current = null;
+    }
+  };
+
+  const applyRequestedQuality = (player: YT.Player, label: string): boolean => {
+    const requested = requestedQualityRef.current;
+    if (!requested) return false;
+    try {
+      if (requested === 'auto') {
+        player.setPlaybackQuality?.('default' as YT.PlaybackQuality);
+        return true;
+      }
+      const available = player.getAvailableQualityLevels?.() ?? [];
+      if (!available.includes(requested)) {
+        logDebug('YouTubePlayer', `${label} qualidade indisponivel:`, requested, available);
+        return false;
+      }
+      player.setPlaybackQuality?.(requested);
+      // Algumas versões do iframe respeitam melhor quando a faixa também é definida.
+      const withRange = player as YT.Player & {
+        setPlaybackQualityRange?: (
+          suggestedQuality: YT.PlaybackQuality,
+          endQuality?: YT.PlaybackQuality
+        ) => void;
+      };
+      withRange.setPlaybackQualityRange?.(requested, requested);
+      return true;
+    } catch (e) {
+      logDebug('YouTubePlayer', `${label} applyRequestedQuality falhou`, e);
+      return false;
+    }
+  };
+
+  const startQualityStick = (player: YT.Player) => {
+    stopQualityStick();
+    qualityStickIntervalRef.current = setInterval(() => {
+      try {
+        const state = player.getPlayerState?.();
+        if (state !== 1 && state !== 3) return;
+        applyRequestedQuality(player, 'stick-interval');
+      } catch {
+        /* ignore */
+      }
+    }, 1100);
+  };
 
   useEffect(() => {
     onReadyRef.current = onReady;
@@ -251,10 +302,19 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
         return 'auto';
       }
     },
-    setPlaybackQuality: (quality: YT.PlaybackQuality) => {
+    setPlaybackQuality: (quality: YT.PlaybackQuality | 'auto') => {
       userPickedQualityRef.current = true;
+      requestedQualityRef.current = quality;
       try {
-        playerRef.current?.setPlaybackQuality(quality);
+        const player = playerRef.current;
+        if (!player) return;
+        if (quality === 'auto') {
+          stopQualityStick();
+          player.setPlaybackQuality?.('default' as YT.PlaybackQuality);
+          return;
+        }
+        applyRequestedQuality(player, 'handle-set');
+        startQualityStick(player);
       } catch {
         /* ignore */
       }
@@ -264,6 +324,8 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
   useEffect(() => {
     let cancelled = false;
     userPickedQualityRef.current = false;
+    requestedQualityRef.current = null;
+    stopQualityStick();
 
     loadYouTubeIframeAPI().then(() => {
       if (cancelled || !hostRef.current || !window.YT?.Player) return;
@@ -312,6 +374,14 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
           onPlaybackQualityChange: (event) => {
             if (lockQuality && !userPickedQualityRef.current) {
               forceMaximumQuality(event.target, 'onQualityChange');
+              return;
+            }
+            const requested = requestedQualityRef.current;
+            const changedQuality = (event as { data?: YT.PlaybackQuality }).data;
+            if (requested && requested !== 'auto' && changedQuality !== requested) {
+              setTimeout(() => {
+                applyRequestedQuality(event.target, 'onQualityChange-user');
+              }, 80);
             }
           },
           onStateChange: (event) => {
@@ -324,6 +394,10 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
                 cleanupQualityRef.current = startQualityEnforcer(event.target, isShort);
               }
             }
+            if (requestedQualityRef.current && requestedQualityRef.current !== 'auto') {
+              applyRequestedQuality(event.target, event.data === 3 ? 'onBuffer-user' : 'onPlay-user');
+              startQualityStick(event.target);
+            }
           },
         },
       });
@@ -335,6 +409,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
       cancelled = true;
       cleanupQualityRef.current?.();
       cleanupQualityRef.current = null;
+      stopQualityStick();
       try {
         playerRef.current?.destroy();
       } catch {
