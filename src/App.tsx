@@ -91,7 +91,7 @@ import { normalizeNickname, validateNickname } from './lib/nickname';
 import { sendTransactionalEmail } from './lib/email';
 import { requestPasswordReset, requestEmailVerification, type AuthEmailResult } from './lib/authEmail';
 import { parseAuthActionParams, clearAuthActionParams } from './lib/authActionParams';
-import { ensureUserProfile } from './lib/authProfile';
+import { ensureUserProfile, getUserProfileIfExists } from './lib/authProfile';
 import { AdvancedFiltersBar } from './components/AdvancedFiltersBar';
 import { useAdvancedFilters } from './hooks/useAdvancedFilters';
 import { applyAdvancedFilters, hasActiveAdvancedFilters } from './lib/exerciseFilters';
@@ -100,7 +100,6 @@ import { buildExerciseWritePayload, applyExerciseSaveToList } from './lib/exerci
 import { parseCoverFocusYInput } from './lib/coverFocus';
 import {
   isAuthorizedEmailActive,
-  resolveInitialUserStatus,
   syncUserAccess,
 } from './lib/accessControl';
 
@@ -298,20 +297,11 @@ export default function App() {
           }
         }
       } else if (!isAdmin && user) {
-        const email = (user.email || '').trim().toLowerCase();
-        const status = await resolveInitialUserStatus(email);
-        const newProfile: UserProfile = {
-          uid: user.uid,
-          email,
-          name: user.displayName || 'Aluno DMX',
-          status,
-          createdAt: new Date().toISOString(),
-        };
         try {
-          await setDoc(userProfileRef, newProfile);
-          setUserProfile(newProfile);
+          const profile = await ensureUserProfile(user);
+          setUserProfile(profile);
         } catch (e) {
-          console.error('Erro ao migrar usuário', e);
+          console.error('Erro ao criar perfil do usuário', e);
         }
       }
     });
@@ -907,7 +897,14 @@ export default function App() {
     setGoogleSubmitting(true);
     try {
       const result = await fb.signInWithPopup(auth, fb.googleProvider);
-      const profile = await ensureUserProfile(result.user);
+      let profile: UserProfile;
+      try {
+        profile = await ensureUserProfile(result.user);
+      } catch (profileErr) {
+        const existing = await getUserProfileIfExists(result.user);
+        if (!existing) throw profileErr;
+        profile = existing;
+      }
       if (profile.status === 'approved') {
         showToast('Login com Google realizado com sucesso!');
       } else {

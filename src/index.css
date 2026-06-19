@@ -425,6 +425,61 @@ input:focus, select:focus, textarea:focus {
   border: 1px solid var(--dmx-border-subtle);
 }
 
+.pending-access-spinner {
+  width: 3rem;
+  height: 3rem;
+}
+
+.pending-access-spinner__svg {
+  width: 100%;
+  height: 100%;
+  animation: pending-access-spin 0.9s linear infinite;
+}
+
+.pending-access-spinner__track {
+  stroke: rgba(239, 68, 68, 0.15);
+}
+
+.pending-access-spinner__arc {
+  stroke: rgb(220, 38, 38);
+  stroke-dasharray: 62 163;
+  stroke-dashoffset: 0;
+  transform-origin: center;
+  animation: pending-access-dash 1.4s ease-in-out infinite;
+}
+
+@keyframes pending-access-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pending-access-dash {
+  0% {
+    stroke-dasharray: 1 224;
+    stroke-dashoffset: 0;
+  }
+  50% {
+    stroke-dasharray: 100 224;
+    stroke-dashoffset: -32;
+  }
+  100% {
+    stroke-dasharray: 100 224;
+    stroke-dashoffset: -156;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pending-access-spinner__svg {
+    animation-duration: 1.8s !important;
+    animation-iteration-count: infinite !important;
+  }
+  .pending-access-spinner__arc {
+    animation-duration: 2.2s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
+
 .modal-backdrop {
   background: var(--dmx-modal-backdrop);
   backdrop-filter: blur(20px);
