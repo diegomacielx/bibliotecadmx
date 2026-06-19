@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { buildGitHubCoverUrls } from '../lib/utils';
 import { isOfficialGitHubCoverUrl } from '../lib/coverSource';
-import { resolveExerciseCoverUrl } from '../lib/coverResolver';
+import { resolveExerciseCoverUrl, type CoverPriority } from '../lib/coverResolver';
 import {
   getSessionCoverUrl,
   isSessionCoverReady,
@@ -16,18 +16,24 @@ interface CoverSource {
   youtubeUrl?: string;
 }
 
-export function useExerciseCover(ex: CoverSource) {
+interface UseExerciseCoverOptions {
+  priority?: CoverPriority;
+}
+
+export function useExerciseCover(ex: CoverSource, options: UseExerciseCoverOptions = {}) {
+  const priority = options.priority ?? 'normal';
+
   const [coverMissing, setCoverMissing] = useState(() => buildGitHubCoverUrls(ex).length === 0);
   const [imgSrc, setImgSrc] = useState(() => {
     const urls = buildGitHubCoverUrls(ex);
     if (urls.length === 0) return '';
-    const sessionUrl = getSessionCoverUrl(ex.firestoreId);
-    if (sessionUrl && isOfficialGitHubCoverUrl(sessionUrl)) return sessionUrl;
+    const known = getSessionCoverUrl(ex.firestoreId);
+    if (known && isOfficialGitHubCoverUrl(known)) return known;
     return '';
   });
   const [imgLoaded, setImgLoaded] = useState(() => {
-    const sessionUrl = getSessionCoverUrl(ex.firestoreId);
-    return !!sessionUrl && isSessionCoverReady(ex.firestoreId);
+    const known = getSessionCoverUrl(ex.firestoreId);
+    return !!known && isSessionCoverReady(ex.firestoreId);
   });
 
   useEffect(() => {
@@ -39,25 +45,29 @@ export function useExerciseCover(ex: CoverSource) {
       return;
     }
 
-    const sessionUrl = getSessionCoverUrl(ex.firestoreId);
-    if (sessionUrl && isOfficialGitHubCoverUrl(sessionUrl) && isSessionCoverReady(ex.firestoreId)) {
+    const known = getSessionCoverUrl(ex.firestoreId);
+    if (known && isOfficialGitHubCoverUrl(known)) {
       setCoverMissing(false);
-      setImgSrc(sessionUrl);
-      setImgLoaded(true);
-      return;
+      setImgSrc(known);
+      if (isSessionCoverReady(ex.firestoreId)) {
+        setImgLoaded(true);
+        return;
+      }
+      setImgLoaded(false);
+    } else {
+      setCoverMissing(false);
+      setImgLoaded(false);
+      setImgSrc('');
     }
 
     let cancelled = false;
-    setCoverMissing(false);
-    setImgLoaded(false);
-    setImgSrc('');
 
-    void resolveExerciseCoverUrl(ex).then((url) => {
+    void resolveExerciseCoverUrl(ex, priority).then((url) => {
       if (cancelled) return;
       if (url) {
         setCoverMissing(false);
         setImgSrc(url);
-      } else {
+      } else if (!known) {
         setCoverMissing(true);
         setImgSrc('');
         setImgLoaded(true);
@@ -67,7 +77,7 @@ export function useExerciseCover(ex: CoverSource) {
     return () => {
       cancelled = true;
     };
-  }, [ex.firestoreId, ex.id]);
+  }, [ex.firestoreId, ex.id, priority]);
 
   const handleLoad = useCallback(
     (e: React.SyntheticEvent<HTMLImageElement>) => {

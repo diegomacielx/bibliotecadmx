@@ -4,27 +4,49 @@ import { getCachedCoverUrl } from './coverCache';
 import { getSessionCoverUrl, isSessionCoverReady, setSessionCoverUrl } from './coverImageStore';
 import { isOfficialGitHubCoverUrl } from './coverSource';
 
-const inflight = new Map<string, Promise<string | null>>();
-const queue: Array<() => void> = [];
-let active = 0;
-const MAX_CONCURRENT = 14;
+export type CoverPriority = 'critical' | 'high' | 'normal' | 'low';
 
-function schedule<T>(fn: () => Promise<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const run = async () => {
-      active += 1;
-      try {
-        resolve(await fn());
-      } catch (error) {
-        reject(error);
-      } finally {
+const PRIORITY_RANK: Record<CoverPriority, number> = {
+  critical: 0,
+  high: 1,
+  normal: 2,
+  low: 3,
+};
+
+const inflight = new Map<string, Promise<string | null>>();
+
+interface QueueItem<T> {
+  rank: number;
+  run: () => Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason: unknown) => void;
+}
+
+const queue: QueueItem<unknown>[] = [];
+let active = 0;
+const MAX_CONCURRENT = 32;
+
+function drainQueue(): void {
+  while (active < MAX_CONCURRENT && queue.length > 0) {
+    queue.sort((a, b) => a.rank - b.rank);
+    const item = queue.shift();
+    if (!item) break;
+
+    active += 1;
+    void item
+      .run()
+      .then(item.resolve, item.reject)
+      .finally(() => {
         active -= 1;
-        const next = queue.shift();
-        if (next) next();
-      }
-    };
-    if (active < MAX_CONCURRENT) void run();
-    else queue.push(run);
+        drainQueue();
+      });
+  }
+}
+
+function schedule<T>(priority: CoverPriority, fn: () => Promise<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    queue.push({ rank: PRIORITY_RANK[priority], run: fn, resolve, reject });
+    drainQueue();
   });
 }
 
@@ -33,8 +55,33 @@ export interface CoverResolveSource {
   id: string;
 }
 
-/** Resolve capa GitHub com cache de sessão, dedupe e fila de concorrência */
-export function resolveExerciseCoverUrl(ex: CoverResolveSource): Promise<string | null> {
+async function resolveCoverUrls(
+  ex: CoverResolveSource,
+  urls: string[],
+  key: string
+): Promise<string | null> {
+  if (ex.firestoreId) {
+    const cached = getCachedCoverUrl(ex.firestoreId);
+    if (cached && isOfficialGitHubCoverUrl(cached)) {
+      if (await probeImageUrl(cached)) {
+        setSessionCoverUrl(ex.firestoreId, cached);
+        inflight.delete(key);
+        return cached;
+      }
+    }
+  }
+
+  const hit = await findFirstWorkingCoverUrl(urls);
+  if (hit && ex.firestoreId) setSessionCoverUrl(ex.firestoreId, hit);
+  inflight.delete(key);
+  return hit;
+}
+
+/** Resolve capa GitHub com cache, dedupe e fila prioritária */
+export function resolveExerciseCoverUrl(
+  ex: CoverResolveSource,
+  priority: CoverPriority = 'normal'
+): Promise<string | null> {
   const urls = buildGitHubCoverUrls(ex);
   if (urls.length === 0) return Promise.resolve(null);
 
@@ -43,48 +90,62 @@ export function resolveExerciseCoverUrl(ex: CoverResolveSource): Promise<string 
     if (sessionUrl && isOfficialGitHubCoverUrl(sessionUrl) && isSessionCoverReady(ex.firestoreId)) {
       return Promise.resolve(sessionUrl);
     }
-
-    const cached = getCachedCoverUrl(ex.firestoreId);
-    if (cached && isOfficialGitHubCoverUrl(cached)) {
-      const key = ex.firestoreId;
-      const pending = inflight.get(key);
-      if (pending) return pending;
-
-      const promise = schedule(async () => {
-        if (await probeImageUrl(cached)) {
-          setSessionCoverUrl(ex.firestoreId!, cached);
-          inflight.delete(key);
-          return cached;
-        }
-        const hit = await findFirstWorkingCoverUrl(urls.filter((url) => url !== cached));
-        if (hit) setSessionCoverUrl(ex.firestoreId!, hit);
-        inflight.delete(key);
-        return hit;
-      });
-
-      inflight.set(key, promise);
-      return promise;
-    }
   }
 
   const key = ex.firestoreId || ex.id;
   const pending = inflight.get(key);
   if (pending) return pending;
 
-  const promise = schedule(async () => {
-    const hit = await findFirstWorkingCoverUrl(urls);
-    if (hit && ex.firestoreId) setSessionCoverUrl(ex.firestoreId, hit);
-    inflight.delete(key);
-    return hit;
-  });
-
+  const promise = schedule(priority, () => resolveCoverUrls(ex, urls, key));
   inflight.set(key, promise);
   return promise;
 }
 
-/** Pré-resolve capas visíveis sem bloquear a UI */
-export function prefetchExerciseCovers(exercises: CoverResolveSource[]): void {
+const CRITICAL_VISIBLE = 16;
+const HIGH_VISIBLE = 56;
+
+/** Dispara resolução em camadas — viewport primeiro, resto depois */
+export function primeCoversFromExerciseList(
+  exercises: CoverResolveSource[],
+  options?: { heroFirestoreId?: string | null }
+): void {
+  const list = exercises.filter((ex) => ex.firestoreId && ex.id);
+  if (list.length === 0) return;
+
+  const seen = new Set<string>();
+  const ordered: CoverResolveSource[] = [];
+
+  const pushUnique = (ex: CoverResolveSource | undefined) => {
+    if (!ex?.firestoreId || seen.has(ex.firestoreId)) return;
+    seen.add(ex.firestoreId);
+    ordered.push(ex);
+  };
+
+  if (options?.heroFirestoreId) {
+    pushUnique(list.find((ex) => ex.firestoreId === options.heroFirestoreId));
+  }
+
+  for (const ex of list) pushUnique(ex);
+
+  ordered.slice(0, CRITICAL_VISIBLE).forEach((ex) => {
+    void resolveExerciseCoverUrl(ex, 'critical');
+  });
+
+  ordered.slice(CRITICAL_VISIBLE, CRITICAL_VISIBLE + HIGH_VISIBLE).forEach((ex) => {
+    void resolveExerciseCoverUrl(ex, 'high');
+  });
+
+  ordered.slice(CRITICAL_VISIBLE + HIGH_VISIBLE).forEach((ex) => {
+    void resolveExerciseCoverUrl(ex, 'normal');
+  });
+}
+
+/** Pré-resolve capas — atalho com prioridade normal */
+export function prefetchExerciseCovers(
+  exercises: CoverResolveSource[],
+  priority: CoverPriority = 'normal'
+): void {
   for (const ex of exercises) {
-    void resolveExerciseCoverUrl(ex);
+    void resolveExerciseCoverUrl(ex, priority);
   }
 }

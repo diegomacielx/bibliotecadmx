@@ -84,8 +84,12 @@ export function ExerciseCard({
   const hoverDevice = useMediaQuery('(hover: hover)');
   const [mobileExpanded, setMobileExpanded] = useState(false);
   const coverRef = useRef<HTMLDivElement>(null);
+  const coverPriority = index < 8 ? 'critical' : index < 24 ? 'high' : 'normal';
+  const coverLoading = index < 12 ? 'eager' : 'lazy';
+  const coverFetchPriority = index < 12 ? 'high' : 'auto';
+
   const { imgSrc, imgLoaded, isCoverInstant, coverMissing, placeholderSrc, webpSrc, handleLoad, handleError } =
-    useExerciseCover(ex);
+    useExerciseCover(ex, { priority: coverPriority });
   const handleGlow = useAmbientGlow<HTMLDivElement>();
   const reducedMotion = useReducedMotion();
   const desktopEffects = hoverDevice;
@@ -334,6 +338,8 @@ export function ExerciseCard({
             exerciseCategory={ex.category}
             instantDisplay={isCoverInstant}
             coverMissing={coverMissing}
+            loading={coverLoading}
+            fetchPriority={coverFetchPriority}
             useBlurUp={false}
             onLoad={handleLoad}
             onError={handleError}

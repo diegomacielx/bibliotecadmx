@@ -74,7 +74,10 @@ export function HeroSpotlightSection({
     return { firestoreId: 'hero-preview', id: '0000', youtubeUrl: '', thumbnail: '' };
   }, [mode, heroSpotlight.imageUrl, selectedExercise]);
 
-  const { imgSrc, coverMissing, placeholderSrc, webpSrc, handleLoad, handleError } = useExerciseCover(coverSource);
+  const { imgSrc, coverMissing, placeholderSrc, webpSrc, handleLoad, handleError } = useExerciseCover(
+    coverSource,
+    { priority: 'critical' }
+  );
   const previewSrc = mode === 'campaign' ? heroSpotlight.imageUrl || imgSrc : imgSrc;
   const showCoverPreview = Boolean(previewSrc) || (mode !== 'campaign' && coverMissing);
 

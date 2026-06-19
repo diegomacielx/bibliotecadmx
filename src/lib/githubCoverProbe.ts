@@ -15,6 +15,9 @@ export function probeImageUrl(url: string): Promise<boolean> {
   return new Promise((resolve) => {
     const img = new Image();
     img.decoding = 'async';
+    if ('fetchPriority' in img) {
+      (img as HTMLImageElement & { fetchPriority: string }).fetchPriority = 'high';
+    }
     const finish = (ok: boolean) => {
       urlProbeCache.set(key, ok);
       resolve(ok);

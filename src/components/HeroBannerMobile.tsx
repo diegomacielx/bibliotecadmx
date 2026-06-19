@@ -29,7 +29,7 @@ export function HeroBannerMobile({ hero, onWatch, onCampaignClick }: HeroBannerM
         youtubeUrl: '',
       };
 
-  const { imgSrc, handleLoad, handleError } = useExerciseCover(coverSource);
+  const { imgSrc, handleLoad, handleError } = useExerciseCover(coverSource, { priority: 'critical' });
   const displaySrc = isCampaign && hero.imageUrl ? hero.imageUrl : imgSrc;
   const frame = getCoverFrameStyle(hero.frameSource);
 

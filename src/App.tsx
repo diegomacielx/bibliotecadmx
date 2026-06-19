@@ -83,7 +83,7 @@ import { useSearchHistory } from './hooks/useSearchHistory';
 import { useFavorites } from './hooks/useFavorites';
 import { isCoarsePointer, isMobileUi, useTouchLayoutClass } from './hooks/useMediaQuery';
 import { isFeatureEnabled } from './lib/mobileCapabilities';
-import { prefetchExerciseCovers } from './lib/coverResolver';
+import { primeCoversFromExerciseList, prefetchExerciseCovers } from './lib/coverResolver';
 import { getGridPrefetchPeers } from './lib/exercisePrefetch';
 import { normalizeNickname, validateNickname } from './lib/nickname';
 import { sendTransactionalEmail } from './lib/email';
@@ -412,6 +412,11 @@ export default function App() {
         logDebug('Firestore', `${withYoutube}/${data.length} com YouTube válido`);
 
         setExercises(data);
+        primeCoversFromExerciseList(
+          data
+            .filter((ex) => !isExerciseIncomplete(ex.youtubeUrl))
+            .map((ex) => ({ firestoreId: ex.firestoreId, id: ex.id }))
+        );
         setLoading(false);
       },
       (err) => {
@@ -1458,31 +1463,28 @@ export default function App() {
     if (isCoarsePointer()) return;
     const timer = window.setTimeout(() => {
       void preloadYouTubePlayerApi();
-    }, 3000);
+    }, 20000);
     return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
-    if (loading || publicExercises.length === 0 || isCoarsePointer()) return;
-    const limit = isMobileUi() ? 6 : 80;
-    prefetchExerciseCovers(
-      publicExercises.slice(0, limit).map((ex) => ({
-        firestoreId: ex.firestoreId,
-        id: ex.id,
-      }))
-    );
-  }, [loading, publicExercises]);
+    if (loading || publicExercises.length === 0) return;
 
-  useEffect(() => {
-    if (loading || gridExercises.length === 0 || isCoarsePointer()) return;
-    const limit = isMobileUi() ? 4 : 48;
+    const heroId = heroDisplay?.exercise?.firestoreId ?? null;
+    primeCoversFromExerciseList(
+      publicExercises.map((ex) => ({ firestoreId: ex.firestoreId, id: ex.id })),
+      { heroFirestoreId: heroId }
+    );
+
+    const viewportLimit = isMobileUi() ? 10 : 28;
     prefetchExerciseCovers(
-      gridExercises.slice(0, limit).map((ex) => ({
+      gridExercises.slice(0, viewportLimit).map((ex) => ({
         firestoreId: ex.firestoreId,
         id: ex.id,
-      }))
+      })),
+      'critical'
     );
-  }, [loading, gridExercises]);
+  }, [loading, publicExercises, gridExercises, heroDisplay?.exercise?.firestoreId]);
 
   if (authLoading) {
     return <LoadingScreen slowConnection={slowConnection} />;

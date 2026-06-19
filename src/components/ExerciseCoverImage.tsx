@@ -18,6 +18,7 @@ interface ExerciseCoverImageProps {
   exerciseId?: string;
   exerciseCategory?: string;
   instantDisplay?: boolean;
+  fetchPriority?: 'high' | 'low' | 'auto';
   onLoad: (e: React.SyntheticEvent<HTMLImageElement>) => void;
   onError: () => void;
 }
@@ -34,6 +35,7 @@ export function ExerciseCoverImage({
   exerciseId,
   exerciseCategory,
   instantDisplay = false,
+  fetchPriority = 'auto',
   onLoad,
   onError,
 }: ExerciseCoverImageProps) {
@@ -67,6 +69,7 @@ export function ExerciseCoverImage({
           alt={alt}
           loading={loading}
           decoding="async"
+          fetchPriority={fetchPriority}
           draggable={false}
           onLoad={onLoad}
           onError={onError}

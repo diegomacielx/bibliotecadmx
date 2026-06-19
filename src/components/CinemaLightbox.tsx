@@ -188,7 +188,7 @@ function ExerciseDetails({
 }
 
 function MobileWatchPanel({ ex }: { ex: Exercise }) {
-  const { imgSrc, coverMissing, handleLoad, handleError } = useExerciseCover(ex);
+  const { imgSrc, coverMissing, handleLoad, handleError } = useExerciseCover(ex, { priority: 'high' });
 
   return (
     <div className="cinema-mobile-watch-panel">

@@ -17,22 +17,22 @@ function scheduleIdle(task: () => void): void {
 }
 
 /** Pré-carrega capa de um exercício (deduplicado por firestoreId) */
-export function prefetchExerciseCover(ex: CoverSource): void {
+export function prefetchExerciseCover(ex: CoverSource, priority: 'critical' | 'high' = 'high'): void {
   if (typeof window === 'undefined' || !ex.firestoreId) return;
   if (prefetchedIds.has(ex.firestoreId)) return;
 
   prefetchedIds.add(ex.firestoreId);
-  void resolveExerciseCoverUrl(ex);
+  void resolveExerciseCoverUrl(ex, priority);
 }
 
 /** Hover no card — capa atual + vizinhos na grid, prioridade baixa nos peers */
 export function prefetchExerciseHoverBundle(ex: CoverSource, peers: CoverSource[] = []): void {
-  prefetchExerciseCover(ex);
+  prefetchExerciseCover(ex, 'critical');
   if (peers.length === 0) return;
 
   scheduleIdle(() => {
     for (const peer of peers) {
-      prefetchExerciseCover(peer);
+      prefetchExerciseCover(peer, 'high');
     }
   });
 }
@@ -47,7 +47,7 @@ export function prefetchExerciseNeighbors(list: Exercise[], activeIndex: number)
 
   scheduleIdle(() => {
     for (const ex of targets) {
-      prefetchExerciseCover(ex);
+      prefetchExerciseCover(ex, 'high');
     }
   });
 }

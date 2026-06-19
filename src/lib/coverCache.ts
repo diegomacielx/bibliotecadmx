@@ -51,13 +51,16 @@ export function forgetCoverUrl(firestoreId: string, failedUrl?: string): void {
   writeJSON(COVER_CACHE_KEY, map);
 }
 
-/** Pré-aquece capas visíveis em background (baixa prioridade) */
+/** Pré-aquece capas em background */
 export function prefetchCoverUrls(urls: string[]): void {
   if (typeof window === 'undefined') return;
   for (const url of urls) {
     if (!url || !isOfficialGitHubCoverUrl(url)) continue;
     const img = new Image();
     img.decoding = 'async';
+    if ('fetchPriority' in img) {
+      (img as HTMLImageElement & { fetchPriority: string }).fetchPriority = 'high';
+    }
     img.src = url;
   }
 }

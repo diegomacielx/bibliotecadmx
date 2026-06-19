@@ -40,7 +40,7 @@ function HeroBannerDesktop({ hero, onWatch, onCampaignClick }: HeroBannerProps) 
   );
 
   const { imgSrc, imgLoaded, coverMissing, placeholderSrc, webpSrc, handleLoad, handleError } =
-    useExerciseCover(coverSource);
+    useExerciseCover(coverSource, { priority: 'critical' });
 
   const displaySrc = isCampaign && hero.imageUrl ? hero.imageUrl : imgSrc;
 
@@ -131,6 +131,7 @@ function HeroBannerDesktop({ hero, onWatch, onCampaignClick }: HeroBannerProps) 
                 exerciseId={hero.exercise?.id}
                 exerciseCategory={hero.exercise?.category ?? hero.categoryLabel}
                 loading="eager"
+                fetchPriority="high"
                 coverMissing={!isCampaign && coverMissing}
                 useBlurUp={!isCampaign && !reducedMotion}
                 onLoad={handleLoad}
