@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { verifyFirebaseAuthHeader } from './lib/verifyFirebaseAuth.js';
-import { resolveAppUrl } from './lib/resolveAppUrl.js';
-import { getStripeClient, resolveCheckoutMode, type CheckoutMode } from './lib/stripeClient.js';
+import { verifyFirebaseAuthHeader } from '../server/lib/verifyFirebaseAuth.js';
+import { resolveAppUrl } from '../server/lib/resolveAppUrl.js';
+import { getStripeClient, resolveCheckoutMode, type CheckoutMode } from '../server/lib/stripeClient.js';
 
 interface CheckoutSessionPayload {
   priceId?: string;

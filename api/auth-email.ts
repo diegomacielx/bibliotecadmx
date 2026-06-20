@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Resend } from 'resend';
-import { getFirebaseAdminAuth } from './lib/firebaseAdmin.js';
-import { buildEmailVerificationEmail, buildPasswordResetEmail } from './lib/emailLayout.js';
+import { getFirebaseAdminAuth } from '../server/lib/firebaseAdmin.js';
+import { buildEmailVerificationEmail, buildPasswordResetEmail } from '../server/lib/emailLayout.js';
 
 type AuthEmailAction = 'password_reset' | 'email_verification';
 
