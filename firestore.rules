@@ -6,6 +6,11 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    /** Requisição do app web legítimo (App Check). Admin SDK / Functions ignoram rules. */
+    function hasValidAppCheck() {
+      return request.app != null;
+    }
+
     function userEmail() {
       return request.auth.token.email.lower();
     }
@@ -39,9 +44,12 @@ service cloud.firestore {
     }
 
     match /artifacts/{appId}/public/data/app_users/{uid} {
-      allow read: if isSignedIn() && (request.auth.uid == uid || isAdminEmail());
+      allow read: if hasValidAppCheck()
+        && isSignedIn()
+        && (request.auth.uid == uid || isAdminEmail());
 
-      allow create: if isSignedIn()
+      allow create: if hasValidAppCheck()
+        && isSignedIn()
         && request.auth.uid == uid
         && request.resource.data.email.lower() == userEmail()
         && request.resource.data.uid == uid
@@ -51,32 +59,35 @@ service cloud.firestore {
           || (request.resource.data.status == 'approved' && isPreAuthorized(appId) && authorizedIsActive(appId))
         );
 
-      allow update: if isAdminEmail()
-        || (
-          isSignedIn()
-          && request.auth.uid == uid
-          && resource.data.status == 'pending'
-          && request.resource.data.status == 'approved'
-          && isPreAuthorized(appId)
-          && authorizedIsActive(appId)
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'accessSyncedAt'])
-        )
-        || (
-          isSignedIn()
-          && request.auth.uid == uid
-          && (
-            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
-            || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nickname'])
-            || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'nickname'])
+      allow update: if hasValidAppCheck()
+        && (
+          isAdminEmail()
+          || (
+            isSignedIn()
+            && request.auth.uid == uid
+            && resource.data.status == 'pending'
+            && request.resource.data.status == 'approved'
+            && isPreAuthorized(appId)
+            && authorizedIsActive(appId)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'accessSyncedAt'])
+          )
+          || (
+            isSignedIn()
+            && request.auth.uid == uid
+            && (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+              || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nickname'])
+              || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'nickname'])
+            )
           )
         );
 
-      allow delete: if isAdminEmail();
+      allow delete: if hasValidAppCheck() && isAdminEmail();
     }
 
     match /artifacts/{appId}/public/data/authorized_emails/{email} {
-      allow get: if isSignedIn() && email.lower() == userEmail();
-      allow list: if isAdminEmail();
+      allow get: if hasValidAppCheck() && isSignedIn() && email.lower() == userEmail();
+      allow list: if hasValidAppCheck() && isAdminEmail();
       allow write: if false;
     }
 
@@ -85,27 +96,27 @@ service cloud.firestore {
     }
 
     match /artifacts/{appId}/public/data/settings/integrations {
-      allow read, write: if isAdminEmail();
+      allow read, write: if hasValidAppCheck() && isAdminEmail();
     }
 
     match /artifacts/{appId}/public/data/exercises/{docId} {
-      allow read: if isAdminEmail() || isApprovedUser(appId);
-      allow write: if isAdminEmail();
+      allow read: if hasValidAppCheck() && (isAdminEmail() || isApprovedUser(appId));
+      allow write: if hasValidAppCheck() && isAdminEmail();
     }
 
     match /artifacts/{appId}/public/data/exercise_requests/{docId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update, delete: if isAdminEmail();
+      allow read: if hasValidAppCheck() && isSignedIn();
+      allow create: if hasValidAppCheck() && isSignedIn();
+      allow update, delete: if hasValidAppCheck() && isAdminEmail();
     }
 
     match /artifacts/{appId}/public/data/notifications/{docId} {
-      allow read: if isSignedIn();
-      allow write: if isAdminEmail();
+      allow read: if hasValidAppCheck() && isSignedIn();
+      allow write: if hasValidAppCheck() && isAdminEmail();
     }
 
     match /artifacts/{appId}/users/{uid}/settings/{docId} {
-      allow read, write: if isSignedIn() && request.auth.uid == uid;
+      allow read, write: if hasValidAppCheck() && isSignedIn() && request.auth.uid == uid;
     }
   }
 }

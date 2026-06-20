@@ -383,6 +383,57 @@ export default function App() {
   }, [isAdmin, userProfile?.status]);
 
   useEffect(() => {
+    if (!isLoggedIn || !user || !userProfile || isAdmin) return;
+    const params = new URLSearchParams(window.location.search);
+    const checkoutState = params.get('checkout');
+    if (checkoutState !== 'success' && checkoutState !== 'cancel') return;
+
+    const cleanCheckoutParams = () => {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('checkout');
+      url.searchParams.delete('session_id');
+      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+    };
+
+    if (checkoutState === 'cancel') {
+      cleanCheckoutParams();
+      showToast('Pagamento cancelado.', 'error');
+      return;
+    }
+
+    let cancelled = false;
+
+    const syncAfterPayment = async () => {
+      for (let attempt = 0; attempt < 6 && !cancelled; attempt++) {
+        try {
+          const synced = await syncUserAccess(user, userProfile);
+          if (synced.status === 'approved') {
+            setUserProfile(synced);
+            showToast('Pagamento confirmado! Bem-vindo à biblioteca.');
+            cleanCheckoutParams();
+            return;
+          }
+        } catch (e) {
+          console.error('Erro ao sincronizar após checkout', e);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+      if (!cancelled) {
+        showToast(
+          'Pagamento recebido! A liberação pode levar alguns instantes — aguarde ou atualize a página.',
+          'error'
+        );
+        cleanCheckoutParams();
+      }
+    };
+
+    void syncAfterPayment();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoggedIn, user, userProfile, isAdmin, showToast]);
+
+  useEffect(() => {
     if (!isLoggedIn) return;
     const settingsRef = fbDoc(db, ...getSettingsPath());
     const unsubSettings = onSnapshot(settingsRef, (snap) => {
@@ -1781,7 +1832,7 @@ export default function App() {
   }
 
   if (!isAdmin && userProfile?.status === 'pending') {
-    return <PendingAccessScreen onLogout={handleLogout} />;
+    return <PendingAccessScreen onLogout={handleLogout} onCheckoutError={(msg) => showToast(msg, 'error')} />;
   }
 
   if (!isAdmin && userProfile?.status === 'blocked') {

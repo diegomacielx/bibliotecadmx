@@ -1,8 +1,30 @@
+import { useState } from 'react';
+import { isInAppPaymentsEnabled, startCheckoutSession } from '../lib/checkoutSession';
+
 interface PendingAccessScreenProps {
   onLogout: () => void;
+  onCheckoutError?: (message: string) => void;
 }
 
-export function PendingAccessScreen({ onLogout }: PendingAccessScreenProps) {
+export function PendingAccessScreen({ onLogout, onCheckoutError }: PendingAccessScreenProps) {
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const showCheckout = isInAppPaymentsEnabled();
+
+  const handlePurchase = async () => {
+    if (checkoutLoading) return;
+    setCheckoutLoading(true);
+    try {
+      const result = await startCheckoutSession();
+      if (result.ok) {
+        window.location.assign(result.url);
+        return;
+      }
+      onCheckoutError?.(result.message);
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
   return (
     <div className="page-canvas min-h-screen flex items-center justify-center p-6 relative font-sans">
       <div className="auth-card p-8 sm:p-12 w-full max-w-md text-center animate-fade-in relative overflow-hidden z-10">
@@ -34,8 +56,20 @@ export function PendingAccessScreen({ onLogout }: PendingAccessScreenProps) {
         <p className="text-body text-xs text-zinc-400 leading-relaxed mb-8 relative z-10">
           Se você já comprou o acesso, cadastre-se com o <strong className="text-zinc-200">mesmo e-mail</strong>{' '}
           usado na Kiwify ou Stripe — a liberação é automática após a confirmação do pagamento.
-          Caso contrário, aguarde a verificação manual do administrador.
+          {showCheckout
+            ? ' Ou adquira o acesso agora pelo botão abaixo.'
+            : ' Caso contrário, aguarde a verificação manual do administrador.'}
         </p>
+        {showCheckout && (
+          <button
+            type="button"
+            disabled={checkoutLoading}
+            onClick={() => void handlePurchase()}
+            className="relative z-10 w-full mb-3 py-4 rounded-2xl font-black uppercase tracking-widest text-2xs text-white bg-red-600 hover:bg-red-500 disabled:opacity-60 ease-cinematic duration-cinematic"
+          >
+            {checkoutLoading ? 'Redirecionando…' : 'Comprar acesso agora'}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => void onLogout()}

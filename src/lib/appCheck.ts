@@ -57,7 +57,7 @@ export function initAppCheck(app: FirebaseApp): void {
     });
     logDebug(
       'AppCheck',
-      'Ativo — tokens enviados ao Firebase. Mantenha Firestore/Auth em "Monitor" até validar métricas.'
+      'Ativo — pronto para enforce no Firebase Console (Firestore + Authentication).'
     );
   } catch (err) {
     logWarn('AppCheck', 'Falha ao inicializar; o app continua sem App Check.', err);

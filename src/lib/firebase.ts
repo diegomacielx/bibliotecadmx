@@ -28,7 +28,9 @@ import {
   type CollectionReference,
 } from 'firebase/firestore';
 import { logDebug, logError, logWarn } from './utils';
-import { initAppCheck } from './appCheck';
+import { initAppCheck, isAppCheckConfigured } from './appCheck';
+
+export { initAppCheck, isAppCheckConfigured };
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -62,6 +64,11 @@ if (!isFirebaseValid) {
 }
 
 const app = initializeApp(firebaseConfig);
+
+if (isFirebaseValid) {
+  initAppCheck(app);
+}
+
 export const auth = getAuth(app);
 auth.languageCode = 'pt-BR';
 export const db = getFirestore(app);
@@ -78,7 +85,6 @@ console.log('[DMX:Firebase] Inicializado', {
 logDebug('Firebase', 'Firestore inicializado para projeto:', firebaseConfig.projectId);
 
 if (isFirebaseValid) {
-  initAppCheck(app);
   enableIndexedDbPersistence(db).catch((err: { code?: string }) => {
     logWarn('Firebase', 'Modo offline não suportado neste navegador.', err.code);
   });

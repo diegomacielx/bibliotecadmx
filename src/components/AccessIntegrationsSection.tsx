@@ -87,6 +87,11 @@ export function AccessIntegrationsSection({
               <code>STRIPE_WEBHOOK_SECRET</code>.
             </li>
             <li>
+              Checkout in-app (Vercel): <code>STRIPE_SECRET_KEY</code>,{' '}
+              <code>STRIPE_DEFAULT_PRICE_ID</code>, <code>PAYMENTS_ENABLED=true</code>,{' '}
+              <code>VITE_PAYMENTS_ENABLED=true</code>.
+            </li>
+            <li>
               <code>firebase deploy --only functions,firestore:rules</code>
             </li>
           </ol>
@@ -131,6 +136,35 @@ export function AccessIntegrationsSection({
             }
           />
         </AdminFieldInline>
+      </div>
+
+      <div className="admin-access-block">
+        <h3 className="admin-access-title">App Check (proteção anti-abuso)</h3>
+        <p className="admin-lead">
+          Bloqueia acesso ao Firestore fora do app oficial. Ative enforce somente após{' '}
+          <code>VITE_RECAPTCHA_ENTERPRISE_SITE_KEY</code> estar na Vercel e métricas estáveis no
+          Firebase Console.
+        </p>
+        <div className="admin-access-steps">
+          <ol className="admin-access-list">
+            <li>
+              Firebase → App Check → <strong>Site Github</strong> → Registrar → reCAPTCHA Enterprise
+              → copie a site key para <code>VITE_RECAPTCHA_ENTERPRISE_SITE_KEY</code> na Vercel.
+            </li>
+            <li>
+              Localhost: <code>VITE_APPCHECK_DEBUG_TOKEN=true</code> + registre o token de debug no
+              Console.
+            </li>
+            <li>
+              Deploy das rules: <code>firebase deploy --only firestore:rules</code> (exigem App Check
+              válido).
+            </li>
+            <li>
+              Firebase → App Check → <strong>APIs</strong> → Cloud Firestore e Authentication →{' '}
+              <strong>Enforce</strong>.
+            </li>
+          </ol>
+        </div>
       </div>
 
       <div className="admin-access-block">
