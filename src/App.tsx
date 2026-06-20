@@ -22,6 +22,7 @@ import {
   parseCommaList,
   isExerciseIncomplete,
   hasValidYouTubeUrl,
+  compareExerciseIdAsc,
   getNotifPath,
   getRequestsPath,
   getUsersPath,
@@ -84,7 +85,7 @@ import { useSearchHistory } from './hooks/useSearchHistory';
 import { useFavorites } from './hooks/useFavorites';
 import { isCoarsePointer, isMobileUi, useTouchLayoutClass } from './hooks/useMediaQuery';
 import { isFeatureEnabled } from './lib/mobileCapabilities';
-import { primeCoversFromExerciseList, prefetchExerciseCovers } from './lib/coverResolver';
+import { primeCoversFromExerciseList, prefetchExerciseCovers, resolveExerciseCoverUrl } from './lib/coverResolver';
 import { scheduleKnownCoversWarmup } from './lib/coverImageCache';
 import { getGridPrefetchPeers } from './lib/exercisePrefetch';
 import { normalizeNickname, validateNickname } from './lib/nickname';
@@ -1184,7 +1185,10 @@ export default function App() {
 
   /** Exercícios visíveis para alunos — somente com YouTube válido */
   const publicExercises = useMemo(
-    () => exercises.filter((ex) => hasValidYouTubeUrl(ex.youtubeUrl)),
+    () =>
+      exercises
+        .filter((ex) => hasValidYouTubeUrl(ex.youtubeUrl))
+        .sort(compareExerciseIdAsc),
     [exercises]
   );
 
@@ -1770,13 +1774,25 @@ export default function App() {
     }
 
     const heroId = heroDisplay?.exercise?.firestoreId ?? null;
-    primeCoversFromExerciseList(
-      publicExercises.map((ex) => ({ firestoreId: ex.firestoreId, id: ex.id })),
-      { heroFirestoreId: heroId }
-    );
+    const heroExercise = heroDisplay?.exercise;
+
+    if (heroExercise) {
+      void resolveExerciseCoverUrl(
+        { firestoreId: heroExercise.firestoreId, id: heroExercise.id },
+        'critical'
+      );
+    }
+
+    const coverSources = publicExercises.map((ex) => ({
+      firestoreId: ex.firestoreId,
+      id: ex.id,
+    }));
+
+    primeCoversFromExerciseList(coverSources, { heroFirestoreId: heroId });
     prefetchExerciseCovers(viewportItems, 'critical');
 
     const visibleIds = new Set(viewportItems.map((item) => item.firestoreId));
+    if (heroId) visibleIds.add(heroId);
     scheduleKnownCoversWarmup({ excludeIds: visibleIds });
   }, [loading, publicExercises, gridExercises, heroDisplay?.exercise?.firestoreId, showAdminUI]);
 

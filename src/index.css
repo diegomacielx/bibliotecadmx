@@ -4191,6 +4191,16 @@ html[data-theme="light"] .cinema-backdrop::before {
   border: 0;
 }
 
+/* Sem controles nativos — recorta a barra fina do YouTube na base do iframe */
+.dmx-yt-root--chromeless .dmx-yt-host {
+  overflow: hidden;
+}
+
+.dmx-yt-root--chromeless .dmx-yt-host iframe {
+  height: calc(100% + 54px) !important;
+  margin-bottom: -54px;
+}
+
 /* Vídeo vertical no lightbox — iframe 16:9 amplo recortado (HD + sem barras pretas) */
 .cinema-player-layer--vertical-theater {
   overflow: hidden;

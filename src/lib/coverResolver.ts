@@ -1,4 +1,4 @@
-import { buildGitHubCoverUrls } from './utils';
+import { buildGitHubCoverUrls, compareExerciseIdAsc } from './utils';
 import { findFirstWorkingCoverUrl, probeImageUrl } from './githubCoverProbe';
 import { getCachedCoverUrl, isCoverRecentlyVerified } from './coverCache';
 import { getSessionCoverUrl, isSessionCoverReady, setSessionCoverUrl } from './coverImageStore';
@@ -154,7 +154,8 @@ export function primeCoversFromExerciseList(
     pushUnique(list.find((ex) => ex.firestoreId === options.heroFirestoreId));
   }
 
-  for (const ex of list) pushUnique(ex);
+  const sortedById = [...list].sort(compareExerciseIdAsc);
+  for (const ex of sortedById) pushUnique(ex);
 
   ordered.slice(0, CRITICAL_VISIBLE).forEach((ex) => {
     void resolveExerciseCoverUrl(ex, 'critical');

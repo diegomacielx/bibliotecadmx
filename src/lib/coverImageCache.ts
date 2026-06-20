@@ -1,6 +1,7 @@
 import { getAllCachedCoverEntries, isCoverRecentlyVerified } from './coverCache';
 import { isOfficialGitHubCoverUrl } from './coverSource';
 import { isSessionCoverReady, setSessionCoverUrl } from './coverImageStore';
+import { parseExerciseIdFromGitHubCoverUrl } from './utils';
 
 export const COVER_CACHE_NAME = 'dmx-covers-v1';
 
@@ -87,7 +88,14 @@ export function scheduleKnownCoversWarmup(options?: {
 
   const entries = getAllCachedCoverEntries()
     .filter((entry) => !exclude.has(entry.firestoreId))
-    .sort((a, b) => b.ts - a.ts);
+    .sort((a, b) => {
+      const idA = parseExerciseIdFromGitHubCoverUrl(a.url);
+      const idB = parseExerciseIdFromGitHubCoverUrl(b.url);
+      if (idA != null && idB != null) return idA - idB;
+      if (idA != null) return -1;
+      if (idB != null) return 1;
+      return a.ts - b.ts;
+    });
 
   if (entries.length === 0) return;
 

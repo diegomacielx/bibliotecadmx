@@ -228,9 +228,10 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
   }, [videoId, autoplay, mute, controls, deferAutoplay]);
 
   const hostClass = ['dmx-yt-host', largeSurface ? 'dmx-yt-host--large' : ''].filter(Boolean).join(' ');
+  const rootClass = ['dmx-yt-root', !controls ? 'dmx-yt-root--chromeless' : ''].filter(Boolean).join(' ');
 
   return (
-    <div ref={containerRef} className={`dmx-yt-root ${className}`.trim()} aria-label={title}>
+    <div ref={containerRef} className={`${rootClass} ${className}`.trim()} aria-label={title}>
       <div ref={hostRef} id={`yt-${domId}`} className={hostClass} />
     </div>
   );

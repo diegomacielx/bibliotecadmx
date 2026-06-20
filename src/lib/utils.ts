@@ -96,6 +96,23 @@ export const normalizeExerciseIdForAssets = (id: string | undefined | null): str
   return s;
 };
 
+/** Ordenação numérica crescente de ID de exercício (grid: esquerda→direita, menor→maior) */
+export function compareExerciseIdAsc(
+  a: { id?: string | null },
+  b: { id?: string | null }
+): number {
+  return String(a.id ?? '').localeCompare(String(b.id ?? ''), undefined, { numeric: true });
+}
+
+/** Extrai número do ID a partir do nome do arquivo na URL GitHub (ex: …/0009.png → 9) */
+export function parseExerciseIdFromGitHubCoverUrl(url: string): number | null {
+  const match = url.match(/\/([^/]+)\.(png|jpe?g|webp)$/i);
+  if (!match) return null;
+  const raw = match[1];
+  if (!/^\d+$/.test(raw)) return null;
+  return parseInt(raw, 10);
+}
+
 /** Variantes de ID para assets GitHub (0001, 1, etc.) */
 export function getExerciseAssetIds(id: string | undefined | null): string[] {
   const raw = String(id ?? '').trim();
