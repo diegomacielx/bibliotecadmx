@@ -1,5 +1,5 @@
 import type { DecodedIdToken } from 'firebase-admin/auth';
-import { getFirebaseAdminAuth } from './firebaseAdmin.js';
+import { getFirebaseAdminAuth } from './_firebaseAdmin.js';
 
 export type VerifiedFirebaseUser = {
   uid: string;

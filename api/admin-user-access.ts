@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getFirestore } from 'firebase-admin/firestore';
-import { getFirebaseAdminApp, getFirebaseAdminAuth } from '../server/lib/firebaseAdmin.js';
-import { userProfileDocPath } from '../server/lib/firestorePaths.js';
-import { verifyAdminRequest } from '../server/lib/verifyAdmin.js';
+import { getFirebaseAdminApp, getFirebaseAdminAuth } from './lib/_firebaseAdmin.js';
+import { userProfileDocPath } from './lib/_firestorePaths.js';
+import { verifyAdminRequest } from './lib/_verifyAdmin.js';
 
 type UserStatus = 'approved' | 'pending' | 'blocked';
 

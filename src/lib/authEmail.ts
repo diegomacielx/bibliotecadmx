@@ -37,6 +37,12 @@ export async function sendAuthEmail(input: AuthEmailInput): Promise<AuthEmailRes
 
     const data = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
     if (!res.ok) {
+      if (res.status >= 500 && !data.error) {
+        return {
+          ok: false,
+          error: 'Serviço de e-mail indisponível no momento. Tente novamente em alguns minutos.',
+        };
+      }
       return { ok: false, error: data.error || 'Não foi possível enviar o e-mail.' };
     }
     return { ok: true, message: data.message };

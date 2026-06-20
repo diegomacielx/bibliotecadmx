@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getFirebaseAdminAuth } from '../server/lib/firebaseAdmin.js';
+import { getFirebaseAdminAuth } from './lib/_firebaseAdmin.js';
 
 function normalizeEmail(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;

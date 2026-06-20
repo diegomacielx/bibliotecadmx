@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { Resend } from 'resend';
-import { getFirebaseAdminAuth } from '../server/lib/firebaseAdmin.js';
-import { buildEmailVerificationEmail, buildPasswordResetEmail } from '../server/lib/emailLayout.js';
+import { getFirebaseAdminAuth } from './lib/_firebaseAdmin.js';
+import { buildEmailVerificationEmail, buildPasswordResetEmail } from './lib/_emailLayout.js';
 
 type AuthEmailAction = 'password_reset' | 'email_verification';
 
@@ -118,8 +118,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(200).json(OK_RESPONSE);
   } catch (err) {
     console.error('[auth-email] unexpected error:', err);
+    const msg = err instanceof Error ? err.message : '';
+    if (msg.includes('Firebase Admin não configurado')) {
+      res.status(503).json({
+        error: 'Serviço de e-mail temporariamente indisponível. Tente novamente mais tarde.',
+      });
+      return;
+    }
     res.status(500).json({
-      error: err instanceof Error ? err.message : 'Erro inesperado ao processar solicitação.',
+      error: 'Erro inesperado ao processar solicitação. Tente novamente.',
     });
   }
 }

@@ -1,6 +1,6 @@
 import type { VercelRequest } from '@vercel/node';
-import { verifyFirebaseAuthHeader } from './verifyFirebaseAuth.js';
-import { isAdminEmail } from './adminEmails.js';
+import { verifyFirebaseAuthHeader } from './_verifyFirebaseAuth.js';
+import { isAdminEmail } from './_adminEmails.js';
 
 export type VerifiedAdmin = {
   uid: string;
