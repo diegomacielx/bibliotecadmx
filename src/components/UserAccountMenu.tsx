@@ -3,6 +3,7 @@ import type { User } from '../lib/firebase';
 import type { UserProfile } from '../types';
 import { Icon } from './Icon';
 import { useTheme } from '../hooks/useTheme';
+import type { ExerciseSortOrder } from '../lib/utils';
 import { GlassToggle } from './GlassToggle';
 import { normalizeNickname, validateNickname, resolveDisplayNickname } from '../lib/nickname';
 
@@ -13,6 +14,8 @@ interface UserAccountMenuProps {
   onResendVerification?: () => Promise<void>;
   videoLoop?: boolean;
   onToggleVideoLoop?: (enabled: boolean) => void;
+  exerciseSortOrder?: ExerciseSortOrder;
+  onExerciseSortOrderChange?: (order: ExerciseSortOrder) => void;
   onSuggest: () => void;
   onLogout: () => void;
   onClose: () => void;
@@ -25,6 +28,8 @@ export function UserAccountMenu({
   onResendVerification,
   videoLoop = false,
   onToggleVideoLoop,
+  exerciseSortOrder,
+  onExerciseSortOrderChange,
   onSuggest,
   onLogout,
   onClose,
@@ -141,6 +146,25 @@ export function UserAccountMenu({
       </div>
 
       <div className="account-menu-divider" />
+
+      {onExerciseSortOrderChange && exerciseSortOrder != null && (
+        <>
+          <div className="account-menu-section account-menu-section--flush-x">
+            <p className="account-menu-label">Exercícios</p>
+            <GlassToggle
+              label="Nome (A–Z)"
+              hint={
+                exerciseSortOrder === 'alpha'
+                  ? 'Lista ordenada alfabeticamente.'
+                  : 'Ative para ordenar por nome; desligado usa ordem por ID.'
+              }
+              checked={exerciseSortOrder === 'alpha'}
+              onChange={(checked) => onExerciseSortOrderChange(checked ? 'alpha' : 'id')}
+            />
+          </div>
+          <div className="account-menu-divider" />
+        </>
+      )}
 
       {onToggleVideoLoop && (
         <>

@@ -126,9 +126,10 @@ export function compareExercisesBySortOrder(
 export const EXERCISE_SORT_STORAGE_KEY = 'dmx_exercise_sort';
 
 export function readExerciseSortOrder(): ExerciseSortOrder {
-  if (typeof window === 'undefined') return 'id';
+  if (typeof window === 'undefined') return 'alpha';
   const raw = localStorage.getItem(EXERCISE_SORT_STORAGE_KEY);
-  return raw === 'alpha' ? 'alpha' : 'id';
+  if (raw === 'id') return 'id';
+  return 'alpha';
 }
 
 /** Extrai número do ID a partir do nome do arquivo na URL GitHub (ex: …/0009.png → 9) */

@@ -11,6 +11,7 @@ import { SearchChips } from './SearchChips';
 import { UserAccountMenu } from './UserAccountMenu';
 import { resolveDisplayNickname } from '../lib/nickname';
 import type { RecentExercise } from '../hooks/useSearchHistory';
+import type { ExerciseSortOrder } from '../lib/utils';
 
 interface SiteHeaderProps {
   user: User | null;
@@ -19,6 +20,8 @@ interface SiteHeaderProps {
   onResendVerification?: () => Promise<void>;
   videoLoop?: boolean;
   onToggleVideoLoop?: (enabled: boolean) => void;
+  exerciseSortOrder?: ExerciseSortOrder;
+  onExerciseSortOrderChange?: (order: ExerciseSortOrder) => void;
   searchTerm: string;
   onSearchChange: (value: string) => void;
   onSearchCommit?: (term: string) => void;
@@ -68,6 +71,8 @@ export function SiteHeader({
   onResendVerification,
   videoLoop = false,
   onToggleVideoLoop,
+  exerciseSortOrder,
+  onExerciseSortOrderChange,
   searchTerm,
   onSearchChange,
   onSearchCommit,
@@ -420,6 +425,8 @@ export function SiteHeader({
                       onResendVerification={onResendVerification}
                       videoLoop={videoLoop}
                       onToggleVideoLoop={onToggleVideoLoop}
+                      exerciseSortOrder={exerciseSortOrder}
+                      onExerciseSortOrderChange={onExerciseSortOrderChange}
                       onSuggest={onSuggest}
                       onLogout={() => {
                         setShowUserMenu(false);

@@ -104,7 +104,6 @@ import { parseAuthActionParams, clearAuthActionParams } from './lib/authActionPa
 import { ensureUserProfile, getUserProfileIfExists } from './lib/authProfile';
 import { adminRemoveUserProfile, adminSetUserStatus } from './lib/adminUserAccess';
 import { AdvancedFiltersBar } from './components/AdvancedFiltersBar';
-import { ExerciseSortControl } from './components/ExerciseSortControl';
 import { useAdvancedFilters } from './hooks/useAdvancedFilters';
 import { applyAdvancedFilters, hasActiveAdvancedFilters } from './lib/exerciseFilters';
 import { useGitHubCoverProbe, resolveNeedsGitHubCover } from './hooks/useGitHubCoverProbe';
@@ -1975,6 +1974,8 @@ export default function App() {
         onResendVerification={handleResendVerification}
         videoLoop={videoLoop}
         onToggleVideoLoop={(enabled) => void handleUpdateVideoLoop(enabled)}
+        exerciseSortOrder={!showAdminUI ? exerciseSortOrder : undefined}
+        onExerciseSortOrderChange={!showAdminUI ? setExerciseSortOrder : undefined}
         searchTerm={searchTerm}
         onSearchChange={handleSearchChange}
         onSearchCommit={addSearch}
@@ -2053,10 +2054,6 @@ export default function App() {
         onCategoryChange={handleCategoryChange}
         favoritesCount={favorites.size}
       />
-
-      {!showAdminUI && !searchTerm.trim() && (
-        <ExerciseSortControl value={exerciseSortOrder} onChange={setExerciseSortOrder} />
-      )}
 
       {!isMobileLayout && (
         <AdvancedFiltersBar
