@@ -442,6 +442,11 @@ export function AdminPanel({
 
             {adminTab === 'users' && (
               <div className="admin-panel-section">
+                <p className="admin-lead">
+                  Use <strong>Bloquear</strong> para suspender o acesso sem apagar o cadastro.{' '}
+                  <strong>Remover</strong> apaga o registro — o aluno volta a aparecer como pendente ao
+                  fazer login novamente, e você pode aprová-lo de novo.
+                </p>
                 {groupedUsers.length === 0 ? (
                   <AdminEmpty message="Nenhum aluno cadastrado." />
                 ) : (

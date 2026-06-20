@@ -59,6 +59,7 @@ import {
   deleteDoc,
   setDoc,
   getDoc,
+  getDocFromServer,
   writeBatch,
   onSnapshot,
 } from './lib/firebase';
@@ -98,6 +99,7 @@ import {
 } from './lib/authLogin';
 import { parseAuthActionParams, clearAuthActionParams } from './lib/authActionParams';
 import { ensureUserProfile, getUserProfileIfExists } from './lib/authProfile';
+import { adminRemoveUserProfile, adminSetUserStatus } from './lib/adminUserAccess';
 import { AdvancedFiltersBar } from './components/AdvancedFiltersBar';
 import { useAdvancedFilters } from './hooks/useAdvancedFilters';
 import { applyAdvancedFilters, hasActiveAdvancedFilters } from './lib/exerciseFilters';
@@ -316,62 +318,87 @@ export default function App() {
     }
     setProfileLoading(!isAdmin);
     const userProfileRef = fbDoc(db, ...getUserProfilePath(user.uid));
-    const unsubProfile = onSnapshot(userProfileRef, async (docSnap) => {
-      try {
-        if (docSnap.exists()) {
-          profileEverLoadedRef.current = true;
-          const profile = docSnap.data() as UserProfile;
-          setUserProfile(profile);
-          if (!isAdmin && profile.status === 'pending' && user) {
-            try {
-              const synced = await syncUserAccess(user, profile);
+
+    const unsubProfile = onSnapshot(userProfileRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const profile = docSnap.data() as UserProfile;
+        profileEverLoadedRef.current = true;
+        setUserProfile(profile);
+        if (!isAdmin) setProfileLoading(false);
+
+        if (!isAdmin && profile.status === 'pending') {
+          void syncUserAccess(user, profile)
+            .then((synced) => {
               if (synced.status !== profile.status) {
                 setUserProfile(synced);
               }
-            } catch (e) {
-              console.error('Erro ao sincronizar acesso', e);
-            }
-          }
-        } else if (!isAdmin && user) {
-          if (profileEverLoadedRef.current) {
-            setUserProfile(null);
-            try {
-              await user.reload();
-            } catch {
-              // conta removida no Firebase Auth
-            }
-            profileEverLoadedRef.current = false;
-            await fb.signOut(auth);
-            showToast('Seu acesso foi revogado.', 'error');
-          } else if (!authFlowBusyRef.current) {
-            const existing = await getUserProfileIfExists(user);
-            if (existing) {
-              profileEverLoadedRef.current = true;
-              setUserProfile(existing);
-            } else {
-              await fb.signOut(auth);
-              showToast('Conta sem acesso. Entre em contato com o suporte.', 'error');
-            }
-          }
+            })
+            .catch((e) => console.error('Erro ao sincronizar acesso', e));
         }
-      } finally {
-        if (!isAdmin) setProfileLoading(false);
+        return;
       }
+
+      if (isAdmin || !user) return;
+
+      if (profileEverLoadedRef.current) {
+        profileEverLoadedRef.current = false;
+        setUserProfile(null);
+        void fb.signOut(auth).then(() => {
+          showToast('Seu acesso foi revogado.', 'error');
+        });
+        if (!isAdmin) setProfileLoading(false);
+        return;
+      }
+
+      void ensureUserProfile(user)
+        .then((profile) => {
+          profileEverLoadedRef.current = true;
+          setUserProfile(profile);
+          if (profile.status === 'pending') {
+            showToast('Cadastro restaurado. Aguarde aprovação do administrador.');
+          }
+        })
+        .catch(() => {
+          void fb.signOut(auth).then(() => {
+            showToast('Não foi possível restaurar seu cadastro. Entre em contato com o suporte.', 'error');
+          });
+        })
+        .finally(() => {
+          if (!isAdmin) setProfileLoading(false);
+        });
     });
+
     return () => unsubProfile();
   }, [isLoggedIn, user, isAdmin, showToast]);
 
   useEffect(() => {
     if (!isLoggedIn || !user || isAdmin) return;
-    const unsubToken = fb.onIdTokenChanged(auth, async (u) => {
+    const unsubToken = fb.onIdTokenChanged(auth, (u) => {
       if (!u) return;
-      try {
-        await u.reload();
-      } catch {
-        profileEverLoadedRef.current = false;
-        await fb.signOut(auth);
-        showToast('Sua sessão foi encerrada pelo administrador.', 'error');
-      }
+      void (async () => {
+        try {
+          await u.getIdToken(true);
+          const snap = await getDocFromServer(fbDoc(db, ...getUserProfilePath(u.uid)));
+          if (!snap.exists()) {
+            if (profileEverLoadedRef.current) {
+              profileEverLoadedRef.current = false;
+              setUserProfile(null);
+              await fb.signOut(auth);
+              showToast('Seu acesso foi revogado.', 'error');
+            }
+            return;
+          }
+          const profile = snap.data() as UserProfile;
+          profileEverLoadedRef.current = true;
+          setUserProfile(profile);
+        } catch {
+          if (!profileEverLoadedRef.current) return;
+          profileEverLoadedRef.current = false;
+          setUserProfile(null);
+          await fb.signOut(auth);
+          showToast('Sua sessão foi encerrada pelo administrador.', 'error');
+        }
+      })();
     });
     return () => unsubToken();
   }, [isLoggedIn, user, isAdmin, showToast]);
@@ -737,7 +764,12 @@ export default function App() {
 
   const setUserAccessStatus = async (uid: string, status: UserProfile['status']) => {
     try {
-      await updateDoc(fbDoc(db, ...getUserProfilePath(uid)), { status });
+      try {
+        await adminSetUserStatus(uid, status);
+      } catch (apiErr) {
+        console.warn('API admin indisponível, usando Firestore direto.', apiErr);
+        await updateDoc(fbDoc(db, ...getUserProfilePath(uid)), { status });
+      }
       const labels: Record<UserProfile['status'], string> = {
         approved: 'aprovado',
         pending: 'pendente',
@@ -751,10 +783,21 @@ export default function App() {
   };
 
   const deleteUserProfileAdmin = async (uid: string) => {
-    if (!confirm('Remover este registro? O usuário perderá acesso imediatamente.')) return;
+    if (
+      !confirm(
+        'Remover este registro? O aluno perderá acesso imediatamente. Ele poderá solicitar acesso novamente ao fazer login.'
+      )
+    ) {
+      return;
+    }
     try {
-      await deleteDoc(fbDoc(db, ...getUserProfilePath(uid)));
-      showToast('Registro removido.');
+      try {
+        await adminRemoveUserProfile(uid);
+      } catch (apiErr) {
+        console.warn('API admin indisponível, usando Firestore direto.', apiErr);
+        await deleteDoc(fbDoc(db, ...getUserProfilePath(uid)));
+      }
+      showToast('Registro removido. O aluno pode voltar a solicitar acesso ao fazer login.');
     } catch (e) {
       console.error('Erro ao remover usuário', e);
       showToast('Erro ao remover registro', 'error');
