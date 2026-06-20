@@ -1,4 +1,4 @@
-import { buildGitHubCoverUrls, compareExerciseIdAsc } from './utils';
+import { buildGitHubCoverUrls } from './utils';
 import { findFirstWorkingCoverUrl, probeImageUrl } from './githubCoverProbe';
 import { getCachedCoverUrl, isCoverRecentlyVerified } from './coverCache';
 import { getSessionCoverUrl, isSessionCoverReady, setSessionCoverUrl } from './coverImageStore';
@@ -133,7 +133,7 @@ export function resolveExerciseCoverUrl(
 const CRITICAL_VISIBLE = 16;
 const HIGH_VISIBLE = 56;
 
-/** Dispara resolução em camadas — viewport primeiro, resto depois */
+/** Dispara resolução em camadas — viewport primeiro, resto depois (ordem da lista recebida) */
 export function primeCoversFromExerciseList(
   exercises: CoverResolveSource[],
   options?: { heroFirestoreId?: string | null }
@@ -154,8 +154,7 @@ export function primeCoversFromExerciseList(
     pushUnique(list.find((ex) => ex.firestoreId === options.heroFirestoreId));
   }
 
-  const sortedById = [...list].sort(compareExerciseIdAsc);
-  for (const ex of sortedById) pushUnique(ex);
+  for (const ex of list) pushUnique(ex);
 
   ordered.slice(0, CRITICAL_VISIBLE).forEach((ex) => {
     void resolveExerciseCoverUrl(ex, 'critical');

@@ -80,15 +80,26 @@ function scheduleIdle(task: () => void, timeout = 2500): void {
 export function scheduleKnownCoversWarmup(options?: {
   immediateLimit?: number;
   excludeIds?: Set<string>;
+  /** Ordem de exibição no grid — capas visíveis primeiro ao trocar ordenação */
+  priorityOrder?: string[];
 }): void {
   if (typeof window === 'undefined') return;
 
   const immediateLimit = options?.immediateLimit ?? 64;
   const exclude = options?.excludeIds ?? new Set<string>();
+  const priorityIndex = new Map(
+    (options?.priorityOrder ?? []).map((firestoreId, index) => [firestoreId, index])
+  );
 
   const entries = getAllCachedCoverEntries()
     .filter((entry) => !exclude.has(entry.firestoreId))
     .sort((a, b) => {
+      const rankA = priorityIndex.get(a.firestoreId);
+      const rankB = priorityIndex.get(b.firestoreId);
+      if (rankA != null && rankB != null) return rankA - rankB;
+      if (rankA != null) return -1;
+      if (rankB != null) return 1;
+
       const idA = parseExerciseIdFromGitHubCoverUrl(a.url);
       const idB = parseExerciseIdFromGitHubCoverUrl(b.url);
       if (idA != null && idB != null) return idA - idB;

@@ -14,6 +14,7 @@ import type {
   AdminTab,
   AdminFilter,
 } from './types';
+import type { ExerciseSortOrder } from './lib/utils';
 import { ADMIN_EMAILS, CUSTOM_LOGO_URL, CATEGORIES, DEFAULT_FORM } from './lib/constants';
 import {
   getDbPath,
@@ -22,7 +23,9 @@ import {
   parseCommaList,
   isExerciseIncomplete,
   hasValidYouTubeUrl,
-  compareExerciseIdAsc,
+  compareExercisesBySortOrder,
+  readExerciseSortOrder,
+  EXERCISE_SORT_STORAGE_KEY,
   getNotifPath,
   getRequestsPath,
   getUsersPath,
@@ -101,6 +104,7 @@ import { parseAuthActionParams, clearAuthActionParams } from './lib/authActionPa
 import { ensureUserProfile, getUserProfileIfExists } from './lib/authProfile';
 import { adminRemoveUserProfile, adminSetUserStatus } from './lib/adminUserAccess';
 import { AdvancedFiltersBar } from './components/AdvancedFiltersBar';
+import { ExerciseSortControl } from './components/ExerciseSortControl';
 import { useAdvancedFilters } from './hooks/useAdvancedFilters';
 import { applyAdvancedFilters, hasActiveAdvancedFilters } from './lib/exerciseFilters';
 import { useGitHubCoverProbe, resolveNeedsGitHubCover } from './hooks/useGitHubCoverProbe';
@@ -152,6 +156,7 @@ export default function App() {
   const [slowConnection, setSlowConnection] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState(() => localStorage.getItem('dmx_category') || 'Todos');
+  const [exerciseSortOrder, setExerciseSortOrder] = useState<ExerciseSortOrder>(() => readExerciseSortOrder());
   const categoryBeforeSearchRef = useRef(activeCategory);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const { filters: advancedFilters, setFilters: setAdvancedFilters, resetFilters: resetAdvancedFilters } =
@@ -260,6 +265,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('dmx_category', activeCategory);
   }, [activeCategory]);
+
+  useEffect(() => {
+    localStorage.setItem(EXERCISE_SORT_STORAGE_KEY, exerciseSortOrder);
+  }, [exerciseSortOrder]);
 
   useEffect(() => {
     if (isMobileLayout) return;
@@ -1226,14 +1235,11 @@ export default function App() {
 
   const showAdminUI = isAdmin && !adminUserPreview;
 
-  /** Exercícios visíveis para alunos — somente com YouTube válido */
-  const publicExercises = useMemo(
-    () =>
-      exercises
-        .filter((ex) => hasValidYouTubeUrl(ex.youtubeUrl))
-        .sort(compareExerciseIdAsc),
-    [exercises]
-  );
+  /** Exercícios visíveis para alunos — somente com YouTube válido, na ordem escolhida */
+  const publicExercises = useMemo(() => {
+    const list = exercises.filter((ex) => hasValidYouTubeUrl(ex.youtubeUrl));
+    return [...list].sort((a, b) => compareExercisesBySortOrder(a, b, exerciseSortOrder));
+  }, [exercises, exerciseSortOrder]);
 
   const searchableExercises = useMemo(
     () => (showAdminUI ? exercises : publicExercises),
@@ -1291,7 +1297,10 @@ export default function App() {
           return rankExercises(scopedIndexes, searchTerm).map((r) => r.exercise);
         })();
 
-    return applyAdvancedFilters(searched, advancedFilters);
+    return applyAdvancedFilters(searched, advancedFilters).sort((a, b) => {
+      if (searchTerm.trim() || showAdminUI) return 0;
+      return compareExercisesBySortOrder(a, b, exerciseSortOrder);
+    });
   }, [
     searchTerm,
     activeCategory,
@@ -1304,6 +1313,7 @@ export default function App() {
     probeMap,
     coverProbeLoading,
     advancedFilters,
+    exerciseSortOrder,
   ]);
 
   const searchSuggestions = useMemo(() => {
@@ -1812,6 +1822,7 @@ export default function App() {
       prefetchExerciseCovers(viewportItems, 'critical');
       scheduleKnownCoversWarmup({
         excludeIds: new Set(viewportItems.map((item) => item.firestoreId)),
+        priorityOrder: gridExercises.map((ex) => ex.firestoreId),
       });
       return;
     }
@@ -1826,7 +1837,7 @@ export default function App() {
       );
     }
 
-    const coverSources = publicExercises.map((ex) => ({
+    const coverSources = gridExercises.map((ex) => ({
       firestoreId: ex.firestoreId,
       id: ex.id,
     }));
@@ -1836,8 +1847,11 @@ export default function App() {
 
     const visibleIds = new Set(viewportItems.map((item) => item.firestoreId));
     if (heroId) visibleIds.add(heroId);
-    scheduleKnownCoversWarmup({ excludeIds: visibleIds });
-  }, [loading, publicExercises, gridExercises, heroDisplay?.exercise?.firestoreId, showAdminUI]);
+    scheduleKnownCoversWarmup({
+      excludeIds: visibleIds,
+      priorityOrder: gridExercises.map((ex) => ex.firestoreId),
+    });
+  }, [loading, publicExercises, gridExercises, heroDisplay?.exercise?.firestoreId, showAdminUI, exerciseSortOrder]);
 
   if (authLoading || (isLoggedIn && !isAdmin && profileLoading)) {
     return <LoadingScreen slowConnection={slowConnection} />;
@@ -2039,6 +2053,10 @@ export default function App() {
         onCategoryChange={handleCategoryChange}
         favoritesCount={favorites.size}
       />
+
+      {!showAdminUI && !searchTerm.trim() && (
+        <ExerciseSortControl value={exerciseSortOrder} onChange={setExerciseSortOrder} />
+      )}
 
       {!isMobileLayout && (
         <AdvancedFiltersBar

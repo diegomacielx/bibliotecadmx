@@ -104,6 +104,33 @@ export function compareExerciseIdAsc(
   return String(a.id ?? '').localeCompare(String(b.id ?? ''), undefined, { numeric: true });
 }
 
+export type ExerciseSortOrder = 'id' | 'alpha';
+
+/** Ordenação alfabética pelo nome do exercício */
+export function compareExerciseAlphaAsc(
+  a: { name?: string | null },
+  b: { name?: string | null }
+): number {
+  return String(a.name ?? '').localeCompare(String(b.name ?? ''), 'pt-BR', { sensitivity: 'base' });
+}
+
+export function compareExercisesBySortOrder(
+  a: { id?: string | null; name?: string | null },
+  b: { id?: string | null; name?: string | null },
+  order: ExerciseSortOrder
+): number {
+  if (order === 'alpha') return compareExerciseAlphaAsc(a, b);
+  return compareExerciseIdAsc(a, b);
+}
+
+export const EXERCISE_SORT_STORAGE_KEY = 'dmx_exercise_sort';
+
+export function readExerciseSortOrder(): ExerciseSortOrder {
+  if (typeof window === 'undefined') return 'id';
+  const raw = localStorage.getItem(EXERCISE_SORT_STORAGE_KEY);
+  return raw === 'alpha' ? 'alpha' : 'id';
+}
+
 /** Extrai número do ID a partir do nome do arquivo na URL GitHub (ex: …/0009.png → 9) */
 export function parseExerciseIdFromGitHubCoverUrl(url: string): number | null {
   const match = url.match(/\/([^/]+)\.(png|jpe?g|webp)$/i);
