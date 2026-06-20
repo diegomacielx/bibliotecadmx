@@ -1,8 +1,9 @@
 import { buildGitHubCoverUrls } from './utils';
 import { findFirstWorkingCoverUrl, probeImageUrl } from './githubCoverProbe';
-import { getCachedCoverUrl } from './coverCache';
+import { getCachedCoverUrl, isCoverRecentlyVerified } from './coverCache';
 import { getSessionCoverUrl, isSessionCoverReady, setSessionCoverUrl } from './coverImageStore';
 import { isOfficialGitHubCoverUrl } from './coverSource';
+import { ensureCoverCached, resolveTrustedCoverUrl } from './coverImageCache';
 
 export type CoverPriority = 'critical' | 'high' | 'normal' | 'low';
 
@@ -68,8 +69,14 @@ async function resolveCoverUrls(
   if (ex.firestoreId) {
     const cached = getCachedCoverUrl(ex.firestoreId);
     if (cached && isOfficialGitHubCoverUrl(cached)) {
+      const trusted = await resolveTrustedCoverUrl(ex.firestoreId, cached);
+      if (trusted) {
+        inflight.delete(key);
+        return trusted;
+      }
       if (await probeImageUrl(cached)) {
         setSessionCoverUrl(ex.firestoreId, cached);
+        void ensureCoverCached(cached);
         inflight.delete(key);
         return cached;
       }
@@ -77,7 +84,10 @@ async function resolveCoverUrls(
   }
 
   const hit = await findFirstWorkingCoverUrl(urls);
-  if (hit && ex.firestoreId) setSessionCoverUrl(ex.firestoreId, hit);
+  if (hit && ex.firestoreId) {
+    setSessionCoverUrl(ex.firestoreId, hit);
+    void ensureCoverCached(hit);
+  }
   inflight.delete(key);
   return hit;
 }
@@ -94,6 +104,20 @@ export function resolveExerciseCoverUrl(
     const sessionUrl = getSessionCoverUrl(ex.firestoreId);
     if (sessionUrl && isOfficialGitHubCoverUrl(sessionUrl) && isSessionCoverReady(ex.firestoreId)) {
       return Promise.resolve(sessionUrl);
+    }
+
+    const cached = getCachedCoverUrl(ex.firestoreId);
+    if (cached && isOfficialGitHubCoverUrl(cached) && isCoverRecentlyVerified(ex.firestoreId)) {
+      const key = ex.firestoreId || ex.id;
+      const trustedPromise = resolveTrustedCoverUrl(ex.firestoreId, cached).then((trusted) => {
+        if (trusted) {
+          inflight.delete(key);
+          return trusted;
+        }
+        return schedule(priority, () => resolveCoverUrls(ex, urls, key));
+      });
+      inflight.set(key, trustedPromise);
+      return trustedPromise;
     }
   }
 

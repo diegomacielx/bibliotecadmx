@@ -8,6 +8,7 @@ import {
   setSessionCoverUrl,
   clearSessionCoverUrl,
 } from '../lib/coverImageStore';
+import { ensureCoverCached } from '../lib/coverImageCache';
 
 interface CoverSource {
   firestoreId: string;
@@ -92,6 +93,7 @@ export function useExerciseCover(ex: CoverSource, options: UseExerciseCoverOptio
       setCoverMissing(false);
       setImgLoaded(true);
       setSessionCoverUrl(ex.firestoreId, url);
+      void ensureCoverCached(url);
     },
     [ex.firestoreId]
   );

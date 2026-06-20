@@ -1,0 +1,1 @@
+export { registerCoverServiceWorker } from './coverImageCache';

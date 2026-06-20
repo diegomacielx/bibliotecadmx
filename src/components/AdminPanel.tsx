@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import type {
   AdminTab,
   Exercise,
@@ -10,6 +10,7 @@ import type {
   HeroSpotlightSettings,
 } from '../types';
 import { CATEGORIES } from '../lib/constants';
+import { groupAppUsersByEmail } from '../lib/adminUsers';
 import { Icon } from './Icon';
 import { AdminCoverEditor } from './AdminCoverEditor';
 import { AdminEquipmentField } from './AdminEquipmentField';
@@ -41,7 +42,9 @@ interface AdminPanelProps {
   onAddAuthEmail: (e: React.FormEvent) => void;
   onRemoveAuthEmail: (email: string) => void;
   appUsers: UserProfile[];
-  onToggleUserStatus: (uid: string, status: string) => void;
+  onSetUserStatus: (uid: string, status: UserProfile['status']) => void;
+  onDeleteUser: (uid: string) => void;
+  onRemoveDuplicates: (uids: string[]) => void;
   isAuditing: boolean;
   auditProgress: number;
   auditCurrentItem: string;
@@ -117,7 +120,9 @@ export function AdminPanel({
   onAddAuthEmail,
   onRemoveAuthEmail,
   appUsers,
-  onToggleUserStatus,
+  onSetUserStatus,
+  onDeleteUser,
+  onRemoveDuplicates,
   isAuditing,
   auditProgress,
   auditCurrentItem,
@@ -132,7 +137,13 @@ export function AdminPanel({
   onSaveHeroSpotlight,
 }: AdminPanelProps) {
   const pendingRequests = exerciseRequests.filter((r) => r.status === 'pending');
-  const pendingUsers = appUsers.filter((u) => u.status === 'pending').length;
+  const pendingUsers = useMemo(() => {
+    const emails = new Set(
+      appUsers.filter((u) => u.status === 'pending').map((u) => u.email.trim().toLowerCase())
+    );
+    return emails.size;
+  }, [appUsers]);
+  const groupedUsers = useMemo(() => groupAppUsersByEmail(appUsers), [appUsers]);
 
   const navItems: NavItem[] = editingId
     ? [{ tab: 'single', label: 'Editar exercício', icon: 'pencil' }]
@@ -431,19 +442,24 @@ export function AdminPanel({
 
             {adminTab === 'users' && (
               <div className="admin-panel-section">
-                {appUsers.length === 0 ? (
+                {groupedUsers.length === 0 ? (
                   <AdminEmpty message="Nenhum aluno cadastrado." />
                 ) : (
                   <div className="admin-list">
-                    {appUsers.map((u) => (
+                    {groupedUsers.map(({ primary: u, duplicates }) => (
                       <article key={u.uid} className="admin-list-card admin-list-card--compact">
                         <div className="admin-list-main">
                           <p className="admin-list-title">{u.name}</p>
                           <p className="admin-list-sub">
                             {u.email} · {new Date(u.createdAt).toLocaleDateString('pt-BR')}
                           </p>
+                          {duplicates.length > 0 && (
+                            <p className="admin-list-sub text-amber-500/90 mt-1">
+                              +{duplicates.length} registro(s) duplicado(s) do mesmo e-mail
+                            </p>
+                          )}
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-col items-end gap-2">
                           <span
                             className={`admin-status ${
                               u.status === 'approved'
@@ -459,25 +475,68 @@ export function AdminPanel({
                                 ? 'Bloqueado'
                                 : 'Pendente'}
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => onToggleUserStatus(u.uid, u.status)}
-                            className={`admin-btn admin-btn--sm ${
-                              u.status === 'approved' ? 'admin-btn--ghost' : 'admin-btn--success'
-                            }`}
-                          >
-                            {u.status === 'approved' ? (
+                          <AdminRowActions>
+                            {u.status === 'pending' && (
                               <>
-                                <Icon name="x" className="w-3.5 h-3.5" />
-                                Bloquear
-                              </>
-                            ) : (
-                              <>
-                                <Icon name="check" className="w-3.5 h-3.5" />
-                                Aprovar
+                                <button
+                                  type="button"
+                                  onClick={() => onSetUserStatus(u.uid, 'approved')}
+                                  className="admin-btn admin-btn--sm admin-btn--success"
+                                >
+                                  <Icon name="check" className="w-3.5 h-3.5" />
+                                  Aprovar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => onSetUserStatus(u.uid, 'blocked')}
+                                  className="admin-btn admin-btn--sm admin-btn--ghost"
+                                >
+                                  <Icon name="x" className="w-3.5 h-3.5" />
+                                  Recusar
+                                </button>
                               </>
                             )}
-                          </button>
+                            {u.status === 'approved' && (
+                              <button
+                                type="button"
+                                onClick={() => onSetUserStatus(u.uid, 'blocked')}
+                                className="admin-btn admin-btn--sm admin-btn--ghost"
+                              >
+                                <Icon name="x" className="w-3.5 h-3.5" />
+                                Bloquear
+                              </button>
+                            )}
+                            {u.status === 'blocked' && (
+                              <button
+                                type="button"
+                                onClick={() => onSetUserStatus(u.uid, 'approved')}
+                                className="admin-btn admin-btn--sm admin-btn--success"
+                              >
+                                <Icon name="check" className="w-3.5 h-3.5" />
+                                Aprovar
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => onDeleteUser(u.uid)}
+                              className="admin-btn admin-btn--sm admin-btn--ghost"
+                              title="Remover registro"
+                            >
+                              <Icon name="trash" className="w-3.5 h-3.5" />
+                              Remover
+                            </button>
+                            {duplicates.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onRemoveDuplicates(duplicates.map((d) => d.uid))
+                                }
+                                className="admin-btn admin-btn--sm admin-btn--ghost"
+                              >
+                                Limpar duplicatas
+                              </button>
+                            )}
+                          </AdminRowActions>
                         </div>
                       </article>
                     ))}

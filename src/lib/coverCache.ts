@@ -3,6 +3,8 @@ import { isOfficialGitHubCoverUrl } from './coverSource';
 
 const COVER_CACHE_KEY = 'dmx_cover_hits_v4';
 const MAX_ENTRIES = 800;
+/** URLs validadas recentemente — evita re-probe desnecessário */
+export const COVER_TRUST_MS = 14 * 24 * 60 * 60 * 1000;
 
 interface CoverHit {
   url: string;
@@ -38,6 +40,19 @@ export function rememberCoverUrl(firestoreId: string, url: string): void {
   }
 
   writeJSON(COVER_CACHE_KEY, map);
+}
+
+export function isCoverRecentlyVerified(firestoreId: string): boolean {
+  if (!firestoreId) return false;
+  const hit = readMap()[firestoreId];
+  if (!hit?.url || !isOfficialGitHubCoverUrl(hit.url)) return false;
+  return Date.now() - hit.ts < COVER_TRUST_MS;
+}
+
+export function getAllCachedCoverEntries(): { firestoreId: string; url: string; ts: number }[] {
+  return Object.entries(readMap())
+    .map(([firestoreId, hit]) => ({ firestoreId, url: hit.url, ts: hit.ts }))
+    .filter((entry) => entry.url && isOfficialGitHubCoverUrl(entry.url));
 }
 
 /** Remove URL de capa inválida do cache */

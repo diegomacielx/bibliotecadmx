@@ -3,6 +3,7 @@ import type { User } from '../lib/firebase';
 import type { UserProfile } from '../types';
 import { Icon } from './Icon';
 import { useTheme } from '../hooks/useTheme';
+import { GlassToggle } from './GlassToggle';
 import { normalizeNickname, validateNickname, resolveDisplayNickname } from '../lib/nickname';
 
 interface UserAccountMenuProps {
@@ -143,22 +144,14 @@ export function UserAccountMenu({
 
       {onToggleVideoLoop && (
         <>
-          <div className="account-menu-section">
+          <div className="account-menu-section account-menu-section--flush-x">
             <p className="account-menu-label">Reprodução</p>
-            <button
-              type="button"
-              className={`account-menu-switch ${videoLoop ? 'account-menu-switch--active' : ''}`}
-              onClick={() => onToggleVideoLoop(!videoLoop)}
-              aria-pressed={videoLoop}
-            >
-              <span>Repetir vídeos em loop</span>
-              <span className="text-2xs font-bold uppercase tracking-widest opacity-80">
-                {videoLoop ? 'Ligado' : 'Desligado'}
-              </span>
-            </button>
-            <p className="account-menu-switch__hint">
-              Quando ativo, o vídeo reinicia automaticamente ao terminar.
-            </p>
+            <GlassToggle
+              label="Repetir vídeos em loop"
+              hint="Quando ativo, o vídeo reinicia automaticamente ao terminar."
+              checked={videoLoop}
+              onChange={onToggleVideoLoop}
+            />
           </div>
           <div className="account-menu-divider" />
         </>

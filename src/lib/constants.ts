@@ -1,4 +1,4 @@
-export const ADMIN_EMAILS = ['diego.maciel.965@gmail.com'];
+export const ADMIN_EMAILS = ['diego.maciel.965@gmail.com', 'contatomacielx@gmail.com'];
 
 /** Arquivos locais em public/brand/ — substitua por sua logo (SVG recomendado) */
 export const BRAND_LOGO_CANDIDATES = [

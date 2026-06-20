@@ -5,6 +5,7 @@ import {
   signInWithPopup,
   signOut,
   onAuthStateChanged,
+  onIdTokenChanged,
   createUserWithEmailAndPassword,
   updateProfile,
   GoogleAuthProvider,
@@ -27,6 +28,7 @@ import {
   type CollectionReference,
 } from 'firebase/firestore';
 import { logDebug, logError, logWarn } from './utils';
+import { initAppCheck } from './appCheck';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -76,6 +78,7 @@ console.log('[DMX:Firebase] Inicializado', {
 logDebug('Firebase', 'Firestore inicializado para projeto:', firebaseConfig.projectId);
 
 if (isFirebaseValid) {
+  initAppCheck(app);
   enableIndexedDbPersistence(db).catch((err: { code?: string }) => {
     logWarn('Firebase', 'Modo offline não suportado neste navegador.', err.code);
   });
@@ -103,6 +106,7 @@ export {
   getDoc,
   writeBatch,
   onAuthStateChanged,
+  onIdTokenChanged,
 };
 export type { User };
 
@@ -114,6 +118,7 @@ export const fb = {
   signInWithPopup,
   signOut,
   onAuthStateChanged,
+  onIdTokenChanged,
   createUserWithEmailAndPassword,
   updateProfile,
   googleProvider,

@@ -66,13 +66,11 @@ import { Icon } from './components/Icon';
 import { Toast } from './components/Toast';
 import { LoadingScreen } from './components/LoadingScreen';
 import { LoginScreen } from './components/LoginScreen';
-import { AuthActionScreen } from './components/AuthActionScreen';
 import { PendingAccessScreen } from './components/PendingAccessScreen';
+import { BlockedAccessScreen } from './components/BlockedAccessScreen';
 import { primeVideoPlaybackIntent, primeYouTubePlayerApi } from './lib/videoPlaybackPrime';
-import { CinemaLightbox } from './components/CinemaLightbox';
 import { HeroBanner } from './components/HeroBanner';
 import { ExerciseCard } from './components/ExerciseCard';
-import { RequestModal } from './components/RequestModal';
 import { GridSkeleton } from './components/Skeleton';
 import { EmptyState } from './components/EmptyState';
 import { ShortcutsPanel } from './components/ShortcutsPanel';
@@ -87,6 +85,7 @@ import { useFavorites } from './hooks/useFavorites';
 import { isCoarsePointer, isMobileUi, useTouchLayoutClass } from './hooks/useMediaQuery';
 import { isFeatureEnabled } from './lib/mobileCapabilities';
 import { primeCoversFromExerciseList, prefetchExerciseCovers } from './lib/coverResolver';
+import { scheduleKnownCoversWarmup } from './lib/coverImageCache';
 import { getGridPrefetchPeers } from './lib/exercisePrefetch';
 import { normalizeNickname, validateNickname } from './lib/nickname';
 import { sendTransactionalEmail } from './lib/email';
@@ -111,6 +110,18 @@ import {
 
 const AdminPanel = lazy(() =>
   import('./components/AdminPanel').then((m) => ({ default: m.AdminPanel }))
+);
+
+const CinemaLightbox = lazy(() =>
+  import('./components/CinemaLightbox').then((m) => ({ default: m.CinemaLightbox }))
+);
+
+const AuthActionScreen = lazy(() =>
+  import('./components/AuthActionScreen').then((m) => ({ default: m.AuthActionScreen }))
+);
+
+const RequestModal = lazy(() =>
+  import('./components/RequestModal').then((m) => ({ default: m.RequestModal }))
 );
 
 const NAV_CATEGORIES = ['Todos', 'Favoritos', ...CATEGORIES.slice(1)] as const;
@@ -192,8 +203,15 @@ export default function App() {
   const [form, setForm] = useState<ExerciseForm>(DEFAULT_FORM);
   const [exercisesPath, setExercisesPath] = useState<string[]>(() => getDbPath());
   const triedAlternateExercisesPath = useRef(false);
+  const profileEverLoadedRef = useRef(false);
+  const authFlowBusyRef = useRef(false);
 
-  const pendingUsersCount = appUsers.filter((u) => u.status === 'pending').length;
+  const pendingUsersCount = useMemo(() => {
+    const pendingEmails = new Set(
+      appUsers.filter((u) => u.status === 'pending').map((u) => u.email.trim().toLowerCase())
+    );
+    return pendingEmails.size;
+  }, [appUsers]);
   const pendingRequestsCount = exerciseRequests.filter((r) => r.status === 'pending').length;
 
   const showToast = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
@@ -291,12 +309,16 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!isLoggedIn || !user) return;
+    if (!isLoggedIn || !user) {
+      profileEverLoadedRef.current = false;
+      return;
+    }
     setProfileLoading(!isAdmin);
     const userProfileRef = fbDoc(db, ...getUserProfilePath(user.uid));
     const unsubProfile = onSnapshot(userProfileRef, async (docSnap) => {
       try {
         if (docSnap.exists()) {
+          profileEverLoadedRef.current = true;
           const profile = docSnap.data() as UserProfile;
           setUserProfile(profile);
           if (!isAdmin && profile.status === 'pending' && user) {
@@ -310,11 +332,25 @@ export default function App() {
             }
           }
         } else if (!isAdmin && user) {
-          try {
-            const profile = await ensureUserProfile(user);
-            setUserProfile(profile);
-          } catch (e) {
-            console.error('Erro ao criar perfil do usuário', e);
+          if (profileEverLoadedRef.current) {
+            setUserProfile(null);
+            try {
+              await user.reload();
+            } catch {
+              // conta removida no Firebase Auth
+            }
+            profileEverLoadedRef.current = false;
+            await fb.signOut(auth);
+            showToast('Seu acesso foi revogado.', 'error');
+          } else if (!authFlowBusyRef.current) {
+            const existing = await getUserProfileIfExists(user);
+            if (existing) {
+              profileEverLoadedRef.current = true;
+              setUserProfile(existing);
+            } else {
+              await fb.signOut(auth);
+              showToast('Conta sem acesso. Entre em contato com o suporte.', 'error');
+            }
           }
         }
       } finally {
@@ -322,7 +358,29 @@ export default function App() {
       }
     });
     return () => unsubProfile();
-  }, [isLoggedIn, user, isAdmin]);
+  }, [isLoggedIn, user, isAdmin, showToast]);
+
+  useEffect(() => {
+    if (!isLoggedIn || !user || isAdmin) return;
+    const unsubToken = fb.onIdTokenChanged(auth, async (u) => {
+      if (!u) return;
+      try {
+        await u.reload();
+      } catch {
+        profileEverLoadedRef.current = false;
+        await fb.signOut(auth);
+        showToast('Sua sessão foi encerrada pelo administrador.', 'error');
+      }
+    });
+    return () => unsubToken();
+  }, [isLoggedIn, user, isAdmin, showToast]);
+
+  useEffect(() => {
+    if (!isAdmin && userProfile?.status === 'blocked') {
+      setActiveVideo(null);
+      setCompareEx(null);
+    }
+  }, [isAdmin, userProfile?.status]);
 
   useEffect(() => {
     if (!isLoggedIn) return;
@@ -625,14 +683,45 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const toggleUserStatus = async (uid: string, currentStatus: string) => {
-    const newStatus = currentStatus === 'approved' ? 'blocked' : 'approved';
+  const setUserAccessStatus = async (uid: string, status: UserProfile['status']) => {
     try {
-      const userRef = fbDoc(db, ...getUsersPath(), uid);
-      await updateDoc(userRef, { status: newStatus });
-      showToast(`Acesso do aluno alterado para: ${newStatus}`);
-    } catch {
+      await updateDoc(fbDoc(db, ...getUserProfilePath(uid)), { status });
+      const labels: Record<UserProfile['status'], string> = {
+        approved: 'aprovado',
+        pending: 'pendente',
+        blocked: 'bloqueado',
+      };
+      showToast(`Acesso alterado para: ${labels[status]}`);
+    } catch (e) {
+      console.error('Erro ao alterar acesso', e);
       showToast('Erro ao alterar acesso', 'error');
+    }
+  };
+
+  const deleteUserProfileAdmin = async (uid: string) => {
+    if (!confirm('Remover este registro? O usuário perderá acesso imediatamente.')) return;
+    try {
+      await deleteDoc(fbDoc(db, ...getUserProfilePath(uid)));
+      showToast('Registro removido.');
+    } catch (e) {
+      console.error('Erro ao remover usuário', e);
+      showToast('Erro ao remover registro', 'error');
+    }
+  };
+
+  const removeDuplicateUserProfiles = async (uids: string[]) => {
+    if (uids.length === 0) return;
+    if (!confirm(`Remover ${uids.length} registro(s) duplicado(s)?`)) return;
+    try {
+      const batch = writeBatch(db);
+      for (const uid of uids) {
+        batch.delete(fbDoc(db, ...getUserProfilePath(uid)));
+      }
+      await batch.commit();
+      showToast(`${uids.length} duplicata(s) removida(s).`);
+    } catch (e) {
+      console.error('Erro ao remover duplicatas', e);
+      showToast('Erro ao remover duplicatas', 'error');
     }
   };
 
@@ -849,6 +938,7 @@ export default function App() {
     }
 
     setAuthSubmitting(true);
+    authFlowBusyRef.current = true;
     try {
       if (authMode === 'login') {
         await fb.signInWithEmailAndPassword(auth, email, loginPassword);
@@ -896,6 +986,7 @@ export default function App() {
           createdAt: new Date().toISOString(),
         };
         await setDoc(userProfileRef, newProfile);
+        profileEverLoadedRef.current = true;
         setUserProfile(newProfile);
         setProfileLoading(false);
         void requestEmailVerification(email, registerName.trim());
@@ -924,6 +1015,7 @@ export default function App() {
         );
       }
     } finally {
+      authFlowBusyRef.current = false;
       setAuthSubmitting(false);
     }
   };
@@ -931,6 +1023,7 @@ export default function App() {
   const handleGoogleSignIn = async () => {
     if (googleSubmitting || authSubmitting) return;
     setGoogleSubmitting(true);
+    authFlowBusyRef.current = true;
     try {
       const result = await fb.signInWithPopup(auth, fb.googleProvider);
       let profile: UserProfile;
@@ -947,6 +1040,7 @@ export default function App() {
         showToast('Conta conectada! Aguarde liberação manual do acesso.');
       }
       setUserProfile(profile);
+      profileEverLoadedRef.current = true;
       if (profile.status !== 'approved') setProfileLoading(false);
       if (!result.user.emailVerified && result.user.email) {
         void requestEmailVerification(result.user.email, result.user.displayName || undefined);
@@ -954,6 +1048,7 @@ export default function App() {
     } catch (err) {
       showToast(getAuthErrorMessage(getAuthErrorCode(err), 'Erro ao entrar com Google.'), 'error');
     } finally {
+      authFlowBusyRef.current = false;
       setGoogleSubmitting(false);
     }
   };
@@ -1616,6 +1711,9 @@ export default function App() {
 
     if (showAdminUI) {
       prefetchExerciseCovers(viewportItems, 'critical');
+      scheduleKnownCoversWarmup({
+        excludeIds: new Set(viewportItems.map((item) => item.firestoreId)),
+      });
       return;
     }
 
@@ -1625,6 +1723,9 @@ export default function App() {
       { heroFirestoreId: heroId }
     );
     prefetchExerciseCovers(viewportItems, 'critical');
+
+    const visibleIds = new Set(viewportItems.map((item) => item.firestoreId));
+    scheduleKnownCoversWarmup({ excludeIds: visibleIds });
   }, [loading, publicExercises, gridExercises, heroDisplay?.exercise?.firestoreId, showAdminUI]);
 
   if (authLoading || (isLoggedIn && !isAdmin && profileLoading)) {
@@ -1635,14 +1736,16 @@ export default function App() {
     return (
       <>
         <Toast toast={toast} onClose={() => setToast({ show: false, msg: '', type: 'success' })} />
-        <AuthActionScreen
-          params={authActionParams}
-          onDone={() => {
-            clearAuthActionParams();
-            setAuthActionParams(null);
-            setAuthMode('login');
-          }}
-        />
+        <Suspense fallback={<LoadingScreen />}>
+          <AuthActionScreen
+            params={authActionParams}
+            onDone={() => {
+              clearAuthActionParams();
+              setAuthActionParams(null);
+              setAuthMode('login');
+            }}
+          />
+        </Suspense>
       </>
     );
   }
@@ -1681,6 +1784,10 @@ export default function App() {
     return <PendingAccessScreen onLogout={handleLogout} />;
   }
 
+  if (!isAdmin && userProfile?.status === 'blocked') {
+    return <BlockedAccessScreen onLogout={handleLogout} />;
+  }
+
   if (!isAdmin && !userProfile) {
     return <LoadingScreen slowConnection={slowConnection} />;
   }
@@ -1698,6 +1805,7 @@ export default function App() {
       )}
       <AnimatePresence>
         {activeVideo && (
+          <Suspense fallback={null}>
             <CinemaLightbox
             key={compareEx ? 'compare' : 'cinema'}
             ex={activeVideo}
@@ -1720,16 +1828,19 @@ export default function App() {
             isAdmin={showAdminUI}
             videoLoop={videoLoop}
           />
+          </Suspense>
         )}
       </AnimatePresence>
       <Toast toast={toast} onClose={() => setToast({ show: false, msg: '', type: 'success' })} />
       {showRequestModal && (
-        <RequestModal
-          requestForm={requestForm}
-          setRequestForm={setRequestForm}
-          onSubmit={handleRequestSubmit}
-          onClose={() => setShowRequestModal(false)}
-        />
+        <Suspense fallback={null}>
+          <RequestModal
+            requestForm={requestForm}
+            setRequestForm={setRequestForm}
+            onSubmit={handleRequestSubmit}
+            onClose={() => setShowRequestModal(false)}
+          />
+        </Suspense>
       )}
 
       <SiteHeader
@@ -2049,7 +2160,9 @@ export default function App() {
           onAddAuthEmail={handleAddAuthEmail}
           onRemoveAuthEmail={handleRemoveAuthEmail}
           appUsers={appUsers}
-          onToggleUserStatus={toggleUserStatus}
+          onSetUserStatus={setUserAccessStatus}
+          onDeleteUser={deleteUserProfileAdmin}
+          onRemoveDuplicates={removeDuplicateUserProfiles}
           isAuditing={isAuditing}
           auditProgress={auditProgress}
           auditCurrentItem={auditCurrentItem}

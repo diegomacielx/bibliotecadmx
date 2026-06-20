@@ -11,7 +11,8 @@ service cloud.firestore {
     }
 
     function isAdminEmail() {
-      return isSignedIn() && userEmail() == 'diego.maciel.965@gmail.com';
+      return isSignedIn()
+        && userEmail() in ['diego.maciel.965@gmail.com', 'contatomacielx@gmail.com'];
     }
 
     function userProfilePath(appId, uid) {
