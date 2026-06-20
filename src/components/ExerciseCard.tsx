@@ -54,6 +54,10 @@ interface ExerciseCardProps {
   isComparePick?: boolean;
   playlistSequence?: number;
   prefetchPeers?: Exercise[];
+  /** Preview de vídeo ao passar o mouse (desktop). Padrão: ligado. */
+  hoverPreviewEnabled?: boolean;
+  /** Parallax 3D + deslocamento da capa no hover. Padrão: ligado. */
+  coverParallaxEnabled?: boolean;
 }
 
 export function ExerciseCard({
@@ -78,6 +82,8 @@ export function ExerciseCard({
   isComparePick = false,
   playlistSequence,
   prefetchPeers = [],
+  hoverPreviewEnabled = true,
+  coverParallaxEnabled = true,
 }: ExerciseCardProps) {
   const touchLayout = useTouchLayout();
   // Gate robusto: depende só da capacidade de hover do dispositivo (mouse/touchpad),
@@ -94,13 +100,15 @@ export function ExerciseCard({
   const handleGlow = useAmbientGlow<HTMLDivElement>();
   const reducedMotion = useReducedMotion();
   const desktopEffects = hoverDevice;
-  const canPreview = hoverDevice;
+  const canPreview = hoverDevice && hoverPreviewEnabled;
   const showMobileActions = touchLayout && (mobileExpanded || selectionMode);
   const showCenterPlay = touchLayout && mobileExpanded && !selectionMode;
   const [showPreview, setShowPreview] = useState(false);
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const cardHoveredRef = useRef(false);
+  const coverMotionEnabled = desktopEffects && coverParallaxEnabled;
+  const tiltEnabled = coverMotionEnabled && !showPreview && !previewSrc;
   const activatePreview = useCallback(() => {
     if (!cardHoveredRef.current) return;
     setShowPreview(true);
@@ -140,17 +148,16 @@ export function ExerciseCard({
     setPreviewPlaying(true);
   }, []);
 
-  const tiltEnabled = desktopEffects && !showPreview && !previewSrc;
   const tilt = useTilt3D(6, tiltEnabled);
 
   const resetCoverMotion = useCallback(() => {
     const el = tilt.ref.current;
-    if (!el || !desktopEffects) return;
+    if (!el || !coverMotionEnabled) return;
     el.style.setProperty('--parallax-x', '0');
     el.style.setProperty('--parallax-y', '0');
     el.style.setProperty('--mouse-x', '50%');
     el.style.setProperty('--mouse-y', '50%');
-  }, [desktopEffects, tilt.ref]);
+  }, [coverMotionEnabled, tilt.ref]);
 
   const handleCardMouseEnter = useCallback(() => {
     cardHoveredRef.current = true;
@@ -168,6 +175,18 @@ export function ExerciseCard({
     if (!selectionMode) return;
     setMobileExpanded(false);
   }, [selectionMode]);
+
+  useEffect(() => {
+    if (hoverPreviewEnabled) return;
+    cardHoveredRef.current = false;
+    deactivatePreview();
+  }, [hoverPreviewEnabled, deactivatePreview]);
+
+  useEffect(() => {
+    if (coverParallaxEnabled) return;
+    resetCoverMotion();
+    if (tiltEnabled) tilt.onMouseLeave();
+  }, [coverParallaxEnabled, resetCoverMotion, tiltEnabled, tilt]);
 
   useEffect(() => {
     if (!mobileExpanded || selectionMode) return;
@@ -277,7 +296,7 @@ export function ExerciseCard({
       onMouseEnter={handleCardMouseEnter}
       onMouseLeave={handleCardMouseLeave}
       onMouseMove={(e) => {
-        if (desktopEffects) handleGlow(e);
+        if (coverMotionEnabled) handleGlow(e);
         if (tiltEnabled) tilt.onMouseMove(e);
       }}
       style={

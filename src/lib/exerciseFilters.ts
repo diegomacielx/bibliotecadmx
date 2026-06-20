@@ -9,12 +9,14 @@ export interface AdvancedFilterState {
   muscles: string[];
   muscleRole: MuscleRoleFilter;
   equipment: string[];
+  favoritesOnly: boolean;
 }
 
 export const DEFAULT_ADVANCED_FILTERS: AdvancedFilterState = {
   muscles: [],
   muscleRole: 'any',
   equipment: [],
+  favoritesOnly: false,
 };
 
 /** Grupos musculares disponíveis nos filtros */
@@ -64,23 +66,28 @@ function matchesMuscleFilter(ex: Exercise, muscles: string[], role: MuscleRoleFi
 }
 
 export function hasActiveAdvancedFilters(filters: AdvancedFilterState): boolean {
-  return filters.muscles.length > 0 || filters.equipment.length > 0;
+  return filters.muscles.length > 0 || filters.equipment.length > 0 || filters.favoritesOnly;
 }
 
 export function countActiveAdvancedFilterGroups(filters: AdvancedFilterState): number {
   let count = 0;
   if (filters.muscles.length > 0) count += 1;
   if (filters.equipment.length > 0) count += 1;
+  if (filters.favoritesOnly) count += 1;
   return count;
 }
 
 export function applyAdvancedFilters(
   items: Exercise[],
-  filters: AdvancedFilterState
+  filters: AdvancedFilterState,
+  favoriteIds?: Set<string>
 ): Exercise[] {
   if (!hasActiveAdvancedFilters(filters)) return items;
 
   return items.filter((ex) => {
+    if (filters.favoritesOnly) {
+      if (!favoriteIds?.has(ex.firestoreId)) return false;
+    }
     if (!matchesMuscleFilter(ex, filters.muscles, filters.muscleRole)) return false;
     if (filters.equipment.length > 0) {
       if (!exerciseMatchesEquipmentFilter(ex, filters.equipment)) return false;
@@ -101,5 +108,6 @@ export function parseAdvancedFilters(raw: unknown): AdvancedFilterState {
     equipment: Array.isArray(data.equipment)
       ? data.equipment.filter((e): e is string => typeof e === 'string')
       : [],
+    favoritesOnly: data.favoritesOnly === true,
   };
 }

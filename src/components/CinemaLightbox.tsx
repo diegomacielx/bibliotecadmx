@@ -41,9 +41,41 @@ interface CinemaLightboxProps {
   onToggleFavorite?: () => void;
   isAdmin?: boolean;
   videoLoop?: boolean;
+  compareLoopSync?: boolean;
 }
 
 const VIDEO_H = 'min(92vh, 900px)';
+const COMPARE_STAGE_CHROME = '4.5rem';
+/** Mesma altura do individual quando couber; reduz só o necessário para caber rótulos + padding */
+const COMPARE_VIDEO_H = `min(92vh, 900px, calc(98vh - ${COMPARE_STAGE_CHROME}))`;
+const COMPARE_VIDEO_WIDTH_CAP = 'calc((100vw - 24rem) / 2 - 0.5rem)';
+const SINGLE_VIDEO_WIDTH_CAP = 'calc(100vw - 24rem)';
+
+function getDesktopVideoSizeStyle(
+  isVertical: boolean,
+  mode: 'single' | 'compare'
+): CSSProperties {
+  const widthCap = mode === 'single' ? SINGLE_VIDEO_WIDTH_CAP : COMPARE_VIDEO_WIDTH_CAP;
+  const videoHeightVar = mode === 'compare' ? COMPARE_VIDEO_H : VIDEO_H;
+
+  if (isVertical) {
+    return {
+      ['--video-h' as string]: videoHeightVar,
+      height: 'var(--video-h)',
+      width: `min(calc(var(--video-h) * 9 / 16), ${widthCap})`,
+      aspectRatio: '9 / 16',
+      flexShrink: 0,
+    };
+  }
+
+  return {
+    ['--video-h' as string]: videoHeightVar,
+    height: 'var(--video-h)',
+    width: `min(calc(var(--video-h) * 16 / 9), ${widthCap})`,
+    aspectRatio: '16 / 9',
+    flexShrink: 0,
+  };
+}
 const CONTROLS_HIDE_MS = 3200;
 const SIDEBAR_SLIDE_EASE = [0.32, 0.72, 0, 1] as const;
 
@@ -334,6 +366,7 @@ function ComparePanel({
   playerRef,
   onSyncPlay,
   onPlayerReady,
+  onEnded,
   mobileLayout = false,
 }: {
   ex: Exercise;
@@ -341,6 +374,7 @@ function ComparePanel({
   playerRef: React.RefObject<YouTubePlayerHandle | null>;
   onSyncPlay: () => void;
   onPlayerReady: () => void;
+  onEnded?: () => void;
   mobileLayout?: boolean;
 }) {
   const [readyToken, setReadyToken] = useState(0);
@@ -352,13 +386,11 @@ function ComparePanel({
   const isVertical = orientation === 'vertical';
   const videoSizeStyle: CSSProperties | undefined = mobileLayout
     ? undefined
-    : isVertical
-      ? { height: 'min(70vh, 720px)', aspectRatio: '9 / 16' }
-      : { height: 'min(50vh, 480px)', aspectRatio: '16 / 9' };
+    : getDesktopVideoSizeStyle(isVertical, 'compare');
 
   return (
     <div className="compare-panel flex flex-col gap-2 min-w-0 flex-1">
-      <div className="flex items-center justify-between gap-2 min-w-0">
+      <div className="compare-panel-head flex items-center justify-between gap-2 min-w-0 shrink-0">
         <p className="compare-panel-label">{label}</p>
         <button
           type="button"
@@ -401,6 +433,7 @@ function ComparePanel({
                   setReadyToken((t) => t + 1);
                   onPlayerReady();
                 }}
+                onEnded={onEnded}
               />
               <button
                 type="button"
@@ -446,6 +479,7 @@ export function CinemaLightbox({
   onToggleFavorite,
   isAdmin = false,
   videoLoop = false,
+  compareLoopSync = false,
 }: CinemaLightboxProps) {
   const reducedMotion = useReducedMotion();
   const isMobileLayout = useTouchLayout();
@@ -463,10 +497,15 @@ export function CinemaLightbox({
   const [showReplay, setShowReplay] = useState(false);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoLoopRef = useRef(videoLoop);
+  const compareLoopSyncRef = useRef(compareLoopSync);
 
   useEffect(() => {
     videoLoopRef.current = videoLoop;
   }, [videoLoop]);
+
+  useEffect(() => {
+    compareLoopSyncRef.current = compareLoopSync;
+  }, [compareLoopSync]);
 
   const orientation = useMemo(
     () =>
@@ -605,6 +644,22 @@ export function CinemaLightbox({
     resetHideTimer();
   }, [playlist.length, playlistIndex, onVideoEnded, resetHideTimer]);
 
+  const handleComparePlayerEnded = useCallback((slot: 'primary' | 'secondary') => {
+    if (!videoLoopRef.current) return;
+
+    if (compareLoopSyncRef.current) {
+      playerRef.current?.seekTo(0);
+      comparePlayerRef.current?.seekTo(0);
+      playerRef.current?.playVideo();
+      comparePlayerRef.current?.playVideo();
+      return;
+    }
+
+    const target = slot === 'primary' ? playerRef : comparePlayerRef;
+    target.current?.seekTo(0);
+    target.current?.playVideo();
+  }, []);
+
   const handleReplay = useCallback(() => {
     playerRef.current?.seekTo(0);
     playerRef.current?.playVideo();
@@ -712,19 +767,7 @@ export function CinemaLightbox({
 
   const videoSizeStyle: CSSProperties = isMobileLayout
     ? {}
-    : isVertical
-      ? {
-          height: VIDEO_H,
-          width: `min(calc(${VIDEO_H} * 9 / 16), calc(100vw - 24rem))`,
-          aspectRatio: '9 / 16',
-          flexShrink: 0,
-        }
-      : {
-          height: VIDEO_H,
-          width: `min(calc(${VIDEO_H} * 16 / 9), calc(100vw - 24rem))`,
-          aspectRatio: '16 / 9',
-          flexShrink: 0,
-        };
+    : getDesktopVideoSizeStyle(isVertical, 'single');
 
   const showMobileSheet = isMobileLayout && !isCompare;
   const showSidebar = showMobileSheet ? false : isMobileLayout || sidebarVisible;
@@ -771,11 +814,13 @@ export function CinemaLightbox({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={panelOpenTransition}
-        className={`cinema-lightbox-panel pointer-events-auto relative z-10 mx-auto flex flex-col md:flex-row md:items-stretch max-h-[94vh] overflow-hidden rounded-cinema ${
-          isCompare ? 'compare-lightbox-panel' : 'cinema-lightbox-panel--single w-fit max-w-[min(calc(100vw-2rem),100%)]'
+        className={`cinema-lightbox-panel pointer-events-auto relative z-10 mx-auto flex flex-col md:flex-row md:items-stretch overflow-hidden rounded-cinema ${
+          isCompare
+            ? 'compare-lightbox-panel'
+            : 'cinema-lightbox-panel--single w-fit max-w-[min(calc(100vw-2rem),100%)] max-h-[94vh]'
         } ${
           isMobileLayout ? 'cinema-lightbox-panel--mobile' : ''
-        } ${isCompare ? 'compare-lightbox-panel' : ''}`}
+        }`}
         onMouseMove={isMobileLayout ? undefined : resetHideTimer}
         onWheel={isMobileLayout ? undefined : resetHideTimer}
       >
@@ -812,6 +857,7 @@ export function CinemaLightbox({
               playerRef={playerRef}
               onSyncPlay={syncCompare}
               onPlayerReady={handleComparePrimaryReady}
+              onEnded={() => handleComparePlayerEnded('primary')}
               mobileLayout={isMobileLayout}
             />
             <ComparePanel
@@ -820,6 +866,7 @@ export function CinemaLightbox({
               playerRef={comparePlayerRef}
               onSyncPlay={syncCompare}
               onPlayerReady={handleCompareSecondaryReady}
+              onEnded={() => handleComparePlayerEnded('secondary')}
               mobileLayout={isMobileLayout}
             />
           </div>

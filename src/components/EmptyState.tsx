@@ -10,20 +10,26 @@ interface EmptyStateProps {
   onSuggest?: () => void;
   onClearFilters?: () => void;
   onGoHome?: () => void;
+  onSearchAllCategories?: () => void;
   animated?: boolean;
 }
 
 const CONFIG: Record<
   EmptyStateVariant,
-  { icon: string; title: string; getDescription: (searchTerm?: string, category?: string) => string }
+  { icon: string; title: string; getDescription: (searchTerm?: string, category?: string) => string | null }
 > = {
   search: {
     icon: 'search',
     title: 'Nenhum resultado',
-    getDescription: (term) =>
-      term?.trim()
-        ? `Não encontramos exercícios para “${term}”. Tente outro termo ou sugira uma gravação.`
-        : 'Não encontramos exercícios com esses critérios.',
+    getDescription: (term, category) => {
+      if (term?.trim() && category && category !== 'Todos') {
+        return null;
+      }
+      if (term?.trim()) {
+        return `Não encontramos exercícios para “${term}”. Tente outro termo ou sugira uma gravação.`;
+      }
+      return 'Não encontramos exercícios com esses critérios.';
+    },
   },
   favorites: {
     icon: 'heart',
@@ -54,10 +60,16 @@ export function EmptyState({
   onSuggest,
   onClearFilters,
   onGoHome,
+  onSearchAllCategories,
   animated = true,
 }: EmptyStateProps) {
   const { icon, title, getDescription } = CONFIG[variant];
   const description = getDescription(searchTerm, category);
+  const isCategoryScopedSearch =
+    variant === 'search' &&
+    !!searchTerm?.trim() &&
+    !!category &&
+    category !== 'Todos';
 
   const content = (
     <>
@@ -67,7 +79,17 @@ export function EmptyState({
           <Icon name={icon} className="empty-state__icon" strokeWidth={1.5} />
         </div>
         <h3 className="empty-state__title">{title}</h3>
-        <p className="empty-state__description">{description}</p>
+        <p className="empty-state__description">
+          {isCategoryScopedSearch ? (
+            <>
+              Não encontramos exercícios para “{searchTerm}” na categoria{' '}
+              <span className="empty-state__category-emphasis">{category}</span>. Busque em todas as
+              categorias ou sugira uma gravação.
+            </>
+          ) : (
+            description
+          )}
+        </p>
         <div className="empty-state__actions">
           {variant === 'search' && searchTerm?.trim() && onSuggest && (
             <button type="button" onClick={onSuggest} className="empty-state__cta">
@@ -75,6 +97,19 @@ export function EmptyState({
               Sugerir gravação de “{searchTerm}”
             </button>
           )}
+          {variant === 'search' &&
+            searchTerm?.trim() &&
+            category &&
+            category !== 'Todos' &&
+            onSearchAllCategories && (
+              <button
+                type="button"
+                onClick={onSearchAllCategories}
+                className="empty-state__cta empty-state__cta--ghost"
+              >
+                Buscar em todas as categorias
+              </button>
+            )}
           {variant === 'favorites' && onClearFilters && (
             <button type="button" onClick={onClearFilters} className="empty-state__cta empty-state__cta--ghost">
               Explorar todos os exercícios
@@ -90,6 +125,17 @@ export function EmptyState({
               Limpar filtros avançados
             </button>
           )}
+          {variant === 'search' && onGoHome && (
+            <button
+              type="button"
+              onClick={onGoHome}
+              className="empty-state__cta empty-state__cta--glass"
+              aria-label="Voltar ao início — categoria Todos"
+            >
+              <Icon name="x" className="w-4 h-4 shrink-0" strokeWidth={2} />
+              Voltar ao início
+            </button>
+          )}
         </div>
         {variant === 'search' && (
           <p className="empty-state__hint">
@@ -97,17 +143,6 @@ export function EmptyState({
           </p>
         )}
       </div>
-      {variant === 'search' && onGoHome && (
-        <button
-          type="button"
-          className="empty-state__home-fab"
-          onClick={onGoHome}
-          aria-label="Voltar ao início — categoria Todos"
-          title="Voltar ao início"
-        >
-          <Icon name="x" className="w-5 h-5" strokeWidth={2} />
-        </button>
-      )}
     </>
   );
 

@@ -13,6 +13,8 @@ interface AdvancedFiltersBarProps {
   onChange: (next: AdvancedFilterState) => void;
   onReset: () => void;
   resultCount?: number;
+  activeCategory?: string;
+  favoriteCount?: number;
 }
 
 function toggleListItem(list: string[], item: string): string[] {
@@ -24,6 +26,8 @@ export function AdvancedFiltersBar({
   onChange,
   onReset,
   resultCount,
+  activeCategory,
+  favoriteCount = 0,
 }: AdvancedFiltersBarProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -42,6 +46,9 @@ export function AdvancedFiltersBar({
   const patch = (patchValue: Partial<AdvancedFilterState>) => {
     onChange({ ...filters, ...patchValue });
   };
+
+  const showFavoritesFilter = activeCategory !== 'Favoritos';
+  const favoritesDisabled = favoriteCount === 0;
 
   return (
     <div className="advanced-filters cinema-container mb-fluid-md">
@@ -78,6 +85,33 @@ export function AdvancedFiltersBar({
         {open && (
           <div className="advanced-filters-panel-wrap">
             <div className="advanced-filters-panel">
+              {showFavoritesFilter && (
+                <section className="advanced-filters-section">
+                  <h3 className="advanced-filters-heading">Favoritos</h3>
+                  <div className="advanced-filters-pills">
+                    <button
+                      type="button"
+                      className={`advanced-filters-pill advanced-filters-pill--icon ${
+                        filters.favoritesOnly ? 'advanced-filters-pill--active' : ''
+                      }`}
+                      disabled={favoritesDisabled}
+                      title={
+                        favoritesDisabled
+                          ? 'Favorite exercícios para usar este filtro'
+                          : undefined
+                      }
+                      onClick={() => patch({ favoritesOnly: !filters.favoritesOnly })}
+                    >
+                      <Icon
+                        name="heart"
+                        className={`w-3.5 h-3.5 shrink-0 ${filters.favoritesOnly ? 'text-red-400' : ''}`}
+                      />
+                      Somente favoritos
+                    </button>
+                  </div>
+                </section>
+              )}
+
               <section className="advanced-filters-section">
                 <h3 className="advanced-filters-heading">Grupo muscular</h3>
                 <div className="advanced-filters-pills">

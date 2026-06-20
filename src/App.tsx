@@ -49,6 +49,7 @@ import {
   buildExerciseSearchIndex,
   rankExercises,
   filterExercisesByCategory,
+  getSearchPool,
 } from './lib/search';
 import { DEFAULT_HERO_SPOTLIGHT, resolveHeroDisplay } from './lib/heroSpotlight';
 import {
@@ -79,13 +80,14 @@ import { ExerciseCard } from './components/ExerciseCard';
 import { GridSkeleton } from './components/Skeleton';
 import { EmptyState } from './components/EmptyState';
 import { ShortcutsPanel } from './components/ShortcutsPanel';
-import { isTypingTarget } from './lib/keyboard';
+import { isTypingTarget, isBackquoteKey, isCatalogShortcutMod } from './lib/keyboard';
 import { staggerContainer, pageTransition } from './lib/motion';
 import { SiteHeader } from './components/SiteHeader';
 import { AdminStudioBar } from './components/AdminStudioBar';
 import { CategoryNav } from './components/CategoryNav';
 import { PlaylistBar } from './components/PlaylistBar';
 import { useSearchHistory } from './hooks/useSearchHistory';
+import { useSearchPreferences } from './hooks/useSearchPreferences';
 import { useFavorites } from './hooks/useFavorites';
 import { isCoarsePointer, isMobileUi, useTouchLayoutClass } from './hooks/useMediaQuery';
 import { isFeatureEnabled } from './lib/mobileCapabilities';
@@ -131,6 +133,12 @@ const RequestModal = lazy(() =>
 );
 
 const NAV_CATEGORIES = ['Todos', 'Favoritos', ...CATEGORIES.slice(1)] as const;
+
+function resolveExerciseNavCategory(category: string | undefined | null): string {
+  if (!category || category === 'Todos' || category === 'Favoritos') return 'Todos';
+  if ((NAV_CATEGORIES as readonly string[]).includes(category)) return category;
+  return 'Todos';
+}
 
 export default function App() {
   const isMobileLayout = useTouchLayoutClass();
@@ -185,6 +193,16 @@ export default function App() {
   const [adminUserPreview, setAdminUserPreview] = useState(false);
   const { history, recents, addSearch, addRecent, removeHistoryItem, clearHistory } =
     useSearchHistory();
+  const {
+    saveRecentVideos,
+    saveSearchHistory,
+    cardHoverPreview,
+    cardCoverParallax,
+    setSaveRecentVideos,
+    setSaveSearchHistory,
+    setCardHoverPreview,
+    setCardCoverParallax,
+  } = useSearchPreferences();
   const { favorites, toggle: toggleFavorite, isFavorite } = useFavorites(user?.uid);
   const [auditProgress, setAuditProgress] = useState(0);
   const [isAuditing, setIsAuditing] = useState(false);
@@ -196,6 +214,7 @@ export default function App() {
   const [lastReadAt, setLastReadAt] = useState<string | null>(null);
   const [clearedAt, setClearedAt] = useState<string | null>(null);
   const [videoLoop, setVideoLoop] = useState(false);
+  const [compareLoopSync, setCompareLoopSync] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [sendNotification, setSendNotification] = useState(true);
   const [sendEmail, setSendEmail] = useState(false);
@@ -622,9 +641,18 @@ export default function App() {
     const playbackDocRef = fbDoc(db, ...getUserPlaybackSettingsPath(user.uid));
     const unsubPlayback = onSnapshot(playbackDocRef, (docSnap) => {
       if (docSnap.exists()) {
-        setVideoLoop(docSnap.data().videoLoop === true);
+        const data = docSnap.data();
+        const loopEnabled = data.videoLoop === true;
+        setVideoLoop(loopEnabled);
+        setCompareLoopSync(loopEnabled && data.compareLoopSync === true);
       } else {
         setVideoLoop(false);
+        setCompareLoopSync(false);
+        void setDoc(
+          playbackDocRef,
+          { videoLoop: false, compareLoopSync: false },
+          { merge: true }
+        );
       }
     });
 
@@ -1160,9 +1188,14 @@ export default function App() {
     async (enabled: boolean) => {
       if (!user) return;
       setVideoLoop(enabled);
+      if (!enabled) setCompareLoopSync(false);
       try {
         const playbackDocRef = fbDoc(db, ...getUserPlaybackSettingsPath(user.uid));
-        await setDoc(playbackDocRef, { videoLoop: enabled }, { merge: true });
+        await setDoc(
+          playbackDocRef,
+          enabled ? { videoLoop: true } : { videoLoop: false, compareLoopSync: false },
+          { merge: true }
+        );
       } catch {
         setVideoLoop(!enabled);
         showToast('Não foi possível salvar a preferência de reprodução.', 'error');
@@ -1170,6 +1203,26 @@ export default function App() {
     },
     [user, showToast]
   );
+
+  const handleUpdateCompareLoopSync = useCallback(
+    async (enabled: boolean) => {
+      if (!user) return;
+      setCompareLoopSync(enabled);
+      try {
+        const playbackDocRef = fbDoc(db, ...getUserPlaybackSettingsPath(user.uid));
+        await setDoc(playbackDocRef, { compareLoopSync: enabled }, { merge: true });
+      } catch {
+        setCompareLoopSync(!enabled);
+        showToast('Não foi possível salvar a preferência do comparador.', 'error');
+      }
+    },
+    [user, showToast]
+  );
+
+  const handleExerciseSortOrderChange = useCallback((order: ExerciseSortOrder) => {
+    setExerciseSortOrder(order);
+    localStorage.setItem(EXERCISE_SORT_STORAGE_KEY, order);
+  }, []);
 
   const handleResendVerification = useCallback(async () => {
     if (!user?.email) throw new Error('Sem e-mail');
@@ -1263,8 +1316,8 @@ export default function App() {
   const { probeMap, loading: coverProbeLoading, progress: coverProbeProgress } =
     useGitHubCoverProbe(exercises, coverProbeEnabled);
 
-  const filteredExercises = useMemo(() => {
-    const validExercises = exercises.filter((ex) => {
+  const validExercises = useMemo(() => {
+    return exercises.filter((ex) => {
       const youtubeOk = hasValidYouTubeUrl(ex.youtubeUrl);
       if (showAdminUI) {
         if (adminFilter === 'completed') return youtubeOk;
@@ -1280,60 +1333,86 @@ export default function App() {
       }
       return youtubeOk;
     });
+  }, [exercises, showAdminUI, adminFilter, probeMap, coverProbeLoading]);
 
-    const categoryFiltered = filterExercisesByCategory(validExercises, activeCategory, favorites);
+  const categoryFiltered = useMemo(
+    () => filterExercisesByCategory(validExercises, activeCategory, favorites),
+    [validExercises, activeCategory, favorites]
+  );
 
+  const exerciseSearchPool = useMemo(
+    () =>
+      getSearchPool(
+        validExercises,
+        categoryFiltered,
+        publicExercises,
+        activeCategory,
+        advancedFilters.favoritesOnly,
+        favorites,
+        showAdminUI
+      ),
+    [
+      validExercises,
+      categoryFiltered,
+      publicExercises,
+      activeCategory,
+      advancedFilters.favoritesOnly,
+      favorites,
+      showAdminUI,
+    ]
+  );
+
+  const filteredExercises = useMemo(() => {
     const searched = !searchTerm.trim()
       ? categoryFiltered
       : (() => {
           const indexById = new Map(searchIndexes.map((idx) => [idx.exercise.firestoreId, idx]));
-          /** Com busca ativa: pesquisa em todos os exercícios públicos (ignora categoria) */
-          const searchPool = showAdminUI ? validExercises : publicExercises;
-          const scopedIndexes = searchPool
+          const scopedIndexes = exerciseSearchPool
             .map((ex) => indexById.get(ex.firestoreId))
             .filter((idx): idx is NonNullable<typeof idx> => !!idx);
 
           return rankExercises(scopedIndexes, searchTerm).map((r) => r.exercise);
         })();
 
-    return applyAdvancedFilters(searched, advancedFilters).sort((a, b) => {
+    return applyAdvancedFilters(searched, advancedFilters, favorites).sort((a, b) => {
       if (searchTerm.trim() || showAdminUI) return 0;
       return compareExercisesBySortOrder(a, b, exerciseSortOrder);
     });
   }, [
     searchTerm,
-    activeCategory,
-    exercises,
-    showAdminUI,
-    adminFilter,
+    categoryFiltered,
+    exerciseSearchPool,
     searchIndexes,
-    favorites,
-    publicExercises,
-    probeMap,
-    coverProbeLoading,
     advancedFilters,
+    favorites,
+    showAdminUI,
     exerciseSortOrder,
   ]);
 
   const searchSuggestions = useMemo(() => {
     if (searchTerm.trim().length < 2) return [];
     const indexById = new Map(searchIndexes.map((idx) => [idx.exercise.firestoreId, idx]));
-    const scopedIndexes = searchableExercises
+    const scopedIndexes = exerciseSearchPool
       .map((ex) => indexById.get(ex.firestoreId))
       .filter((idx): idx is NonNullable<typeof idx> => !!idx);
     return rankExercises(scopedIndexes, searchTerm)
       .slice(0, 6)
       .map((r) => r.exercise);
-  }, [searchTerm, searchableExercises, searchIndexes]);
+  }, [searchTerm, exerciseSearchPool, searchIndexes]);
 
   const publicExerciseIds = useMemo(
     () => new Set(publicExercises.map((ex) => ex.firestoreId)),
     [publicExercises]
   );
 
-  const visibleRecents = useMemo(
-    () => recents.filter((r) => publicExerciseIds.has(r.firestoreId) || showAdminUI),
-    [recents, publicExerciseIds, showAdminUI]
+  const visibleRecents = useMemo(() => {
+    if (!saveRecentVideos) return [];
+    return recents.filter((r) => publicExerciseIds.has(r.firestoreId) || showAdminUI);
+  }, [recents, publicExerciseIds, showAdminUI, saveRecentVideos]);
+
+  const visibleSearchHistory = useMemo(
+    () => (saveSearchHistory ? history : []),
+    [history, saveSearchHistory]
   );
 
   const heroDisplay = useMemo(
@@ -1351,6 +1430,17 @@ export default function App() {
     }
     return filteredExercises.filter((ex) => ex.firestoreId !== heroExId);
   }, [filteredExercises, heroDisplay, searchTerm, activeCategory]);
+
+  const gridExerciseIds = useMemo(
+    () => gridExercises.map((ex) => ex.firestoreId),
+    [gridExercises]
+  );
+
+  const gridMembershipKey = useMemo(() => [...gridExerciseIds].sort().join('|'), [gridExerciseIds]);
+
+  const gridOrderKey = gridExerciseIds.join('|');
+
+  const gridMembershipRef = useRef<string | null>(null);
 
   const emptyStateVariant = useMemo(() => {
     if (hasActiveAdvancedFilters(advancedFilters)) return 'filters' as const;
@@ -1371,6 +1461,22 @@ export default function App() {
     resetAdvancedFilters();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [resetAdvancedFilters]);
+
+  const handleSearchCommit = useCallback(
+    (term: string) => {
+      if (saveSearchHistory) addSearch(term);
+    },
+    [addSearch, saveSearchHistory]
+  );
+
+  const handleGoToTodosKeepSearch = useCallback(() => {
+    setActiveCategory('Todos');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  const handleClearSearch = useCallback(() => {
+    setSearchTerm('');
+  }, []);
 
   const handleSearchChange = useCallback(
     (value: string) => {
@@ -1411,16 +1517,37 @@ export default function App() {
 
   useEffect(() => {
     if (isMobileLayout) return;
+    const blocked = () =>
+      !!(activeVideo || showAdminPanel || shortcutsOpen || comparePick);
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Home' || e.ctrlKey || e.metaKey || e.altKey) return;
-      if (isTypingTarget(e.target)) return;
-      if (activeVideo || showAdminPanel || shortcutsOpen || comparePick) return;
-      e.preventDefault();
-      handleGoHome();
+      if (blocked()) return;
+
+      if (isCatalogShortcutMod(e) && isBackquoteKey(e)) {
+        e.preventDefault();
+        if (e.shiftKey) handleGoHome();
+        else handleGoToTodosKeepSearch();
+        return;
+      }
+
+      if (e.key === 'Escape' && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleClearSearch();
+      }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [isMobileLayout, handleGoHome, activeVideo, showAdminPanel, shortcutsOpen, comparePick]);
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [
+    isMobileLayout,
+    handleGoHome,
+    handleGoToTodosKeepSearch,
+    handleClearSearch,
+    activeVideo,
+    showAdminPanel,
+    shortcutsOpen,
+    comparePick,
+  ]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1673,9 +1800,9 @@ export default function App() {
       primeVideoPlaybackIntent(ex);
       setCompareEx(null);
       setActiveVideo(ex);
-      addRecent(ex);
+      if (saveRecentVideos) addRecent(ex);
     },
-    [addRecent]
+    [addRecent, saveRecentVideos]
   );
 
   const handleCompare = useCallback(
@@ -1699,13 +1826,15 @@ export default function App() {
         showToast('Comparação cancelada');
         return;
       }
-      addRecent(comparePick);
-      addRecent(ex);
+      if (saveRecentVideos) {
+        addRecent(comparePick);
+        addRecent(ex);
+      }
       setActiveVideo(comparePick);
       setCompareEx(ex);
       setComparePick(null);
     },
-    [comparePick, addRecent, showToast, watchExercise]
+    [comparePick, addRecent, showToast, watchExercise, saveRecentVideos]
   );
 
   useEffect(() => {
@@ -1782,14 +1911,27 @@ export default function App() {
     watchExercise(lightboxNavList[lightboxNavIndex - 1]);
   }, [lightboxNavIndex, lightboxNavList, watchExercise]);
 
-  const handleRecentWatch = useCallback(
-    (firestoreId: string) => {
+  const handleSelectRecentExercise = useCallback(
+    (firestoreId: string, _name: string) => {
       const ex = exercises.find((e) => e.firestoreId === firestoreId);
       if (!ex) return;
       if (!showAdminUI && !hasValidYouTubeUrl(ex.youtubeUrl)) return;
+
+      setSearchTerm('');
+
+      if (activeCategory !== 'Todos') {
+        if (activeCategory === 'Favoritos') {
+          if (!favorites.has(firestoreId)) {
+            setActiveCategory(resolveExerciseNavCategory(ex.category));
+          }
+        } else if (ex.category !== activeCategory) {
+          setActiveCategory(resolveExerciseNavCategory(ex.category));
+        }
+      }
+
       watchExercise(ex);
     },
-    [exercises, watchExercise, showAdminUI]
+    [exercises, showAdminUI, activeCategory, favorites, watchExercise]
   );
 
   const pageKey = searchTerm.trim()
@@ -1817,16 +1959,36 @@ export default function App() {
       id: ex.id,
     }));
 
+    const priorityOrder = gridExercises.map((ex) => ex.firestoreId);
+    const visibleIds = new Set(viewportItems.map((item) => item.firestoreId));
+    const heroId = heroDisplay?.exercise?.firestoreId ?? null;
+    if (heroId) visibleIds.add(heroId);
+
+    const membershipChanged = gridMembershipRef.current !== gridMembershipKey;
+    gridMembershipRef.current = gridMembershipKey;
+
+    const scheduleWarmup = () => {
+      scheduleKnownCoversWarmup({
+        excludeIds: visibleIds,
+        priorityOrder,
+      });
+    };
+
     if (showAdminUI) {
       prefetchExerciseCovers(viewportItems, 'critical');
       scheduleKnownCoversWarmup({
         excludeIds: new Set(viewportItems.map((item) => item.firestoreId)),
-        priorityOrder: gridExercises.map((ex) => ex.firestoreId),
+        priorityOrder,
       });
       return;
     }
 
-    const heroId = heroDisplay?.exercise?.firestoreId ?? null;
+    if (!membershipChanged) {
+      prefetchExerciseCovers(viewportItems, 'critical');
+      scheduleWarmup();
+      return;
+    }
+
     const heroExercise = heroDisplay?.exercise;
 
     if (heroExercise) {
@@ -1843,14 +2005,16 @@ export default function App() {
 
     primeCoversFromExerciseList(coverSources, { heroFirestoreId: heroId });
     prefetchExerciseCovers(viewportItems, 'critical');
-
-    const visibleIds = new Set(viewportItems.map((item) => item.firestoreId));
-    if (heroId) visibleIds.add(heroId);
-    scheduleKnownCoversWarmup({
-      excludeIds: visibleIds,
-      priorityOrder: gridExercises.map((ex) => ex.firestoreId),
-    });
-  }, [loading, publicExercises, gridExercises, heroDisplay?.exercise?.firestoreId, showAdminUI, exerciseSortOrder]);
+    scheduleWarmup();
+  }, [
+    loading,
+    publicExercises.length,
+    gridExercises,
+    gridMembershipKey,
+    gridOrderKey,
+    heroDisplay?.exercise?.firestoreId,
+    showAdminUI,
+  ]);
 
   if (authLoading || (isLoggedIn && !isAdmin && profileLoading)) {
     return <LoadingScreen slowConnection={slowConnection} />;
@@ -1951,6 +2115,7 @@ export default function App() {
             onToggleFavorite={() => toggleFavorite(activeVideo.firestoreId)}
             isAdmin={showAdminUI}
             videoLoop={videoLoop}
+            compareLoopSync={compareLoopSync}
           />
           </Suspense>
         )}
@@ -1974,22 +2139,31 @@ export default function App() {
         onResendVerification={handleResendVerification}
         videoLoop={videoLoop}
         onToggleVideoLoop={(enabled) => void handleUpdateVideoLoop(enabled)}
+        compareLoopSync={compareLoopSync}
+        onToggleCompareLoopSync={(enabled) => void handleUpdateCompareLoopSync(enabled)}
         exerciseSortOrder={!showAdminUI ? exerciseSortOrder : undefined}
-        onExerciseSortOrderChange={!showAdminUI ? setExerciseSortOrder : undefined}
+        onExerciseSortOrderChange={!showAdminUI ? handleExerciseSortOrderChange : undefined}
+        saveRecentVideos={!showAdminUI ? saveRecentVideos : undefined}
+        onToggleSaveRecentVideos={!showAdminUI ? setSaveRecentVideos : undefined}
+        saveSearchHistory={!showAdminUI ? saveSearchHistory : undefined}
+        onToggleSaveSearchHistory={!showAdminUI ? setSaveSearchHistory : undefined}
+        cardHoverPreview={!showAdminUI ? cardHoverPreview : undefined}
+        onToggleCardHoverPreview={!showAdminUI ? setCardHoverPreview : undefined}
+        cardCoverParallax={!showAdminUI ? cardCoverParallax : undefined}
+        onToggleCardCoverParallax={!showAdminUI ? setCardCoverParallax : undefined}
         searchTerm={searchTerm}
         onSearchChange={handleSearchChange}
-        onSearchCommit={addSearch}
-        searchHistory={history}
+        onSearchCommit={handleSearchCommit}
+        searchHistory={visibleSearchHistory}
         searchRecents={visibleRecents}
         onSelectHistory={handleSelectSearchHistory}
-        onSelectRecent={(_id, name) => handleSearchChange(name)}
+        onSelectRecent={handleSelectRecentExercise}
         onRemoveHistoryItem={removeHistoryItem}
         onClearHistory={clearHistory}
-        onRecentWatch={handleRecentWatch}
         searchSuggestions={searchSuggestions}
         onSelectSuggestion={(ex) => {
           if (!showAdminUI && !hasValidYouTubeUrl(ex.youtubeUrl)) return;
-          addSearch(ex.name);
+          if (saveSearchHistory) addSearch(ex.name);
           watchExercise(ex);
         }}
         onSuggest={() => setShowRequestModal(true)}
@@ -2004,6 +2178,7 @@ export default function App() {
         onNotificationClick={handleNotificationClick}
         onOpenShortcuts={isMobileLayout ? undefined : () => setShortcutsOpen(true)}
         onGoHome={handleGoHome}
+        enableStudentGuide={!showAdminUI}
       />
 
       {showAdminUI && (
@@ -2061,6 +2236,8 @@ export default function App() {
           onChange={setAdvancedFilters}
           onReset={resetAdvancedFilters}
           resultCount={filteredExercises.length}
+          activeCategory={activeCategory}
+          favoriteCount={favorites.size}
         />
       )}
 
@@ -2121,6 +2298,11 @@ export default function App() {
                 : undefined
             }
             onClearFilters={handleEmptyClearFilters}
+            onSearchAllCategories={
+              emptyStateVariant === 'search' && activeCategory !== 'Todos'
+                ? handleGoToTodosKeepSearch
+                : undefined
+            }
             onGoHome={emptyStateVariant === 'search' ? handleGoHome : undefined}
           />
         ) : (
@@ -2155,6 +2337,8 @@ export default function App() {
                 onCompare={isFeatureEnabled('compare') ? handleCompare : undefined}
                 isComparePick={comparePick?.firestoreId === ex.firestoreId}
                 prefetchPeers={getGridPrefetchPeers(gridExercises, index)}
+                hoverPreviewEnabled={cardHoverPreview}
+                coverParallaxEnabled={cardCoverParallax}
               />
             ))}
           </div>
@@ -2204,6 +2388,11 @@ export default function App() {
                 : undefined
             }
             onClearFilters={handleEmptyClearFilters}
+            onSearchAllCategories={
+              emptyStateVariant === 'search' && activeCategory !== 'Todos'
+                ? handleGoToTodosKeepSearch
+                : undefined
+            }
             onGoHome={emptyStateVariant === 'search' ? handleGoHome : undefined}
           />
         ) : (
@@ -2243,6 +2432,8 @@ export default function App() {
                 onCompare={isFeatureEnabled('compare') ? handleCompare : undefined}
                 isComparePick={comparePick?.firestoreId === ex.firestoreId}
                 prefetchPeers={getGridPrefetchPeers(gridExercises, index)}
+                hoverPreviewEnabled={cardHoverPreview}
+                coverParallaxEnabled={cardCoverParallax}
               />
             ))}
           </motion.div>

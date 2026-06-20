@@ -9,6 +9,8 @@ import { Icon } from './Icon';
 import { SearchSuggestions } from './SearchSuggestions';
 import { SearchChips } from './SearchChips';
 import { UserAccountMenu } from './UserAccountMenu';
+import { StudentSettingsPanel } from './StudentSettingsPanel';
+import { UsageGuidePanel } from './UsageGuidePanel';
 import { resolveDisplayNickname } from '../lib/nickname';
 import type { RecentExercise } from '../hooks/useSearchHistory';
 import type { ExerciseSortOrder } from '../lib/utils';
@@ -20,8 +22,18 @@ interface SiteHeaderProps {
   onResendVerification?: () => Promise<void>;
   videoLoop?: boolean;
   onToggleVideoLoop?: (enabled: boolean) => void;
+  compareLoopSync?: boolean;
+  onToggleCompareLoopSync?: (enabled: boolean) => void;
   exerciseSortOrder?: ExerciseSortOrder;
   onExerciseSortOrderChange?: (order: ExerciseSortOrder) => void;
+  saveRecentVideos?: boolean;
+  onToggleSaveRecentVideos?: (enabled: boolean) => void;
+  saveSearchHistory?: boolean;
+  onToggleSaveSearchHistory?: (enabled: boolean) => void;
+  cardHoverPreview?: boolean;
+  onToggleCardHoverPreview?: (enabled: boolean) => void;
+  cardCoverParallax?: boolean;
+  onToggleCardCoverParallax?: (enabled: boolean) => void;
   searchTerm: string;
   onSearchChange: (value: string) => void;
   onSearchCommit?: (term: string) => void;
@@ -31,7 +43,6 @@ interface SiteHeaderProps {
   onSelectRecent?: (firestoreId: string, name: string) => void;
   onRemoveHistoryItem?: (term: string) => void;
   onClearHistory?: () => void;
-  onRecentWatch?: (firestoreId: string) => void;
   searchSuggestions?: Exercise[];
   onSelectSuggestion?: (ex: Exercise) => void;
   onSuggest: () => void;
@@ -46,6 +57,8 @@ interface SiteHeaderProps {
   onNotificationClick: (exerciseId?: string) => void;
   onOpenShortcuts?: () => void;
   onGoHome?: () => void;
+  /** Exibe «Guia de uso» no menu da conta (alunos) */
+  enableStudentGuide?: boolean;
 }
 
 function UserAvatar({ name }: { name: string }) {
@@ -71,8 +84,18 @@ export function SiteHeader({
   onResendVerification,
   videoLoop = false,
   onToggleVideoLoop,
+  compareLoopSync = false,
+  onToggleCompareLoopSync,
   exerciseSortOrder,
   onExerciseSortOrderChange,
+  saveRecentVideos,
+  onToggleSaveRecentVideos,
+  saveSearchHistory,
+  onToggleSaveSearchHistory,
+  cardHoverPreview,
+  onToggleCardHoverPreview,
+  cardCoverParallax,
+  onToggleCardCoverParallax,
   searchTerm,
   onSearchChange,
   onSearchCommit,
@@ -82,7 +105,6 @@ export function SiteHeader({
   onSelectRecent,
   onRemoveHistoryItem,
   onClearHistory,
-  onRecentWatch,
   searchSuggestions = [],
   onSelectSuggestion,
   onSuggest,
@@ -97,8 +119,12 @@ export function SiteHeader({
   onNotificationClick,
   onOpenShortcuts,
   onGoHome,
+  enableStudentGuide = false,
 }: SiteHeaderProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [usageGuideOpen, setUsageGuideOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const showStudentSettings = onExerciseSortOrderChange != null;
   const [searchFocused, setSearchFocused] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
@@ -234,7 +260,6 @@ export function SiteHeader({
         }}
         onSelectRecent={(id, name) => {
           onSelectRecent?.(id, name);
-          onRecentWatch?.(id);
           setSearchFocused(false);
         }}
         onRemoveHistory={(term) => onRemoveHistoryItem?.(term)}
@@ -244,6 +269,7 @@ export function SiteHeader({
   );
 
   return (
+    <>
     <header className="site-header sticky top-0 z-[100]">
       <div className="site-header-inner cinema-container">
         {/* Linha principal */}
@@ -423,11 +449,22 @@ export function SiteHeader({
                       userProfile={userProfile}
                       onUpdateNickname={onUpdateNickname}
                       onResendVerification={onResendVerification}
-                      videoLoop={videoLoop}
-                      onToggleVideoLoop={onToggleVideoLoop}
-                      exerciseSortOrder={exerciseSortOrder}
-                      onExerciseSortOrderChange={onExerciseSortOrderChange}
-                      onSuggest={onSuggest}
+                      onOpenSettings={
+                        showStudentSettings
+                          ? () => {
+                              setShowUserMenu(false);
+                              setSettingsOpen(true);
+                            }
+                          : undefined
+                      }
+                      onOpenUsageGuide={
+                        enableStudentGuide
+                          ? () => {
+                              setShowUserMenu(false);
+                              setUsageGuideOpen(true);
+                            }
+                          : undefined
+                      }
                       onLogout={() => {
                         setShowUserMenu(false);
                         void onLogout();
@@ -447,5 +484,33 @@ export function SiteHeader({
         </div>
       </div>
     </header>
+      {showStudentSettings && (
+        <StudentSettingsPanel
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          exerciseSortOrder={exerciseSortOrder ?? 'alpha'}
+          onExerciseSortOrderChange={onExerciseSortOrderChange!}
+          saveRecentVideos={saveRecentVideos ?? false}
+          onToggleSaveRecentVideos={onToggleSaveRecentVideos!}
+          saveSearchHistory={saveSearchHistory ?? true}
+          onToggleSaveSearchHistory={onToggleSaveSearchHistory!}
+          cardHoverPreview={cardHoverPreview ?? true}
+          onToggleCardHoverPreview={onToggleCardHoverPreview!}
+          cardCoverParallax={cardCoverParallax ?? true}
+          onToggleCardCoverParallax={onToggleCardCoverParallax!}
+          videoLoop={videoLoop ?? false}
+          onToggleVideoLoop={onToggleVideoLoop!}
+          compareLoopSync={compareLoopSync ?? false}
+          onToggleCompareLoopSync={onToggleCompareLoopSync!}
+        />
+      )}
+      {enableStudentGuide && (
+        <UsageGuidePanel
+          open={usageGuideOpen}
+          onClose={() => setUsageGuideOpen(false)}
+          onOpenShortcuts={onOpenShortcuts}
+        />
+      )}
+    </>
   );
 }

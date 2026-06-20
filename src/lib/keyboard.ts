@@ -16,6 +16,16 @@ export function modKeyLabel(): string {
   return isMacPlatform() ? '⌘' : 'Ctrl';
 }
 
+/** Tecla ` / acento grave — mesma posição física em QWERTY, ABNT2, AZERTY, etc. */
+export function isBackquoteKey(e: KeyboardEvent): boolean {
+  return e.code === 'Backquote' || e.code === 'IntlBackslash';
+}
+
+/** Atalhos de catálogo usam Ctrl (não ⌘) para evitar conflitos do sistema, ex. Cmd+` no macOS. */
+export function isCatalogShortcutMod(e: KeyboardEvent): boolean {
+  return e.ctrlKey && !e.metaKey && !e.altKey;
+}
+
 export type ShortcutKey = string;
 
 export interface ShortcutItem {
@@ -48,7 +58,17 @@ export function buildShortcutSections(options: {
         { id: 'shortcuts', label: 'Abrir este painel', keys: ['?'] },
         { id: 'shortcuts-alt', label: 'Abrir este painel (alternativo)', keys: [mod, '/'] },
         { id: 'escape', label: 'Fechar painel, player ou modal', keys: ['Esc'] },
-        { id: 'home', label: 'Voltar ao início (categoria Todos)', keys: ['Home'] },
+        {
+          id: 'todos-keep-search',
+          label: 'Categoria «Todos» (mantém o texto da busca)',
+          keys: ['Ctrl', '`'],
+        },
+        { id: 'clear-search', label: 'Limpar barra de busca', keys: ['Shift', 'Esc'] },
+        {
+          id: 'home',
+          label: 'Voltar ao início (Todos, limpar busca e filtros)',
+          keys: ['Ctrl', 'Shift', '`'],
+        },
       ],
     },
     {

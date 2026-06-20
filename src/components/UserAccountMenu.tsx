@@ -3,8 +3,6 @@ import type { User } from '../lib/firebase';
 import type { UserProfile } from '../types';
 import { Icon } from './Icon';
 import { useTheme } from '../hooks/useTheme';
-import type { ExerciseSortOrder } from '../lib/utils';
-import { GlassToggle } from './GlassToggle';
 import { normalizeNickname, validateNickname, resolveDisplayNickname } from '../lib/nickname';
 
 interface UserAccountMenuProps {
@@ -12,11 +10,8 @@ interface UserAccountMenuProps {
   userProfile: UserProfile | null;
   onUpdateNickname: (nickname: string) => Promise<void>;
   onResendVerification?: () => Promise<void>;
-  videoLoop?: boolean;
-  onToggleVideoLoop?: (enabled: boolean) => void;
-  exerciseSortOrder?: ExerciseSortOrder;
-  onExerciseSortOrderChange?: (order: ExerciseSortOrder) => void;
-  onSuggest: () => void;
+  onOpenUsageGuide?: () => void;
+  onOpenSettings?: () => void;
   onLogout: () => void;
   onClose: () => void;
 }
@@ -26,11 +21,8 @@ export function UserAccountMenu({
   userProfile,
   onUpdateNickname,
   onResendVerification,
-  videoLoop = false,
-  onToggleVideoLoop,
-  exerciseSortOrder,
-  onExerciseSortOrderChange,
-  onSuggest,
+  onOpenUsageGuide,
+  onOpenSettings,
   onLogout,
   onClose,
 }: UserAccountMenuProps) {
@@ -147,40 +139,6 @@ export function UserAccountMenu({
 
       <div className="account-menu-divider" />
 
-      {onExerciseSortOrderChange && exerciseSortOrder != null && (
-        <>
-          <div className="account-menu-section account-menu-section--flush-x">
-            <p className="account-menu-label">Exercícios</p>
-            <GlassToggle
-              label="Nome (A–Z)"
-              hint={
-                exerciseSortOrder === 'alpha'
-                  ? 'Lista ordenada alfabeticamente.'
-                  : 'Ative para ordenar por nome; desligado usa ordem por ID.'
-              }
-              checked={exerciseSortOrder === 'alpha'}
-              onChange={(checked) => onExerciseSortOrderChange(checked ? 'alpha' : 'id')}
-            />
-          </div>
-          <div className="account-menu-divider" />
-        </>
-      )}
-
-      {onToggleVideoLoop && (
-        <>
-          <div className="account-menu-section account-menu-section--flush-x">
-            <p className="account-menu-label">Reprodução</p>
-            <GlassToggle
-              label="Repetir vídeos em loop"
-              hint="Quando ativo, o vídeo reinicia automaticamente ao terminar."
-              checked={videoLoop}
-              onChange={onToggleVideoLoop}
-            />
-          </div>
-          <div className="account-menu-divider" />
-        </>
-      )}
-
       <div className="account-menu-section">
         <p className="account-menu-label">Aparência</p>
         <div className="theme-toggle-group" role="group" aria-label="Tema da interface">
@@ -207,17 +165,33 @@ export function UserAccountMenu({
 
       <div className="account-menu-divider" />
 
-      <button
-        type="button"
-        onClick={() => {
-          onClose();
-          onSuggest();
-        }}
-        className="menu-item w-full sm:hidden"
-      >
-        <Icon name="lightbulb" className="w-4 h-4" />
-        Sugerir exercício
-      </button>
+      {onOpenSettings && (
+        <button
+          type="button"
+          onClick={() => {
+            onClose();
+            onOpenSettings();
+          }}
+          className="menu-item w-full"
+        >
+          <Icon name="settings" className="w-4 h-4" />
+          Configurações
+        </button>
+      )}
+
+      {onOpenUsageGuide && (
+        <button
+          type="button"
+          onClick={() => {
+            onClose();
+            onOpenUsageGuide();
+          }}
+          className="menu-item w-full"
+        >
+          <Icon name="help" className="w-4 h-4" />
+          Guia de uso
+        </button>
+      )}
 
       <button
         type="button"

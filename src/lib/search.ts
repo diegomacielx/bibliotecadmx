@@ -234,6 +234,29 @@ export function filterExercisesByCategory(
   return items.filter((ex) => ex.category === activeCategory);
 }
 
+/** Pool de exercícios usado na busca — respeita categoria ativa e filtro «Somente favoritos». */
+export function getSearchPool(
+  validExercises: Exercise[],
+  categoryFiltered: Exercise[],
+  publicExercises: Exercise[],
+  activeCategory: string,
+  favoritesOnly: boolean,
+  favorites: Set<string>,
+  showAdminUI: boolean
+): Exercise[] {
+  if (showAdminUI) return validExercises;
+
+  if (favoritesOnly && favorites.size > 0) {
+    return publicExercises.filter((ex) => favorites.has(ex.firestoreId));
+  }
+
+  if (activeCategory !== 'Todos') {
+    return categoryFiltered;
+  }
+
+  return publicExercises;
+}
+
 /** Destaque rotativo: muda 1x por dia (estável durante o dia) */
 export function pickDailyFeaturedExercise(pool: Exercise[], date = new Date()): Exercise | null {
   if (pool.length === 0) return null;

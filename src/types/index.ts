@@ -131,6 +131,8 @@ export type AuthMode = 'login' | 'register' | 'forgot' | 'forgot-sent';
 
 export interface UserPlaybackSettings {
   videoLoop: boolean;
+  /** No comparador: reiniciar os dois vídeos juntos ao terminar um deles (padrão: desligado). */
+  compareLoopSync?: boolean;
 }
 export type AdminTab = 'single' | 'batch' | 'requests' | 'authorized' | 'audit' | 'users' | 'settings';
 export type AdminFilter =
