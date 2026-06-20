@@ -57,7 +57,6 @@ interface YouTubePlayerProps {
   autoplay?: boolean;
   mute?: boolean;
   controls?: boolean;
-  loop?: boolean;
   /** Player grande (lightbox) — YouTube libera qualidades mais altas conforme o tamanho */
   largeSurface?: boolean;
   onEnded?: () => void;
@@ -75,7 +74,6 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
     autoplay = true,
     mute = false,
     controls = true,
-    loop = false,
     largeSurface = false,
     onEnded,
     onPlayStateChange,
@@ -201,7 +199,6 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
           fs: showControls ? 1 : 0,
           disablekb: showControls ? 0 : 1,
           cc_load_policy: 0,
-          ...(loop ? { loop: 1, playlist: videoId } : {}),
         },
         events: {
           onReady: (event) => {
@@ -228,7 +225,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
       }
       playerRef.current = null;
     };
-  }, [videoId, autoplay, mute, controls, loop, deferAutoplay]);
+  }, [videoId, autoplay, mute, controls, deferAutoplay]);
 
   const hostClass = ['dmx-yt-host', largeSurface ? 'dmx-yt-host--large' : ''].filter(Boolean).join(' ');
 

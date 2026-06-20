@@ -35,6 +35,11 @@ html[data-theme="dark"] {
   --dmx-hover-bg: rgba(255, 255, 255, 0.07);
   --dmx-hover-bg-strong: rgba(255, 255, 255, 0.05);
 
+  /* Estado ativo bordô (tema Escuro, toggles, etc.) */
+  --dmx-accent-active-bg: rgba(239, 68, 68, 0.1);
+  --dmx-accent-active-border: rgba(239, 68, 68, 0.45);
+  --dmx-accent-active-glow: rgba(239, 68, 68, 0.22);
+
   --dmx-shadow-cinematic:
     0 1px 2px rgba(0, 0, 0, 0.24),
     0 8px 24px rgba(0, 0, 0, 0.32),
@@ -142,6 +147,10 @@ html[data-theme="light"] {
   --dmx-nav-arrow-bg: rgba(252, 251, 249, 0.98);
   --dmx-hover-bg: rgba(26, 24, 22, 0.06);
   --dmx-hover-bg-strong: rgba(26, 24, 22, 0.04);
+
+  --dmx-accent-active-bg: rgba(239, 68, 68, 0.1);
+  --dmx-accent-active-border: rgba(239, 68, 68, 0.45);
+  --dmx-accent-active-glow: rgba(239, 68, 68, 0.18);
 
   --dmx-shadow-cinematic:
     0 1px 2px rgba(26, 24, 22, 0.04),
@@ -351,8 +360,8 @@ html[data-theme="light"] {
 }
 
 .theme-toggle-btn--active {
-  border-color: rgba(239, 68, 68, 0.45);
-  background: rgba(239, 68, 68, 0.1);
+  border-color: var(--dmx-accent-active-border);
+  background: var(--dmx-accent-active-bg);
   color: var(--dmx-fg);
 }
 
@@ -422,13 +431,14 @@ html[data-theme="light"] {
   width: 3.125rem;
   height: 1.875rem;
   padding: 0.125rem;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 9999px;
   background: rgba(255, 255, 255, 0.1);
   box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.32);
   cursor: pointer;
   transition:
     background-color 280ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 280ms cubic-bezier(0.4, 0, 0.2, 1),
     box-shadow 280ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -438,10 +448,11 @@ html[data-theme="light"] {
 }
 
 .glass-toggle--on {
-  background: rgba(48, 209, 88, 0.92);
+  background: var(--dmx-accent-active-bg);
+  border-color: var(--dmx-accent-active-border);
   box-shadow:
     inset 0 1px 2px rgba(0, 0, 0, 0.12),
-    0 0 14px rgba(48, 209, 88, 0.28);
+    0 0 12px var(--dmx-accent-active-glow);
 }
 
 .glass-toggle__thumb {
@@ -480,7 +491,11 @@ html[data-theme="light"] {
 }
 
 [data-theme="light"] .glass-toggle--on {
-  background: rgba(48, 209, 88, 0.95);
+  background: var(--dmx-accent-active-bg);
+  border-color: var(--dmx-accent-active-border);
+  box-shadow:
+    inset 0 1px 2px rgba(26, 24, 22, 0.08),
+    0 0 10px var(--dmx-accent-active-glow);
 }
 
 [data-theme="light"] .hero-cta {

@@ -343,6 +343,7 @@ function ComparePanel({
   onPlayerReady: () => void;
   mobileLayout?: boolean;
 }) {
+  const [readyToken, setReadyToken] = useState(0);
   const ytId = getYouTubeId(ex.youtubeUrl);
   const orientation = resolveVideoOrientation(ex.youtubeUrl, {
     videoOrientation: ex.videoOrientation,
@@ -394,10 +395,25 @@ function ComparePanel({
                 autoplay
                 deferAutoplay
                 mute={false}
-                controls
+                controls={false}
                 largeSurface
-                onReady={onPlayerReady}
+                onReady={() => {
+                  setReadyToken((t) => t + 1);
+                  onPlayerReady();
+                }}
               />
+              <button
+                type="button"
+                className="cinema-play-catch absolute inset-0 z-[2]"
+                aria-label="Reproduzir ou pausar"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  playerRef.current?.togglePlay();
+                }}
+              />
+              <div className="cinema-overlay-controls">
+                <VideoProgressBar playerRef={playerRef} readyToken={readyToken} visible />
+              </div>
             </div>
           )
         ) : (
@@ -446,6 +462,11 @@ export function CinemaLightbox({
   const [playerReadyToken, setPlayerReadyToken] = useState(0);
   const [showReplay, setShowReplay] = useState(false);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const videoLoopRef = useRef(videoLoop);
+
+  useEffect(() => {
+    videoLoopRef.current = videoLoop;
+  }, [videoLoop]);
 
   const orientation = useMemo(
     () =>
@@ -568,7 +589,12 @@ export function CinemaLightbox({
   }, [effectiveNavNext, resetHideTimer]);
 
   const handlePlayerEnded = useCallback(() => {
-    if (videoLoop) return;
+    if (videoLoopRef.current) {
+      playerRef.current?.seekTo(0);
+      playerRef.current?.playVideo();
+      setShowReplay(false);
+      return;
+    }
 
     if (playlist.length > 1 && playlistIndex < playlist.length - 1 && onVideoEnded) {
       onVideoEnded();
@@ -577,7 +603,7 @@ export function CinemaLightbox({
 
     setShowReplay(true);
     resetHideTimer();
-  }, [videoLoop, playlist.length, playlistIndex, onVideoEnded, resetHideTimer]);
+  }, [playlist.length, playlistIndex, onVideoEnded, resetHideTimer]);
 
   const handleReplay = useCallback(() => {
     playerRef.current?.seekTo(0);
@@ -838,7 +864,6 @@ export function CinemaLightbox({
                       autoplay
                       mute={false}
                       controls={false}
-                      loop={videoLoop}
                       largeSurface
                       onReady={handlePrimaryPlayerReady}
                       onEnded={handlePlayerEnded}

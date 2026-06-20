@@ -586,7 +586,7 @@ export default function App() {
     const playbackDocRef = fbDoc(db, ...getUserPlaybackSettingsPath(user.uid));
     const unsubPlayback = onSnapshot(playbackDocRef, (docSnap) => {
       if (docSnap.exists()) {
-        setVideoLoop(Boolean(docSnap.data().videoLoop));
+        setVideoLoop(docSnap.data().videoLoop === true);
       } else {
         setVideoLoop(false);
       }
@@ -1112,6 +1112,7 @@ export default function App() {
         const playbackDocRef = fbDoc(db, ...getUserPlaybackSettingsPath(user.uid));
         await setDoc(playbackDocRef, { videoLoop: enabled }, { merge: true });
       } catch {
+        setVideoLoop(!enabled);
         showToast('Não foi possível salvar a preferência de reprodução.', 'error');
       }
     },
