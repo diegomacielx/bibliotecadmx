@@ -5131,10 +5131,11 @@ html[data-theme="light"] .cinema-backdrop::before {
 
   html[data-mobile-playback-active='true'] .cinema-lightbox--mobile {
     bottom: 0;
-    height: 100dvh;
-    max-height: 100dvh;
+    height: 100svh;
+    max-height: 100svh;
+    min-height: -webkit-fill-available;
     pointer-events: auto;
-    background: #000 !important;
+    background: transparent !important;
     z-index: 280;
   }
 

@@ -15,6 +15,7 @@ import { useExerciseCover } from '../hooks/useExerciseCover';
 import { useHorizontalSwipe } from '../hooks/useHorizontalSwipe';
 import { primeVideoPlaybackIntent } from '../lib/videoPlaybackPrime';
 import { MobileMusclesDropup } from './mobile/MobileMusclesDropup';
+import { getCoverPlaceholderStyle } from './ExerciseCoverPlaceholder';
 import { MobileReelsFooterBlur } from './mobile/MobileReelsFooterBlur';
 import { getCoverFrameStyle } from '../lib/coverFocus';
 import { ExerciseCoverPlaceholder } from './ExerciseCoverPlaceholder';
@@ -378,10 +379,13 @@ function MobileExerciseSheet({
     onSwipeRight: navPrevDisabled ? undefined : onNavPrev,
   });
 
+  const stagePlaceholderStyle = getCoverPlaceholderStyle(ex.id, ex.category);
+
   return (
-    <div className="cinema-mobile-sheet cinema-mobile-sheet--reels">
+    <div className="cinema-mobile-sheet cinema-mobile-sheet--reels" style={stagePlaceholderStyle}>
       <div
         className="cinema-mobile-reels-stage"
+        style={stagePlaceholderStyle}
         onTouchStart={swipeHandlers.onTouchStart}
         onTouchEnd={swipeHandlers.onTouchEnd}
         onTouchCancel={swipeHandlers.onTouchCancel}
