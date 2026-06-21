@@ -37,6 +37,15 @@ export const CATEGORIES = [
   'Core',
 ] as const;
 
+/** Desktop — inclui Favoritos na barra de categorias */
+export const NAV_CATEGORIES = ['Todos', 'Favoritos', ...CATEGORIES.slice(1)] as const;
+
+/** Mobile — sem Favoritos (aba dedicada no rodapé), demais categorias em ordem alfabética */
+export const MOBILE_CATEGORY_NAV = [
+  'Todos',
+  ...CATEGORIES.slice(1).slice().sort((a, b) => a.localeCompare(b, 'pt-BR')),
+] as const;
+
 export const DEFAULT_FORM = {
   id: '',
   name: '',

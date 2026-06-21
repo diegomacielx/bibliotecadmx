@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { GlassToggle } from './GlassToggle';
 import { Icon } from './Icon';
 import type { ExerciseSortOrder } from '../lib/utils';
+import { useTouchLayout } from '../hooks/useMediaQuery';
 
 interface StudentSettingsPanelProps {
   open: boolean;
@@ -43,6 +44,7 @@ export function StudentSettingsPanel({
   onToggleCompareLoopSync,
 }: StudentSettingsPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const touchLayout = useTouchLayout();
 
   useEffect(() => {
     if (!open) return;
@@ -134,6 +136,7 @@ export function StudentSettingsPanel({
                     onChange={onToggleSaveSearchHistory}
                     transitionSpeed="instant"
                   />
+                  {!touchLayout && (
                   <GlassToggle
                     label="Ordem alfabética (A–Z)"
                     hint={
@@ -145,6 +148,9 @@ export function StudentSettingsPanel({
                     onChange={(checked) => onExerciseSortOrderChange(checked ? 'alpha' : 'id')}
                     transitionSpeed="instant"
                   />
+                  )}
+                  {!touchLayout && (
+                  <>
                   <GlassToggle
                     label="Preview ao passar o mouse"
                     hint={
@@ -167,6 +173,8 @@ export function StudentSettingsPanel({
                     onChange={onToggleCardCoverParallax}
                     transitionSpeed="instant"
                   />
+                  </>
+                  )}
                 </div>
               </section>
 
@@ -183,6 +191,7 @@ export function StudentSettingsPanel({
                     checked={videoLoop}
                     onChange={onToggleVideoLoop}
                   />
+                  {!touchLayout && (
                   <GlassToggle
                     label="Loop sincronizado no comparador"
                     hint={
@@ -194,6 +203,7 @@ export function StudentSettingsPanel({
                     onChange={onToggleCompareLoopSync}
                     disabled={!videoLoop}
                   />
+                  )}
                 </div>
               </section>
             </div>

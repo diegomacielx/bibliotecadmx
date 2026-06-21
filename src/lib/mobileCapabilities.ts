@@ -11,9 +11,11 @@ export const MOBILE_FEATURES = {
   copyLink: true,
   download: true,
   /** Botão nos cards; modo lado a lado só no desktop */
-  compare: true,
+  compare: false,
   compareBanner: false,
   adminStudio: true,
+  /** Tabs batch/audit/settings — mobile gate warns desktop preferred */
+  adminStudioAdvanced: true,
   heroFeatured: true,
 } as const;
 

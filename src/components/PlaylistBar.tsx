@@ -8,6 +8,7 @@ interface PlaylistBarProps {
   onToggleSelectionMode: () => void;
   onPlay: () => void;
   onClear: () => void;
+  mobileShellMode?: boolean;
 }
 
 export function PlaylistBar({
@@ -16,42 +17,44 @@ export function PlaylistBar({
   onToggleSelectionMode,
   onPlay,
   onClear,
+  mobileShellMode = false,
 }: PlaylistBarProps) {
   const count = playlist.length;
+  const barVisible = selectionMode || count > 0;
 
   return (
     <>
       <motion.button
         type="button"
-        className="playlist-fab"
+        className={`playlist-fab ${mobileShellMode ? 'playlist-fab--mobile-shell' : ''}`}
         onClick={onToggleSelectionMode}
-        whileHover={{ scale: 1.05 }}
+        whileHover={mobileShellMode ? undefined : { scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
-        title={selectionMode ? 'Sair do modo treino' : 'Montar treino'}
+        title={selectionMode ? 'Sair do modo playlist' : 'Montar playlist'}
         aria-pressed={selectionMode}
       >
         <Icon name={selectionMode ? 'x' : 'listvideo'} className="w-5 h-5" />
       </motion.button>
 
       <AnimatePresence>
-        {(selectionMode || count > 0) && (
+        {barVisible && (
           <motion.div
-            initial={{ opacity: 0, y: 80 }}
+            initial={{ opacity: 0, y: mobileShellMode ? 24 : 80 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 80 }}
+            exit={{ opacity: 0, y: mobileShellMode ? 24 : 80 }}
             transition={{ type: 'spring', stiffness: 340, damping: 32 }}
-            className="playlist-bar"
+            className={`playlist-bar ${mobileShellMode ? 'playlist-bar--mobile-shell' : ''}`}
           >
             <div className="playlist-bar-inner">
               <div className="flex items-center gap-3 min-w-0">
                 <span className="playlist-bar-badge">{count}</span>
                 <div className="min-w-0">
                   <p className="text-xs font-semibold text-white truncate">
-                    {selectionMode ? 'Modo treino' : 'Sua playlist'}
+                    {selectionMode ? 'Modo playlist' : 'Sua playlist'}
                   </p>
                   <p className="text-[10px] text-zinc-500 truncate">
                     {count === 0
-                      ? 'Toque nos cards na ordem do treino'
+                      ? 'Clique nos cards na ordem da playlist'
                       : `Ordem de reprodução: ${count} exercício${count !== 1 ? 's' : ''}`}
                   </p>
                 </div>
@@ -66,6 +69,15 @@ export function PlaylistBar({
                       <Icon name="play" className="w-3.5 h-3.5" /> Iniciar
                     </button>
                   </>
+                )}
+                {selectionMode && count === 0 && (
+                  <button
+                    type="button"
+                    className="playlist-bar-btn playlist-bar-btn--ghost"
+                    onClick={onToggleSelectionMode}
+                  >
+                    Cancelar
+                  </button>
                 )}
               </div>
             </div>

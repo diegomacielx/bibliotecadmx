@@ -85,27 +85,27 @@ export const USAGE_GUIDE_SECTIONS: UsageGuideSection[] = [
   },
   {
     id: 'playlist',
-    title: 'Modo treino (playlist)',
+    title: 'Modo playlist',
     intro: 'Monte uma sequência de exercícios e reproduza na ordem escolhida.',
     items: [
       {
         id: 'start-selection',
-        title: 'Montar o treino',
+        title: 'Montar a playlist',
         description:
-          'Toque no botão flutuante com ícone de lista (canto inferior da tela) para entrar no modo treino. A barra inferior indica quantos exercícios você selecionou.',
+          'Clique no botão flutuante com ícone de lista (canto inferior da tela) para entrar no modo playlist. A barra inferior indica quantos exercícios você selecionou.',
       },
       {
         id: 'pick-order',
         title: 'Escolher a ordem',
         description:
-          'Com o modo treino ativo, clique nos cards na ordem desejada. Cada card mostra um número indicando a posição na sequência. Toque novamente para remover da lista.',
+          'Com o modo playlist ativo, clique nos cards na ordem desejada. Cada card mostra um número indicando a posição na sequência. Clique novamente para remover da lista.',
       },
       {
         id: 'play-playlist',
         title: 'Iniciar reprodução',
         description:
           'Quando tiver um ou mais exercícios, pressione «Iniciar» na barra inferior. Os vídeos tocam em sequência; ao terminar um, o próximo abre automaticamente (se o loop estiver desligado).',
-        steps: ['Use «Limpar» para recomeçar a seleção.', 'Toque no botão flutuante com X para sair do modo treino.'],
+        steps: ['Use «Limpar» para recomeçar a seleção.', 'Clique no botão flutuante com X para sair do modo playlist.'],
       },
     ],
   },

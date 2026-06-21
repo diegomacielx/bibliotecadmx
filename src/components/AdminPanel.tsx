@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useState, useEffect, type ReactNode } from 'react';
 import type {
   AdminTab,
   Exercise,
@@ -16,6 +16,8 @@ import { AdminCoverEditor } from './AdminCoverEditor';
 import { AdminEquipmentField } from './AdminEquipmentField';
 import { AccessIntegrationsSection } from './AccessIntegrationsSection';
 import { HeroSpotlightSection } from './HeroSpotlightSection';
+import { isMobileAdminDesktopTab } from '../lib/adminMobile';
+import { MobileAdminDesktopGate } from './mobile/admin/MobileAdminDesktopGate';
 
 interface AdminPanelProps {
   adminTab: AdminTab;
@@ -57,6 +59,7 @@ interface AdminPanelProps {
   heroSpotlight: HeroSpotlightSettings;
   onHeroSpotlightChange: (next: HeroSpotlightSettings) => void;
   onSaveHeroSpotlight: (next: HeroSpotlightSettings) => Promise<void>;
+  mobileLayout?: boolean;
 }
 
 type NavItem = {
@@ -135,7 +138,9 @@ export function AdminPanel({
   heroSpotlight,
   onHeroSpotlightChange,
   onSaveHeroSpotlight,
+  mobileLayout = false,
 }: AdminPanelProps) {
+  const [mobileDesktopGateAck, setMobileDesktopGateAck] = useState(false);
   const pendingRequests = exerciseRequests.filter((r) => r.status === 'pending');
   const pendingUsers = useMemo(() => {
     const emails = new Set(
@@ -144,6 +149,13 @@ export function AdminPanel({
     return emails.size;
   }, [appUsers]);
   const groupedUsers = useMemo(() => groupAppUsersByEmail(appUsers), [appUsers]);
+
+  useEffect(() => {
+    setMobileDesktopGateAck(false);
+  }, [adminTab, editingId]);
+
+  const showMobileDesktopGate =
+    mobileLayout && !editingId && isMobileAdminDesktopTab(adminTab) && !mobileDesktopGateAck;
 
   const navItems: NavItem[] = editingId
     ? [{ tab: 'single', label: 'Editar exercício', icon: 'pencil' }]
@@ -168,8 +180,8 @@ export function AdminPanel({
   };
 
   return (
-    <div className="admin-shell">
-      <div className="admin-modal">
+    <div className={`admin-shell ${mobileLayout ? 'admin-shell--mobile-fullscreen' : ''}`}>
+      <div className={`admin-modal ${mobileLayout ? 'admin-modal--mobile-fullscreen' : ''}`}>
         <header className="admin-header">
           <div>
             <p className="admin-eyebrow">Studio Admin</p>
@@ -201,6 +213,14 @@ export function AdminPanel({
           )}
 
           <div className="admin-content">
+            {showMobileDesktopGate ? (
+              <MobileAdminDesktopGate
+                tab={adminTab}
+                onBack={onClose}
+                onContinue={() => setMobileDesktopGateAck(true)}
+              />
+            ) : (
+              <>
             {adminTab === 'batch' && (
               <div className="admin-panel-section admin-panel-section--batch">
                 <p className="admin-lead">
@@ -612,6 +632,8 @@ export function AdminPanel({
                   onSave={onSaveSettings}
                 />
               </div>
+            )}
+              </>
             )}
           </div>
         </div>

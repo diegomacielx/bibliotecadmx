@@ -71,6 +71,7 @@ export function ExerciseCoverImage({
           decoding="async"
           fetchPriority={fetchPriority}
           draggable={false}
+          onContextMenu={(e) => e.preventDefault()}
           onLoad={onLoad}
           onError={onError}
           className={`cover-image-main ${imgLoaded || instantDisplay ? 'cover-image-main--loaded' : ''} ${instantDisplay ? 'cover-image-main--instant' : ''} ${imgClassName}`.trim()}

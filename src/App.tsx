@@ -15,7 +15,7 @@ import type {
   AdminFilter,
 } from './types';
 import type { ExerciseSortOrder } from './lib/utils';
-import { ADMIN_EMAILS, CUSTOM_LOGO_URL, CATEGORIES, DEFAULT_FORM } from './lib/constants';
+import { ADMIN_EMAILS, CUSTOM_LOGO_URL, DEFAULT_FORM, MOBILE_CATEGORY_NAV, NAV_CATEGORIES } from './lib/constants';
 import {
   getDbPath,
   getAlternateExercisesPath,
@@ -109,7 +109,26 @@ import { ensureUserProfile, getUserProfileIfExists } from './lib/authProfile';
 import { adminRemoveUserProfile, adminSetUserStatus } from './lib/adminUserAccess';
 import { AdvancedFiltersBar } from './components/AdvancedFiltersBar';
 import { useAdvancedFilters } from './hooks/useAdvancedFilters';
-import { applyAdvancedFilters, hasActiveAdvancedFilters } from './lib/exerciseFilters';
+import { applyAdvancedFilters, countActiveAdvancedFilterGroups, hasActiveAdvancedFilters } from './lib/exerciseFilters';
+import { MobileShell, type MobileTab } from './components/mobile/MobileShell';
+import { MobileSearchScreen } from './components/mobile/MobileSearchScreen';
+import { MobileAccountScreen } from './components/mobile/MobileAccountScreen';
+import { MobileFilterSheet } from './components/mobile/MobileFilterSheet';
+import { MobileCatalog } from './components/mobile/MobileCatalog';
+import { MobileCatalogToolbar } from './components/mobile/MobileCatalogToolbar';
+import { StudentSettingsPanel } from './components/StudentSettingsPanel';
+import { UsageGuidePanel } from './components/UsageGuidePanel';
+import { useMobileCatalogView } from './hooks/useMobileCatalogView';
+import { useMobileHeaderCollapse } from './hooks/useMobileHeaderCollapse';
+import { MobileAdminShell } from './components/mobile/admin/MobileAdminShell';
+import { MobileAdminHub } from './components/mobile/admin/MobileAdminHub';
+import { MobileAdminMoreSheet } from './components/mobile/admin/MobileAdminMoreSheet';
+import { MobileAdminDisabledNotice } from './components/mobile/admin/MobileAdminDisabledNotice';
+import {
+  readMobileAdminBannerDismissed,
+  MOBILE_ADMIN_BANNER_DISMISSED_KEY,
+  type MobileAdminTab,
+} from './lib/adminMobile';
 import { useGitHubCoverProbe, resolveNeedsGitHubCover } from './hooks/useGitHubCoverProbe';
 import { buildExerciseWritePayload, applyExerciseSaveToList } from './lib/exercisePayload';
 import { parseCoverFocusYInput } from './lib/coverFocus';
@@ -134,8 +153,6 @@ const RequestModal = lazy(() =>
   import('./components/RequestModal').then((m) => ({ default: m.RequestModal }))
 );
 
-const NAV_CATEGORIES = ['Todos', 'Favoritos', ...CATEGORIES.slice(1)] as const;
-
 function resolveExerciseNavCategory(category: string | undefined | null): string {
   if (!category || category === 'Todos' || category === 'Favoritos') return 'Todos';
   if ((NAV_CATEGORIES as readonly string[]).includes(category)) return category;
@@ -144,6 +161,13 @@ function resolveExerciseNavCategory(category: string | undefined | null): string
 
 export default function App() {
   const isMobileLayout = useTouchLayoutClass();
+  const [mobileTab, setMobileTab] = useState<MobileTab>('home');
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
+  const [mobileGuideOpen, setMobileGuideOpen] = useState(false);
+  const [adminMobileTab, setAdminMobileTab] = useState<MobileAdminTab>('catalog');
+  const [adminMoreOpen, setAdminMoreOpen] = useState(false);
+  const [adminBannerDismissed, setAdminBannerDismissed] = useState(() => readMobileAdminBannerDismissed());
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [loginEmail, setLoginEmail] = useState('');
@@ -165,7 +189,9 @@ export default function App() {
   const [slowConnection, setSlowConnection] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState(() => localStorage.getItem('dmx_category') || 'Todos');
+  const categoryBeforeFavoritesTabRef = useRef(activeCategory);
   const [exerciseSortOrder, setExerciseSortOrder] = useState<ExerciseSortOrder>(() => readExerciseSortOrder());
+  const catalogSortOrder: ExerciseSortOrder = isMobileLayout ? 'alpha' : exerciseSortOrder;
   const categoryBeforeSearchRef = useRef(activeCategory);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const { filters: advancedFilters, setFilters: setAdvancedFilters, resetFilters: resetAdvancedFilters } =
@@ -259,6 +285,9 @@ export default function App() {
     setShowAdminPanel(false);
     setEditingId(null);
     setAdminTab('batch');
+    if (isMobileLayout && isAdmin && !adminUserPreview) {
+      setAdminMobileTab('catalog');
+    }
   };
 
   const stats = useMemo(() => {
@@ -1288,12 +1317,59 @@ export default function App() {
   };
 
   const showAdminUI = isAdmin && !adminUserPreview;
+  const useMobileShell = isMobileLayout && !showAdminUI;
+  const useMobileAdminShell =
+    isMobileLayout && showAdminUI && isFeatureEnabled('adminStudio');
+  const showAdminMobileDisabled =
+    isMobileLayout && showAdminUI && !isFeatureEnabled('adminStudio');
+  const mobileFilterActiveCount = countActiveAdvancedFilterGroups(advancedFilters);
+  const { catalogView, setCatalogView } = useMobileCatalogView();
+  useMobileHeaderCollapse(useMobileShell || useMobileAdminShell);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (useMobileShell) {
+      document.documentElement.setAttribute('data-mobile-shell', 'true');
+    } else {
+      document.documentElement.removeAttribute('data-mobile-shell');
+    }
+    if (useMobileAdminShell) {
+      document.documentElement.setAttribute('data-mobile-admin-shell', 'true');
+    } else {
+      document.documentElement.removeAttribute('data-mobile-admin-shell');
+    }
+  }, [useMobileShell, useMobileAdminShell]);
+
+  useEffect(() => {
+    if (useMobileShell) {
+      setSelectionMode(false);
+    }
+  }, [useMobileShell]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (!useMobileShell) {
+      document.documentElement.removeAttribute('data-mobile-playlist-active');
+      return;
+    }
+    const active = selectionMode || playlistOrder.length > 0;
+    document.documentElement.toggleAttribute('data-mobile-playlist-active', active);
+  }, [useMobileShell, selectionMode, playlistOrder.length]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (!useMobileShell) {
+      document.documentElement.removeAttribute('data-mobile-playback-active');
+      return;
+    }
+    document.documentElement.toggleAttribute('data-mobile-playback-active', !!activeVideo);
+  }, [useMobileShell, activeVideo]);
 
   /** Exercícios visíveis para alunos — somente com YouTube válido, na ordem escolhida */
   const publicExercises = useMemo(() => {
     const list = exercises.filter((ex) => hasValidYouTubeUrl(ex.youtubeUrl));
-    return [...list].sort((a, b) => compareExercisesBySortOrder(a, b, exerciseSortOrder));
-  }, [exercises, exerciseSortOrder]);
+    return [...list].sort((a, b) => compareExercisesBySortOrder(a, b, catalogSortOrder));
+  }, [exercises, catalogSortOrder]);
 
   const searchableExercises = useMemo(
     () => (showAdminUI ? exercises : publicExercises),
@@ -1378,7 +1454,7 @@ export default function App() {
 
     return applyAdvancedFilters(searched, advancedFilters, favorites).sort((a, b) => {
       if (searchTerm.trim() || showAdminUI) return 0;
-      return compareExercisesBySortOrder(a, b, exerciseSortOrder);
+      return compareExercisesBySortOrder(a, b, catalogSortOrder);
     });
   }, [
     searchTerm,
@@ -1388,7 +1464,7 @@ export default function App() {
     advancedFilters,
     favorites,
     showAdminUI,
-    exerciseSortOrder,
+    catalogSortOrder,
   ]);
 
   const searchSuggestions = useMemo(() => {
@@ -1461,8 +1537,64 @@ export default function App() {
     setSearchTerm('');
     setActiveCategory('Todos');
     resetAdvancedFilters();
+    setMobileTab('home');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [resetAdvancedFilters]);
+
+  const handleMobileBrandPress = useCallback(() => {
+    if (activeVideo) {
+      setActiveVideo(null);
+      setCompareEx(null);
+    }
+    setSearchTerm('');
+    setActiveCategory('Todos');
+    resetAdvancedFilters();
+    setMobileTab('home');
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [activeVideo, resetAdvancedFilters]);
+
+  const handleMobileTabChange = useCallback(
+    (tab: MobileTab) => {
+      if (activeVideo) {
+        setActiveVideo(null);
+        setCompareEx(null);
+      }
+      setMobileTab(tab);
+      if (tab === 'favorites') {
+        categoryBeforeFavoritesTabRef.current = activeCategory;
+        setActiveCategory('Favoritos');
+        setSearchTerm('');
+      } else if (tab === 'home') {
+        if (activeCategory === 'Favoritos') {
+          setActiveCategory(categoryBeforeFavoritesTabRef.current || 'Todos');
+        }
+      }
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    },
+    [activeCategory, activeVideo]
+  );
+
+  const handleAdminMobileTabChange = useCallback((tab: MobileAdminTab) => {
+    setAdminMobileTab(tab);
+    if (tab === 'users') {
+      setEditingId(null);
+      setAdminTab('users');
+      setShowAdminPanel(true);
+    } else if (tab === 'requests') {
+      setEditingId(null);
+      setAdminTab('requests');
+      setShowAdminPanel(true);
+    } else if (tab === 'more') {
+      setAdminMoreOpen(true);
+    } else {
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    }
+  }, []);
+
+  const dismissAdminBanner = useCallback(() => {
+    setAdminBannerDismissed(true);
+    localStorage.setItem(MOBILE_ADMIN_BANNER_DISMISSED_KEY, 'true');
+  }, []);
 
   const handleSearchCommit = useCallback(
     (term: string) => {
@@ -1506,6 +1638,10 @@ export default function App() {
 
   const handleCategoryChange = useCallback((cat: string) => {
     setSearchTerm('');
+    setActiveCategory(cat);
+  }, []);
+
+  const handleSearchScreenCategoryChange = useCallback((cat: string) => {
     setActiveCategory(cat);
   }, []);
 
@@ -1947,7 +2083,7 @@ export default function App() {
     : `browse-${activeCategory}`;
 
   useEffect(() => {
-    if (loading || !isLoggedIn || isCoarsePointer()) return;
+    if (loading || !isLoggedIn) return;
 
     const run = () => primeYouTubePlayerApi();
     if (typeof window.requestIdleCallback === 'function') {
@@ -2187,9 +2323,15 @@ export default function App() {
         onOpenShortcuts={isMobileLayout ? undefined : () => setShortcutsOpen(true)}
         onGoHome={handleGoHome}
         enableStudentGuide={!showAdminUI}
+        mobileShellMode={useMobileShell}
+        mobileCompactHeader={useMobileAdminShell}
+        mobileSearchScreenActive={useMobileShell && mobileTab === 'search'}
+        mobileSearchCategories={MOBILE_CATEGORY_NAV}
+        mobileSearchActiveCategory={activeCategory}
+        onMobileSearchCategoryChange={handleSearchScreenCategoryChange}
       />
 
-      {showAdminUI && (
+      {showAdminUI && !useMobileAdminShell && (
         <>
           {adminFilter === 'missing_cover' && coverProbeLoading && (
             <div className="cover-audit-banner cinema-container mb-fluid-sm">
@@ -2231,12 +2373,54 @@ export default function App() {
         </div>
       )}
 
+      {!useMobileShell && !useMobileAdminShell && (
       <CategoryNav
         categories={NAV_CATEGORIES}
         activeCategory={activeCategory}
         onCategoryChange={handleCategoryChange}
         favoritesCount={favorites.size}
       />
+      )}
+
+      {(useMobileShell || useMobileAdminShell) && (
+        <MobileFilterSheet
+          open={mobileFilterOpen}
+          onClose={() => setMobileFilterOpen(false)}
+          filters={advancedFilters}
+          onChange={setAdvancedFilters}
+          onReset={resetAdvancedFilters}
+          resultCount={filteredExercises.length}
+          activeCategory={activeCategory}
+          favoriteCount={favorites.size}
+        />
+      )}
+
+      {useMobileShell && !showAdminUI && (
+        <>
+          <StudentSettingsPanel
+            open={mobileSettingsOpen}
+            onClose={() => setMobileSettingsOpen(false)}
+            exerciseSortOrder={exerciseSortOrder}
+            onExerciseSortOrderChange={handleExerciseSortOrderChange}
+            saveRecentVideos={saveRecentVideos}
+            onToggleSaveRecentVideos={setSaveRecentVideos}
+            saveSearchHistory={saveSearchHistory}
+            onToggleSaveSearchHistory={setSaveSearchHistory}
+            cardHoverPreview={cardHoverPreview}
+            onToggleCardHoverPreview={setCardHoverPreview}
+            cardCoverParallax={cardCoverParallax}
+            onToggleCardCoverParallax={setCardCoverParallax}
+            videoLoop={videoLoop}
+            onToggleVideoLoop={(enabled) => void handleUpdateVideoLoop(enabled)}
+            compareLoopSync={compareLoopSync}
+            onToggleCompareLoopSync={(enabled) => void handleUpdateCompareLoopSync(enabled)}
+          />
+          <UsageGuidePanel
+            open={mobileGuideOpen}
+            onClose={() => setMobileGuideOpen(false)}
+          />
+        </>
+      )}
 
       {!isMobileLayout && (
         <AdvancedFiltersBar
@@ -2266,8 +2450,242 @@ export default function App() {
         </div>
       )}
 
-      <main className="cinema-container w-full flex-1 pb-fluid-xl relative z-10">
-        {isMobileLayout ? (
+      <main className={`cinema-container w-full flex-1 relative z-10 ${useMobileShell || useMobileAdminShell ? 'mobile-shell-main' : 'pb-fluid-xl'}`}>
+        {showAdminMobileDisabled ? (
+          <MobileAdminDisabledNotice />
+        ) : useMobileAdminShell ? (
+          <>
+            <MobileAdminMoreSheet
+              open={adminMoreOpen}
+              onClose={() => setAdminMoreOpen(false)}
+              onOpenTab={openAdminTab}
+              onNewExercise={() => openAdminTab('single')}
+              onToggleUserPreview={() => setAdminUserPreview((v) => !v)}
+              adminUserPreview={adminUserPreview}
+              onLogout={handleLogout}
+            />
+            <MobileAdminShell
+              activeTab={adminMobileTab}
+              onTabChange={handleAdminMobileTabChange}
+              pendingUsersCount={pendingUsersCount}
+              pendingRequestsCount={pendingRequestsCount}
+            >
+              {adminMobileTab === 'catalog' && (
+                <div key={pageKey}>
+                  <MobileAdminHub
+                    stats={stats}
+                    adminFilter={adminFilter}
+                    onFilterChange={setAdminFilter}
+                    onNewExercise={() => openAdminTab('single')}
+                    onToggleUserPreview={() => setAdminUserPreview((v) => !v)}
+                    adminUserPreview={adminUserPreview}
+                    bannerDismissed={adminBannerDismissed}
+                    onDismissBanner={dismissAdminBanner}
+                    toolbar={
+                      <MobileCatalogToolbar
+                        filterActiveCount={mobileFilterActiveCount}
+                        onOpenFilters={() => setMobileFilterOpen(true)}
+                        catalogView={catalogView}
+                        onCatalogViewChange={setCatalogView}
+                      />
+                    }
+                  >
+                    {loading ? (
+                      <div className="py-fluid-2xl">
+                        <GridSkeleton count={6} />
+                      </div>
+                    ) : filteredExercises.length === 0 ? (
+                      <EmptyState
+                        variant={emptyStateVariant}
+                        searchTerm={searchTerm}
+                        category={activeCategory}
+                        onClearFilters={handleEmptyClearFilters}
+                      />
+                    ) : (
+                      <MobileCatalog
+                        exercises={gridExercises}
+                        catalogView={catalogView}
+                        isAdmin={showAdminUI}
+                        isExerciseIncomplete={isExerciseIncomplete}
+                        handleDownloadCheck={handleDownloadCheck}
+                        setForm={setForm}
+                        setEditingId={setEditingId}
+                        setAdminTab={setAdminTab}
+                        setShowAdminPanel={setShowAdminPanel}
+                        copyLink={copyLink}
+                        copiedId={copiedId}
+                        onWatch={watchExercise}
+                        selectionMode={false}
+                        playlistOrder={[]}
+                        onTogglePlaylist={togglePlaylistItem}
+                        isFavorite={isFavorite}
+                        onToggleFavorite={toggleFavorite}
+                        cardHoverPreview={false}
+                        cardCoverParallax={false}
+                      />
+                    )}
+                  </MobileAdminHub>
+                </div>
+              )}
+            </MobileAdminShell>
+          </>
+        ) : useMobileShell ? (
+          <MobileShell
+            activeTab={mobileTab}
+            onTabChange={handleMobileTabChange}
+            onBrandPress={handleMobileBrandPress}
+            favoritesCount={favorites.size}
+            playbackElevated={!!activeVideo}
+          >
+            {mobileTab === 'search' ? (
+              <MobileSearchScreen
+                searchTerm={searchTerm}
+                onSearchChange={handleSearchChange}
+                onSearchCommit={handleSearchCommit}
+                searchHistory={visibleSearchHistory}
+                searchRecents={visibleRecents}
+                onSelectHistory={handleSelectSearchHistory}
+                onSelectRecent={handleSelectRecentExercise}
+                onRemoveHistoryItem={removeHistoryItem}
+                onClearHistory={clearHistory}
+                searchSuggestions={searchSuggestions}
+                onSelectSuggestion={(ex) => {
+                  if (!hasValidYouTubeUrl(ex.youtubeUrl)) return;
+                  if (saveSearchHistory) addSearch(ex.name);
+                  watchExercise(ex);
+                }}
+                onSearchAll={() => handleSearchCommit(searchTerm.trim())}
+                onSuggest={() => setShowRequestModal(true)}
+                loading={loading}
+                slowConnection={slowConnection}
+                filteredExercises={filteredExercises}
+                gridExercises={gridExercises}
+                emptyStateVariant={emptyStateVariant}
+                activeCategory={activeCategory}
+                onClearFilters={handleEmptyClearFilters}
+                onSearchAllCategories={
+                  emptyStateVariant === 'search' && activeCategory !== 'Todos'
+                    ? handleGoToTodosKeepSearch
+                    : undefined
+                }
+                onGoHome={handleGoHome}
+                filterTrigger={
+                  <MobileCatalogToolbar
+                    filterActiveCount={mobileFilterActiveCount}
+                    onOpenFilters={() => setMobileFilterOpen(true)}
+                    catalogView={catalogView}
+                    onCatalogViewChange={setCatalogView}
+                  />
+                }
+                catalogView={catalogView}
+                isAdmin={showAdminUI}
+                isExerciseIncomplete={isExerciseIncomplete}
+                handleDownloadCheck={handleDownloadCheck}
+                setForm={setForm}
+                setEditingId={setEditingId}
+                setAdminTab={setAdminTab}
+                setShowAdminPanel={setShowAdminPanel}
+                copyLink={copyLink}
+                copiedId={copiedId}
+                onWatch={watchExercise}
+                selectionMode={false}
+                playlistOrder={[]}
+                onTogglePlaylist={togglePlaylistItem}
+                isFavorite={isFavorite}
+                onToggleFavorite={toggleFavorite}
+                comparePickId={comparePick?.firestoreId}
+                cardHoverPreview={cardHoverPreview}
+                cardCoverParallax={cardCoverParallax}
+              />
+            ) : mobileTab === 'account' ? (
+              <MobileAccountScreen
+                user={user}
+                userProfile={userProfile}
+                onUpdateNickname={handleUpdateNickname}
+                onResendVerification={handleResendVerification}
+                onOpenSettings={() => setMobileSettingsOpen(true)}
+                onOpenUsageGuide={() => setMobileGuideOpen(true)}
+                onSuggest={() => setShowRequestModal(true)}
+                onLogout={handleLogout}
+              />
+            ) : (
+              <div key={pageKey}>
+                {mobileTab === 'home' && (
+                  <CategoryNav
+                    categories={MOBILE_CATEGORY_NAV}
+                    activeCategory={activeCategory}
+                    onCategoryChange={handleCategoryChange}
+                    favoritesCount={favorites.size}
+                    compact
+                  />
+                )}
+                {mobileTab === 'favorites' && (
+                  <header className="mobile-tab-heading cinema-container mb-fluid-md">
+                    <h2 className="mobile-tab-heading__title">Favoritos</h2>
+                    <p className="mobile-tab-heading__meta">
+                      {favorites.size} {favorites.size === 1 ? 'exercício salvo' : 'exercícios salvos'}
+                    </p>
+                  </header>
+                )}
+                <MobileCatalogToolbar
+                  filterActiveCount={mobileFilterActiveCount}
+                  onOpenFilters={() => setMobileFilterOpen(true)}
+                  catalogView={catalogView}
+                  onCatalogViewChange={setCatalogView}
+                />
+                {mobileTab === 'home' && !searchTerm && activeCategory === 'Todos' && heroDisplay && (
+                  <HeroBanner
+                    hero={heroDisplay}
+                    onWatch={watchExercise}
+                    onCampaignClick={handleCampaignClick}
+                    onCampaignImpression={handleCampaignImpression}
+                    mobileCompact
+                  />
+                )}
+                {loading ? (
+                  <div className="py-fluid-2xl">
+                    <GridSkeleton count={6} />
+                    {slowConnection && (
+                      <p className="text-2xs text-red-500 uppercase font-black mt-fluid-md text-center bg-accent-muted px-4 py-2 rounded-xl mx-auto w-fit border border-red-900/30">
+                        A conexão parece lenta. Aguarde...
+                      </p>
+                    )}
+                  </div>
+                ) : filteredExercises.length === 0 ? (
+                  <EmptyState
+                    variant={emptyStateVariant}
+                    searchTerm={searchTerm}
+                    category={activeCategory}
+                    onClearFilters={handleEmptyClearFilters}
+                    onGoHome={handleGoHome}
+                  />
+                ) : (
+                  <MobileCatalog
+                    exercises={gridExercises}
+                    catalogView={catalogView}
+                    isAdmin={showAdminUI}
+                    isExerciseIncomplete={isExerciseIncomplete}
+                    handleDownloadCheck={handleDownloadCheck}
+                    setForm={setForm}
+                    setEditingId={setEditingId}
+                    setAdminTab={setAdminTab}
+                    setShowAdminPanel={setShowAdminPanel}
+                    copyLink={copyLink}
+                    copiedId={copiedId}
+                    onWatch={watchExercise}
+                    selectionMode={false}
+                    playlistOrder={[]}
+                    onTogglePlaylist={togglePlaylistItem}
+                    isFavorite={isFavorite}
+                    onToggleFavorite={toggleFavorite}
+                    cardHoverPreview={cardHoverPreview}
+                    cardCoverParallax={cardCoverParallax}
+                  />
+                )}
+              </div>
+            )}
+          </MobileShell>
+        ) : isMobileLayout ? (
           <div key={pageKey}>
         {!searchTerm && activeCategory === 'Todos' && heroDisplay && (
           <HeroBanner
@@ -2452,6 +2870,7 @@ export default function App() {
         )}
       </main>
 
+      {!useMobileShell && (
       <PlaylistBar
         playlist={playlist}
         selectionMode={selectionMode}
@@ -2459,6 +2878,7 @@ export default function App() {
         onPlay={playPlaylist}
         onClear={() => setPlaylistOrder([])}
       />
+      )}
 
       {showAdminPanel && showAdminUI && (
         <Suspense fallback={null}>
@@ -2469,6 +2889,7 @@ export default function App() {
           form={form}
           setForm={setForm}
           onClose={closeAdminPanel}
+          mobileLayout={useMobileAdminShell}
           onSave={handleSave}
           sendNotification={sendNotification}
           setSendNotification={setSendNotification}

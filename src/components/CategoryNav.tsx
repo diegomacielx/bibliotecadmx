@@ -7,6 +7,8 @@ interface CategoryNavProps {
   activeCategory: string;
   onCategoryChange: (category: string) => void;
   favoritesCount?: number;
+  /** Mobile shell: scroll horizontal sem centralizar (mostra «Todos») */
+  compact?: boolean;
 }
 
 export function CategoryNav({
@@ -14,6 +16,7 @@ export function CategoryNav({
   activeCategory,
   onCategoryChange,
   favoritesCount = 0,
+  compact = false,
 }: CategoryNavProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -22,8 +25,12 @@ export function CategoryNav({
   };
 
   return (
-    <nav className="category-nav cinema-container mb-fluid-lg relative z-10" aria-label="Categorias">
+    <nav
+      className={`category-nav cinema-container mb-fluid-lg relative z-10 ${compact ? 'category-nav--compact' : ''}`}
+      aria-label="Categorias"
+    >
       <div className="category-nav-inner">
+        {!compact && (
         <button
           type="button"
           className="category-nav-arrow flex"
@@ -32,6 +39,7 @@ export function CategoryNav({
         >
           <Icon name="left" className="w-3.5 h-3.5" />
         </button>
+        )}
 
         <div className="category-nav-scroll no-scrollbar" ref={scrollRef}>
           {categories.map((cat) => {
@@ -62,6 +70,7 @@ export function CategoryNav({
           })}
         </div>
 
+        {!compact && (
         <button
           type="button"
           className="category-nav-arrow flex"
@@ -70,6 +79,7 @@ export function CategoryNav({
         >
           <Icon name="right" className="w-3.5 h-3.5" />
         </button>
+        )}
       </div>
     </nav>
   );

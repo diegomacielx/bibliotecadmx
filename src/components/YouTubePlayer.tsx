@@ -64,6 +64,8 @@ interface YouTubePlayerProps {
   onReady?: () => void;
   /** Aguarda play externo (ex.: sync no comparador) */
   deferAutoplay?: boolean;
+  /** Mobile vertical (Shorts): controles nativos com qualidade */
+  mobileVertical?: boolean;
 }
 
 export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>(function YouTubePlayer(
@@ -79,6 +81,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
     onPlayStateChange,
     onReady,
     deferAutoplay = false,
+    mobileVertical = false,
   },
   ref
 ) {
@@ -225,10 +228,16 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
       }
       playerRef.current = null;
     };
-  }, [videoId, autoplay, mute, controls, deferAutoplay]);
+  }, [videoId, autoplay, mute, controls, deferAutoplay, mobileVertical]);
 
   const hostClass = ['dmx-yt-host', largeSurface ? 'dmx-yt-host--large' : ''].filter(Boolean).join(' ');
-  const rootClass = ['dmx-yt-root', !controls ? 'dmx-yt-root--chromeless' : ''].filter(Boolean).join(' ');
+  const rootClass = [
+    'dmx-yt-root',
+    !controls ? 'dmx-yt-root--chromeless' : '',
+    mobileVertical ? 'dmx-yt-root--mobile-vertical' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <div ref={containerRef} className={`${rootClass} ${className}`.trim()} aria-label={title}>

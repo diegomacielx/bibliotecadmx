@@ -2,9 +2,9 @@ import {
   Search, Plus, PlusCircle, Pencil, Trash2, Copy, Check, X, 
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader2, Save, CircleCheck, LogOut, Eye, 
   EyeOff, Download, Cloud, Server, Bell, Users, Settings, Mail, 
-  Lightbulb, ListTodo, Play, MoreHorizontal, SlidersHorizontal, LayoutDashboard,
+  Lightbulb, ListTodo, Play, MoreHorizontal, MoreVertical, SlidersHorizontal, LayoutDashboard,
   Heart, Columns2, ListVideo, Pause, Maximize, SkipForward, SkipBack, Clock, GitCompare,
-  Moon, Sun, CircleHelp, Inbox, Shield, RotateCw, ArrowDownAZ
+  Moon, Sun, CircleHelp, Inbox, Shield, RotateCw, ArrowDownAZ, User, Home, Dumbbell, BicepsFlexed
 } from 'lucide-react';
 
 const iconMap: Record<string, React.ComponentType<any>> = {
@@ -38,6 +38,7 @@ const iconMap: Record<string, React.ComponentType<any>> = {
   listtodo: ListTodo,
   play: Play,
   more: MoreHorizontal,
+  morevertical: MoreVertical,
   filter: SlidersHorizontal,
   dashboard: LayoutDashboard,
   heart: Heart,
@@ -56,6 +57,10 @@ const iconMap: Record<string, React.ComponentType<any>> = {
   shield: Shield,
   replay: RotateCw,
   sortalpha: ArrowDownAZ,
+  user: User,
+  home: Home,
+  dumbbell: Dumbbell,
+  biceps: BicepsFlexed,
 };
 
 interface IconProps {

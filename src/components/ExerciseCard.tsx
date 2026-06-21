@@ -3,7 +3,6 @@ import { motion } from 'framer-motion';
 import type { Exercise, ExerciseForm, AdminTab } from '../types';
 import {
   getDbPath,
-  openYouTubeWatch,
 } from '../lib/utils';
 import { deleteDoc, fbDoc, db } from '../lib/firebase';
 import { useAmbientGlow } from '../hooks/useMousePosition';
@@ -19,12 +18,12 @@ import {
 } from '../lib/coverFocus';
 import { useTouchLayout, useMediaQuery } from '../hooks/useMediaQuery';
 import { useCardPreviewHover } from '../hooks/useCardPreviewHover';
-import { MuscleGroupList } from './MuscleGroupList';
 import { ExerciseCoverImage } from './ExerciseCoverImage';
 import { Icon } from './Icon';
 import { CardVideoPreview } from './CardVideoPreview';
 import { prefetchExerciseHoverBundle } from '../lib/exercisePrefetch';
 import { primeVideoPlaybackIntent } from '../lib/videoPlaybackPrime';
+import { MobileExerciseCardMenu } from './mobile/MobileExerciseCardMenu';
 import {
   CARD_PREVIEW_HOVER_DELAY_MS,
   isCardPreviewVertical,
@@ -89,7 +88,6 @@ export function ExerciseCard({
   // Gate robusto: depende só da capacidade de hover do dispositivo (mouse/touchpad),
   // independente de largura de tela, zoom do navegador ou prefers-reduced-motion.
   const hoverDevice = useMediaQuery('(hover: hover)');
-  const [mobileExpanded, setMobileExpanded] = useState(false);
   const coverRef = useRef<HTMLDivElement>(null);
   const coverPriority = index < 8 ? 'critical' : index < 24 ? 'high' : 'normal';
   const coverLoading = index < 12 ? 'eager' : 'lazy';
@@ -101,8 +99,9 @@ export function ExerciseCard({
   const reducedMotion = useReducedMotion();
   const desktopEffects = hoverDevice;
   const canPreview = hoverDevice && hoverPreviewEnabled;
-  const showMobileActions = touchLayout && (mobileExpanded || selectionMode);
-  const showCenterPlay = touchLayout && mobileExpanded && !selectionMode;
+  const showMobileActions = touchLayout && selectionMode && isAdmin;
+  const showCenterPlay = false;
+  const touchCatalogLayout = touchLayout && !selectionMode;
   const [showPreview, setShowPreview] = useState(false);
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   const [previewPlaying, setPreviewPlaying] = useState(false);
@@ -172,11 +171,6 @@ export function ExerciseCard({
   }, [canPreview, previewMouseLeave, resetCoverMotion, tiltEnabled, tilt]);
 
   useEffect(() => {
-    if (!selectionMode) return;
-    setMobileExpanded(false);
-  }, [selectionMode]);
-
-  useEffect(() => {
     if (hoverPreviewEnabled) return;
     cardHoveredRef.current = false;
     deactivatePreview();
@@ -187,16 +181,6 @@ export function ExerciseCard({
     resetCoverMotion();
     if (tiltEnabled) tilt.onMouseLeave();
   }, [coverParallaxEnabled, resetCoverMotion, tiltEnabled, tilt]);
-
-  useEffect(() => {
-    if (!mobileExpanded || selectionMode) return;
-    const onPointerDown = (e: PointerEvent) => {
-      if (coverRef.current?.contains(e.target as Node)) return;
-      setMobileExpanded(false);
-    };
-    document.addEventListener('pointerdown', onPointerDown);
-    return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [mobileExpanded, selectionMode]);
 
   const handleDelete = async (e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -228,7 +212,12 @@ export function ExerciseCard({
   };
 
   const handleCoverPointerDown = (e: React.PointerEvent) => {
-    if (touchLayout || e.button !== 0) return;
+    if (touchLayout) {
+      if (selectionMode) return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      return;
+    }
+    if (e.button !== 0) return;
     primeVideoPlaybackIntent(ex);
   };
 
@@ -237,15 +226,6 @@ export function ExerciseCard({
     if ((e.target as HTMLElement).closest('[data-card-action]')) return;
 
     if (touchLayout) {
-      if (selectionMode && onTogglePlaylist) {
-        e.stopPropagation();
-        e.preventDefault();
-        onTogglePlaylist(ex);
-        return;
-      }
-      e.stopPropagation();
-      e.preventDefault();
-      setMobileExpanded(true);
       return;
     }
 
@@ -270,17 +250,26 @@ export function ExerciseCard({
   };
 
   const handleCoverPointerUp = (e: React.PointerEvent) => {
+    if (!touchLayout) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
-    handleCoverActivate(e);
+    if ((e.target as HTMLElement).closest('[data-card-action]')) return;
+
+    if (selectionMode && onTogglePlaylist) {
+      e.stopPropagation();
+      e.preventDefault();
+      onTogglePlaylist(ex);
+      return;
+    }
+
+    e.stopPropagation();
+    e.preventDefault();
+    deactivatePreview();
+    primeVideoPlaybackIntent(ex);
+    onWatch(ex);
   };
 
   const handlePlayClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setMobileExpanded(false);
-    if (touchLayout) {
-      openYouTubeWatch(ex.youtubeUrl);
-      return;
-    }
     primeVideoPlaybackIntent(ex);
     onWatch(ex);
   };
@@ -312,9 +301,10 @@ export function ExerciseCard({
         coverMissing ? 'exercise-card--no-cover' : ''
       } ${showPreview ? 'exercise-card--preview-active' : ''} ${previewSrc && !showPreview ? 'exercise-card--preview-warming' : ''} ${
         isAdmin ? 'exercise-card--admin' : ''
-      } ${mobileExpanded || selectionMode ? 'card-actions-pinned z-[50]' : 'z-10'} ${
-        mobileExpanded ? 'card-mobile-expanded' : ''
-      } ${selectionMode ? 'card-selection-mode' : ''} ${
+      } ${selectionMode ? 'card-actions-pinned z-[50]' : 'z-10'} ${
+        selectionMode ? 'card-selection-mode' : ''} ${
+        touchCatalogLayout ? 'exercise-card--touch-catalog' : ''
+      } ${
         isComparePick
           ? 'border-red-500 ring-2 ring-red-500/40'
           : isInPlaylist
@@ -331,19 +321,22 @@ export function ExerciseCard({
         ref={coverRef}
         className="exercise-card-cover card-catalog-cover aspect-card-poster relative cursor-pointer touch-manipulation select-none focus:outline-none"
         onClick={touchLayout ? undefined : handleCoverClick}
-        onPointerDown={touchLayout ? undefined : handleCoverPointerDown}
+        onPointerDown={handleCoverPointerDown}
         onPointerUp={touchLayout ? handleCoverPointerUp : undefined}
         onContextMenu={(e) => e.preventDefault()}
         role="button"
         tabIndex={0}
-        aria-label={`${ex.name}${selectionMode ? ' — toque para adicionar ao treino' : touchLayout ? ' — toque para ações' : ''}`}
-        aria-expanded={touchLayout ? mobileExpanded || selectionMode : undefined}
+        aria-label={`${ex.name}${selectionMode ? ' — toque para adicionar ao treino' : touchLayout ? ' — toque para abrir' : ''}`}
+        aria-expanded={touchLayout ? selectionMode : undefined}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             if (touchLayout) {
               if (selectionMode && onTogglePlaylist) onTogglePlaylist(ex);
-              else setMobileExpanded(true);
+              else {
+                primeVideoPlaybackIntent(ex);
+                onWatch(ex);
+              }
             } else {
               onWatch(ex);
             }
@@ -372,7 +365,6 @@ export function ExerciseCard({
             onLoad={handleLoad}
             onError={handleError}
             imgClassName="card-cover-img"
-            className={mobileExpanded ? 'cover-image-root--mobile-expanded' : ''}
           />
 
           {!coverMissing && <div className="card-cover-grain" aria-hidden="true" />}
@@ -422,9 +414,9 @@ export function ExerciseCard({
           )}
         </div>
 
-        <div className="card-top-bar absolute inset-x-0 top-0 z-[60] flex flex-col items-center gap-1.5 px-4 pt-3.5">
+        <div className={`card-top-bar absolute inset-x-0 top-0 z-[60] flex flex-col items-center gap-1.5 px-4 pt-3.5 ${touchCatalogLayout ? 'card-top-bar--touch-hidden' : ''}`}>
           <div className="card-id-row flex items-center justify-center gap-1.5 flex-wrap">
-            {!selectionMode && (
+            {!selectionMode && !touchLayout && (
               <span className="card-id-badge" title={`Exercício #${ex.id}`}>
                 #{ex.id}
               </span>
@@ -475,7 +467,7 @@ export function ExerciseCard({
                   </button>
                 )}
 
-                {onCompare && (
+                {onCompare && !touchLayout && (
                   <button
                     type="button"
                     data-card-action="compare"
@@ -550,17 +542,26 @@ export function ExerciseCard({
           </div>
         </div>
 
-        <div className="card-meta-footer">
-          <p className="card-meta-category">{ex.category}</p>
+        <div className={`card-meta-footer ${touchCatalogLayout ? 'card-meta-footer--touch-top' : ''}`}>
+          {!touchLayout && <p className="card-meta-category">{ex.category}</p>}
           <h3 className="card-meta-title" title={ex.name}>
             {ex.name}
           </h3>
-          {touchLayout && mobileExpanded && !selectionMode && (
-            <div className="card-mobile-details">
-              <MuscleGroupList groups={ex.muscleGroups} compact showTitle />
-            </div>
-          )}
         </div>
+
+        {touchCatalogLayout && !selectionMode && (
+          <MobileExerciseCardMenu
+            variant="grid"
+            onDownload={(e) => handleDownloadCheck(e, ex)}
+            onCopyLink={(e) => {
+              e.stopPropagation();
+              copyLink(ex.youtubeUrl, ex.firestoreId);
+            }}
+            copied={copiedId === ex.firestoreId}
+            onEdit={isAdmin ? handleEdit : undefined}
+            onDelete={isAdmin ? (e) => void handleDelete(e) : undefined}
+          />
+        )}
       </div>
     </motion.div>
   );

@@ -14,6 +14,8 @@ interface HeroBannerProps {
   onWatch: (ex: Exercise) => void;
   onCampaignClick?: (linkUrl: string, campaignId?: string) => void;
   onCampaignImpression?: (campaignId: string) => void;
+  /** Destaque compacto/colapsável no mobile shell */
+  mobileCompact?: boolean;
 }
 
 function HeroBannerDesktop({ hero, onWatch, onCampaignClick, onCampaignImpression }: HeroBannerProps) {
@@ -163,8 +165,10 @@ function HeroBannerDesktop({ hero, onWatch, onCampaignClick, onCampaignImpressio
   );
 }
 
-export function HeroBanner(props: HeroBannerProps) {
+export function HeroBanner({ mobileCompact = false, ...props }: HeroBannerProps) {
   const touchLayout = useTouchLayout();
-  if (touchLayout) return <HeroBannerMobile {...props} />;
+  if (touchLayout) {
+    return <HeroBannerMobile {...props} variant={mobileCompact ? 'compact' : 'default'} />;
+  }
   return <HeroBannerDesktop {...props} />;
 }

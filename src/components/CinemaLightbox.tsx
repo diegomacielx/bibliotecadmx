@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { Exercise } from '../types';
 import {
   getYouTubeId,
-  openYouTubeWatch,
   resolveVideoOrientation,
 } from '../lib/utils';
 import { isTypingTarget } from '../lib/keyboard';
@@ -13,6 +12,10 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useTouchLayout } from '../hooks/useMediaQuery';
 import { useTheme } from '../hooks/useTheme';
 import { useExerciseCover } from '../hooks/useExerciseCover';
+import { useHorizontalSwipe } from '../hooks/useHorizontalSwipe';
+import { primeVideoPlaybackIntent } from '../lib/videoPlaybackPrime';
+import { MobileMusclesDropup } from './mobile/MobileMusclesDropup';
+import { MobileReelsFooterBlur } from './mobile/MobileReelsFooterBlur';
 import { getCoverFrameStyle } from '../lib/coverFocus';
 import { ExerciseCoverPlaceholder } from './ExerciseCoverPlaceholder';
 import { YouTubePlayer, type YouTubePlayerHandle } from './YouTubePlayer';
@@ -110,6 +113,8 @@ function ExerciseDetails({
   onToggleFavorite,
   compact,
   isAdmin = false,
+  section = 'full',
+  hideClose = false,
 }: {
   ex: Exercise;
   isCopied: boolean;
@@ -120,9 +125,16 @@ function ExerciseDetails({
   onToggleFavorite?: () => void;
   compact?: boolean;
   isAdmin?: boolean;
+  /** Mobile sheet: render info, actions, or both */
+  section?: 'full' | 'info' | 'actions';
+  hideClose?: boolean;
 }) {
+  const showInfo = section === 'full' || section === 'info';
+  const showActions = section === 'full' || section === 'actions';
+
   return (
     <div className="flex flex-col">
+      {showInfo && (
       <div className="space-y-4">
         <div className="space-y-1.5 pr-6 min-w-0">
           <p className="lightbox-kicker">
@@ -156,8 +168,10 @@ function ExerciseDetails({
           </div>
         )}
       </div>
+      )}
 
-      <div className="lightbox-actions flex flex-col gap-2 pt-4 mt-4">
+      {showActions && (
+      <div className={`lightbox-actions flex flex-col gap-2 ${showInfo ? 'pt-4 mt-4' : ''}`}>
         {!compact && (
           <button
             type="button"
@@ -205,7 +219,7 @@ function ExerciseDetails({
             </button>
           )}
 
-          {!compact && (
+          {!compact && !hideClose && (
             <button
               type="button"
               onClick={onClose}
@@ -216,44 +230,107 @@ function ExerciseDetails({
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }
 
-function MobileWatchPanel({ ex }: { ex: Exercise }) {
+function MobileCoverPlayer({
+  ex,
+  ytId,
+  hero = false,
+}: {
+  ex: Exercise;
+  ytId: string;
+  hero?: boolean;
+}) {
+  const [isPlaying, setIsPlaying] = useState(hero);
+  const playerRef = useRef<YouTubePlayerHandle>(null);
   const { imgSrc, coverMissing, handleLoad, handleError } = useExerciseCover(ex, { priority: 'high' });
+  const isVertical =
+    resolveVideoOrientation(ex.youtubeUrl, {
+      videoOrientation: ex.videoOrientation,
+      aspectRatio: ex.aspectRatio,
+    }) === 'vertical';
+
+  useEffect(() => {
+    setIsPlaying(hero);
+  }, [ex.firestoreId, hero]);
+
+  useEffect(() => {
+    primeVideoPlaybackIntent(ex);
+  }, [ex]);
+
+  const handlePlay = () => {
+    primeVideoPlaybackIntent(ex);
+    setIsPlaying(true);
+  };
 
   return (
-    <div className="cinema-mobile-watch-panel">
-      {coverMissing ? (
-        <ExerciseCoverPlaceholder className="cinema-mobile-watch-poster cinema-mobile-watch-poster--placeholder" />
+    <div
+      className={`cinema-mobile-cover-frame ${hero ? 'cinema-mobile-cover-frame--hero' : ''} ${
+        isPlaying ? 'cinema-mobile-cover-frame--playing' : ''
+      }`}
+    >
+      {isPlaying ? (
+        <div
+          className={`cinema-mobile-cover-player cinema-player-layer ${
+            hero ? 'cinema-mobile-cover-player--reels-cover' : ''
+          } ${
+            hero && isVertical ? 'cinema-mobile-cover-player--vertical-theater cinema-player-layer--vertical-theater' : ''
+          }`}
+        >
+          <YouTubePlayer
+            ref={playerRef}
+            videoId={ytId}
+            title={ex.name}
+            autoplay
+            mute={false}
+            controls={false}
+            largeSurface
+            mobileVertical={isVertical}
+            onReady={() => playerRef.current?.playVideo()}
+          />
+          <button
+            type="button"
+            className="cinema-play-catch cinema-mobile-play-catch absolute inset-0 z-[2]"
+            aria-label="Reproduzir ou pausar"
+            onClick={(e) => {
+              e.stopPropagation();
+              playerRef.current?.togglePlay();
+            }}
+          />
+        </div>
       ) : (
-        <img
-          src={imgSrc}
-          alt=""
-          loading="eager"
-          decoding="async"
-          draggable={false}
-          onLoad={handleLoad}
-          onError={handleError}
-          style={{
-            objectPosition: getCoverFrameStyle(ex).objectPosition,
-            ...(getCoverFrameStyle(ex).cssVars as React.CSSProperties),
-          }}
-          className="cinema-mobile-watch-poster"
-        />
+        <>
+          {coverMissing ? (
+            <ExerciseCoverPlaceholder className="cinema-mobile-cover-poster cinema-mobile-cover-poster--placeholder" />
+          ) : (
+            <img
+              src={imgSrc}
+              alt=""
+              loading="eager"
+              decoding="async"
+              draggable={false}
+              onLoad={handleLoad}
+              onError={handleError}
+              style={{
+                objectPosition: getCoverFrameStyle(ex).objectPosition,
+                ...(getCoverFrameStyle(ex).cssVars as React.CSSProperties),
+              }}
+              className="cinema-mobile-cover-poster"
+            />
+          )}
+          <button
+            type="button"
+            className="cinema-mobile-yt-play-btn"
+            onClick={handlePlay}
+            aria-label="Reproduzir vídeo"
+          >
+            <Icon name="play" className="w-5 h-5 ml-0.5" strokeWidth={2} fill="currentColor" />
+          </button>
+        </>
       )}
-      <div className="cinema-mobile-watch-gradient" aria-hidden="true" />
-      <button
-        type="button"
-        className="cinema-mobile-watch-btn"
-        onClick={() => openYouTubeWatch(ex.youtubeUrl)}
-      >
-        <span className="cinema-mobile-watch-btn-icon" aria-hidden="true">
-          <Icon name="play" className="w-5 h-5 ml-0.5" strokeWidth={2} />
-        </span>
-        Assistir no YouTube
-      </button>
     </div>
   );
 }
@@ -261,16 +338,12 @@ function MobileWatchPanel({ ex }: { ex: Exercise }) {
 function MobileExerciseSheet({
   ex,
   ytId,
-  onClose,
   isCopied,
   onCopy,
   onDownload,
   isFavorite,
   onToggleFavorite,
-  isAdmin,
   hasNav,
-  navIndex,
-  navTotal,
   onNavPrev,
   onNavNext,
   navPrevDisabled,
@@ -293,68 +366,90 @@ function MobileExerciseSheet({
   navPrevDisabled: boolean;
   navNextDisabled: boolean;
 }) {
+  const [musclesOpen, setMusclesOpen] = useState(false);
+  const swipeEnabled = hasNav && (!navPrevDisabled || !navNextDisabled);
+
+  useEffect(() => {
+    setMusclesOpen(false);
+  }, [ex.firestoreId]);
+  const swipeHandlers = useHorizontalSwipe({
+    enabled: swipeEnabled,
+    onSwipeLeft: navNextDisabled ? undefined : onNavNext,
+    onSwipeRight: navPrevDisabled ? undefined : onNavPrev,
+  });
+
   return (
-    <div className="cinema-mobile-sheet">
-      <header className="cinema-mobile-sheet-header">
-        <button
-          type="button"
-          onClick={onClose}
-          className="cinema-mobile-back-btn cinema-mobile-back-btn--inline"
-          aria-label="Voltar para início"
-        >
-          <Icon name="left" className="w-4 h-4" strokeWidth={2.25} />
-        </button>
-        <span className="cinema-mobile-sheet-header-label">Execução</span>
-      </header>
-
-      <div className="cinema-mobile-sheet-body">
-        <ExerciseDetails
-          ex={ex}
-          isCopied={isCopied}
-          onCopy={onCopy}
-          onClose={onClose}
-          onDownload={onDownload}
-          isFavorite={isFavorite}
-          onToggleFavorite={onToggleFavorite}
-          isAdmin={isAdmin}
-        />
-
-        {hasNav && (
-          <div className="cinema-mobile-nav">
-            <button
-              type="button"
-              onClick={onNavPrev}
-              disabled={navPrevDisabled}
-              className="cinema-mobile-nav-btn"
-              aria-label="Exercício anterior"
-            >
-              <Icon name="skipback" className="w-4 h-4" />
-            </button>
-            <span className="cinema-mobile-nav-counter tabular-nums">
-              {navIndex + 1} / {navTotal}
-            </span>
-            <button
-              type="button"
-              onClick={onNavNext}
-              disabled={navNextDisabled}
-              className="cinema-mobile-nav-btn"
-              aria-label="Próximo exercício"
-            >
-              <Icon name="skipforward" className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-
+    <div className="cinema-mobile-sheet cinema-mobile-sheet--reels">
+      <div
+        className="cinema-mobile-reels-stage"
+        onTouchStart={swipeHandlers.onTouchStart}
+        onTouchEnd={swipeHandlers.onTouchEnd}
+        onTouchCancel={swipeHandlers.onTouchCancel}
+      >
         {ytId ? (
-          <MobileWatchPanel ex={ex} />
+          <MobileCoverPlayer ex={ex} ytId={ytId} hero />
         ) : (
-          <div className="cinema-mobile-watch-panel cinema-mobile-watch-panel--empty">
+          <div className="cinema-mobile-cover-frame cinema-mobile-cover-frame--hero cinema-mobile-cover-frame--empty">
             <Icon name="youtube" className="w-10 h-10 text-zinc-500" strokeWidth={1} />
             <p className="text-2xs font-medium uppercase tracking-cinematic-wide text-zinc-500">
               Execução pendente
             </p>
           </div>
         )}
+
+        <div className="cinema-mobile-reels-top">
+          <h1 className="cinema-mobile-reels-title">{ex.name}</h1>
+        </div>
+
+        <MobileReelsFooterBlur exerciseId={ex.id} category={ex.category} />
+
+        <div className="cinema-mobile-reels-rail">
+          <MobileMusclesDropup
+            groups={ex.muscleGroups}
+            open={musclesOpen}
+            onOpen={() => setMusclesOpen(true)}
+            onClose={() => setMusclesOpen(false)}
+          />
+          <button
+            type="button"
+            className="cinema-mobile-reels-rail-btn"
+            onClick={onDownload}
+            aria-label="Baixar 4K"
+            title="Baixar 4K"
+          >
+            <Icon name="download" className="w-6 h-6" strokeWidth={1.75} />
+          </button>
+          {onToggleFavorite && (
+            <button
+              type="button"
+              className={`cinema-mobile-reels-rail-btn ${
+                isFavorite ? 'cinema-mobile-reels-rail-btn--active' : ''
+              }`}
+              onClick={onToggleFavorite}
+              aria-label={isFavorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
+              title={isFavorite ? 'Remover dos favoritos' : 'Favoritar'}
+              aria-pressed={isFavorite}
+            >
+              <Icon
+                name="heart"
+                className="w-6 h-6"
+                strokeWidth={1.75}
+                fill={isFavorite ? 'currentColor' : 'none'}
+              />
+            </button>
+          )}
+          <button
+            type="button"
+            className={`cinema-mobile-reels-rail-btn ${
+              isCopied ? 'cinema-mobile-reels-rail-btn--success' : ''
+            }`}
+            onClick={onCopy}
+            aria-label={isCopied ? 'Link copiado' : 'Copiar link'}
+            title={isCopied ? 'Copiado' : 'Copiar link'}
+          >
+            <Icon name={isCopied ? 'check' : 'copy'} className="w-6 h-6" strokeWidth={1.75} />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -413,7 +508,7 @@ function ComparePanel({
       >
         {ytId ? (
           mobileLayout ? (
-            <MobileWatchPanel ex={ex} />
+            <MobileCoverPlayer ex={ex} ytId={ytId} />
           ) : (
             <div
               className={`absolute inset-0 ${
@@ -896,7 +991,7 @@ export function CinemaLightbox({
 
             {ytId ? (
               isMobileLayout ? (
-                <MobileWatchPanel ex={ex} />
+                <MobileCoverPlayer ex={ex} ytId={ytId} />
               ) : (
                 <>
                   <div
