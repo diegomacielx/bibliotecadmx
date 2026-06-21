@@ -1,5 +1,5 @@
-import { doc, increment, updateDoc } from 'firebase/firestore';
-import { db } from './firebase';
+import { increment, updateDoc } from 'firebase/firestore';
+import { db, fbDoc } from './firebase';
 import { getSettingsPath, logWarn } from './utils';
 
 const IMPRESSION_SESSION_PREFIX = 'dmx_hero_imp_';
@@ -7,7 +7,7 @@ const IMPRESSION_SESSION_PREFIX = 'dmx_hero_imp_';
 async function incrementStat(campaignId: string, field: 'impressions' | 'clicks'): Promise<void> {
   if (!campaignId) return;
   try {
-    const settingsRef = doc(db, ...getSettingsPath());
+    const settingsRef = fbDoc(db, ...getSettingsPath());
     await updateDoc(settingsRef, {
       [`heroSpotlight.stats.${campaignId}.${field}`]: increment(1),
     });

@@ -20,6 +20,7 @@ import {
   parseCoverFocusXInput,
   parseCoverFocusYInput,
   parseCoverZoomInput,
+  type CoverFrameSource,
 } from '../lib/coverFocus';
 import { Icon } from './Icon';
 
@@ -109,14 +110,14 @@ export function HeroCampaignPanel({ heroSpotlight, onChange }: HeroCampaignPanel
     );
   };
 
-  const previewFrame = editing
+  const previewFrame: CoverFrameSource = editing
     ? {
         ...campaignToFrameSource(editing),
         coverFocusX: editing.coverFocusX,
         coverFocusY: editing.coverFocusY,
         coverZoom: editing.coverZoom,
       }
-    : { name: '', category: '', muscleGroups: [] as string[] };
+    : { name: '', category: '', muscleGroups: [] };
 
   const displayY =
     parseCoverFocusYInput(editing?.coverFocusY != null ? String(editing.coverFocusY) : '') ??
