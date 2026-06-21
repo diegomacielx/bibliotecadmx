@@ -52,6 +52,8 @@ import {
   getSearchPool,
 } from './lib/search';
 import { DEFAULT_HERO_SPOTLIGHT, resolveHeroDisplay } from './lib/heroSpotlight';
+import { normalizeHeroSpotlight } from './lib/heroCampaign';
+import { trackHeroCampaignClick, trackHeroCampaignImpression } from './lib/heroCampaignMetrics';
 import {
   fb,
   db,
@@ -497,8 +499,8 @@ export default function App() {
         return;
       }
       const data = snap.data() as AppSettings;
-      setHeroSpotlight(data.heroSpotlight ?? DEFAULT_HERO_SPOTLIGHT);
-      if (isAdmin) setAppSettings(data);
+      setHeroSpotlight(normalizeHeroSpotlight(data.heroSpotlight ?? DEFAULT_HERO_SPOTLIGHT));
+      if (isAdmin) setAppSettings({ ...data, heroSpotlight: normalizeHeroSpotlight(data.heroSpotlight) });
     });
     return () => unsubSettings();
   }, [isLoggedIn, isAdmin]);
@@ -1586,20 +1588,26 @@ export default function App() {
   }, [loading, exercises.length, filteredExercises.length, isAdmin, adminFilter, activeCategory, searchTerm]);
 
   const saveHeroSpotlight = async (next: HeroSpotlightSettings) => {
-    setHeroSpotlight(next);
-    setAppSettings((prev) => ({ ...prev, heroSpotlight: next }));
+    const normalized = normalizeHeroSpotlight(next);
+    setHeroSpotlight(normalized);
+    setAppSettings((prev) => ({ ...prev, heroSpotlight: normalized }));
     try {
       const settingsRef = fbDoc(db, ...getSettingsPath());
-      await setDoc(settingsRef, { heroSpotlight: next }, { merge: true });
+      await setDoc(settingsRef, { heroSpotlight: normalized }, { merge: true });
       showToast('Destaque salvo!');
     } catch {
       showToast('Erro ao salvar destaque', 'error');
     }
   };
 
-  const handleCampaignClick = (linkUrl: string) => {
+  const handleCampaignClick = (linkUrl: string, campaignId?: string) => {
+    if (campaignId) void trackHeroCampaignClick(campaignId);
     window.open(linkUrl, '_blank', 'noopener,noreferrer');
   };
+
+  const handleCampaignImpression = useCallback((campaignId: string) => {
+    void trackHeroCampaignImpression(campaignId);
+  }, []);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2266,6 +2274,7 @@ export default function App() {
             hero={heroDisplay}
             onWatch={watchExercise}
             onCampaignClick={handleCampaignClick}
+            onCampaignImpression={handleCampaignImpression}
           />
         )}
         {searchTerm.trim() && !loading && filteredExercises.length > 0 && (
@@ -2356,6 +2365,7 @@ export default function App() {
             hero={heroDisplay}
             onWatch={watchExercise}
             onCampaignClick={handleCampaignClick}
+            onCampaignImpression={handleCampaignImpression}
           />
         )}
         {searchTerm.trim() && !loading && filteredExercises.length > 0 && (

@@ -1,6 +1,6 @@
 import { 
   Search, Plus, PlusCircle, Pencil, Trash2, Copy, Check, X, 
-  ChevronLeft, ChevronRight, ChevronDown, Loader2, Save, CircleCheck, LogOut, Eye, 
+  ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Loader2, Save, CircleCheck, LogOut, Eye, 
   EyeOff, Download, Cloud, Server, Bell, Users, Settings, Mail, 
   Lightbulb, ListTodo, Play, MoreHorizontal, SlidersHorizontal, LayoutDashboard,
   Heart, Columns2, ListVideo, Pause, Maximize, SkipForward, SkipBack, Clock, GitCompare,
@@ -20,6 +20,7 @@ const iconMap: Record<string, React.ComponentType<any>> = {
   left: ChevronLeft,
   right: ChevronRight,
   chevrondown: ChevronDown,
+  chevronup: ChevronUp,
   loader: Loader2,
   save: Save,
   circlecheck: CircleCheck,

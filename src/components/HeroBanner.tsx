@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import type { Exercise } from '../types';
 import { useExerciseCover } from '../hooks/useExerciseCover';
@@ -12,14 +12,21 @@ import type { HeroDisplayContent } from '../lib/heroSpotlight';
 interface HeroBannerProps {
   hero: HeroDisplayContent;
   onWatch: (ex: Exercise) => void;
-  onCampaignClick?: (linkUrl: string) => void;
+  onCampaignClick?: (linkUrl: string, campaignId?: string) => void;
+  onCampaignImpression?: (campaignId: string) => void;
 }
 
-function HeroBannerDesktop({ hero, onWatch, onCampaignClick }: HeroBannerProps) {
+function HeroBannerDesktop({ hero, onWatch, onCampaignClick, onCampaignImpression }: HeroBannerProps) {
   const sectionRef = useRef<HTMLElement>(null);
   const reducedMotion = useReducedMotion();
   const enableScrollFx = !reducedMotion;
   const isCampaign = hero.mode === 'campaign';
+
+  useEffect(() => {
+    if (isCampaign && hero.campaignId) {
+      onCampaignImpression?.(hero.campaignId);
+    }
+  }, [isCampaign, hero.campaignId, onCampaignImpression]);
 
   const coverSource = useMemo(
     () =>
@@ -64,7 +71,7 @@ function HeroBannerDesktop({ hero, onWatch, onCampaignClick }: HeroBannerProps) 
 
   const handleCoverClick = () => {
     if (isCampaign && hero.linkUrl) {
-      onCampaignClick?.(hero.linkUrl);
+      onCampaignClick?.(hero.linkUrl, hero.campaignId);
       return;
     }
     if (hero.exercise) onWatch(hero.exercise);
@@ -80,7 +87,7 @@ function HeroBannerDesktop({ hero, onWatch, onCampaignClick }: HeroBannerProps) 
         >
           <p className="hero-featured-label mb-3">
             <span className="hero-featured-label-main">
-              {isCampaign ? 'Outdoor' : 'Destaque do dia'}
+              {isCampaign ? 'Patrocinado' : 'Destaque do dia'}
             </span>
             <span className="hero-featured-label-sep" aria-hidden="true">
               ·

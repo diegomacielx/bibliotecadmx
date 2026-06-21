@@ -2,11 +2,19 @@ import type { Exercise, HeroSpotlightSettings } from '../types';
 import { pickDailyFeaturedExercise } from './search';
 import { hasValidYouTubeUrl } from './utils';
 import type { CoverFrameSource } from './coverFocus';
+import {
+  campaignToDisplayFields,
+  getActiveCampaigns,
+  normalizeHeroSpotlight,
+  pickCampaignForDisplay,
+} from './heroCampaign';
 
 export type HeroDisplayMode = 'daily' | 'exercise' | 'campaign';
 
 export interface HeroDisplayContent {
   mode: HeroDisplayMode;
+  /** ID da campanha veiculada (modo campaign) */
+  campaignId?: string;
   title: string;
   subtitle?: string;
   categoryLabel: string;
@@ -34,34 +42,13 @@ function frameFromSpotlight(
   };
 }
 
-export function resolveHeroDisplay(
+function resolveDailyOrExercise(
   exercises: Exercise[],
-  spotlight: HeroSpotlightSettings | undefined
+  spotlight: HeroSpotlightSettings
 ): HeroDisplayContent | null {
-  const mode = spotlight?.mode ?? 'daily';
+  const mode = spotlight.mode ?? 'daily';
 
-  if (mode === 'campaign' && spotlight?.imageUrl?.trim()) {
-    const title = spotlight.title?.trim() || 'Destaque';
-    return {
-      mode: 'campaign',
-      title,
-      subtitle: spotlight.subtitle?.trim(),
-      categoryLabel: spotlight.categoryLabel?.trim() || 'Outdoor',
-      imageUrl: spotlight.imageUrl.trim(),
-      linkUrl: spotlight.linkUrl?.trim(),
-      ctaLabel: spotlight.ctaLabel?.trim() || 'Saiba mais',
-      frameSource: {
-        name: title,
-        category: spotlight.categoryLabel || '',
-        muscleGroups: [],
-        coverFocusX: spotlight.coverFocusX,
-        coverFocusY: spotlight.coverFocusY,
-        coverZoom: spotlight.coverZoom,
-      },
-    };
-  }
-
-  if (mode === 'exercise' && spotlight?.exerciseFirestoreId) {
+  if (mode === 'exercise' && spotlight.exerciseFirestoreId) {
     const ex = exercises.find((item) => item.firestoreId === spotlight.exerciseFirestoreId);
     if (ex) {
       return {
@@ -93,6 +80,28 @@ export function resolveHeroDisplay(
   };
 }
 
+export function resolveHeroDisplay(
+  exercises: Exercise[],
+  rawSpotlight: HeroSpotlightSettings | undefined
+): HeroDisplayContent | null {
+  const spotlight = normalizeHeroSpotlight(rawSpotlight);
+  const mode = spotlight.mode ?? 'daily';
+
+  if (mode === 'campaign') {
+    const active = getActiveCampaigns(spotlight.campaigns ?? []);
+    const picked = pickCampaignForDisplay(active, spotlight.campaignRotation);
+    if (picked) {
+      return campaignToDisplayFields(picked);
+    }
+    return resolveDailyOrExercise(exercises, { ...spotlight, mode: 'daily' });
+  }
+
+  return resolveDailyOrExercise(exercises, spotlight);
+}
+
 export const DEFAULT_HERO_SPOTLIGHT: HeroSpotlightSettings = {
   mode: 'daily',
+  campaigns: [],
+  stats: {},
+  campaignRotation: 'queue',
 };

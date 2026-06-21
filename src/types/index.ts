@@ -95,20 +95,59 @@ export interface AccessIntegrationSettings {
   stripePriceIds?: string[];
 }
 
+export type HeroCampaignRotation = 'queue' | 'random' | 'priority';
+
+export type HeroCampaignStatus = 'draft' | 'scheduled' | 'active' | 'paused' | 'ended';
+
+export interface HeroCampaign {
+  id: string;
+  /** Nome interno no admin (ex.: «Cliente X — março») */
+  label?: string;
+  enabled: boolean;
+  imageUrl: string;
+  title: string;
+  subtitle?: string;
+  categoryLabel?: string;
+  ctaLabel?: string;
+  linkUrl?: string;
+  coverFocusX?: number;
+  coverFocusY?: number;
+  coverZoom?: number;
+  /** ISO 8601 — início da veiculação (opcional) */
+  startAt?: string;
+  /** ISO 8601 — fim da veiculação (opcional) */
+  endAt?: string;
+  /** Menor = maior prioridade na fila */
+  priority?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface HeroCampaignStats {
+  impressions: number;
+  clicks: number;
+}
+
 export interface HeroSpotlightSettings {
-  /** daily = sorteio diário · exercise = exercício fixo · campaign = outdoor / propaganda */
+  /** daily = sorteio diário · exercise = exercício fixo · campaign = campanhas / outdoor */
   mode?: 'daily' | 'exercise' | 'campaign';
   exerciseFirestoreId?: string;
+  /** @deprecated Use `campaigns[]` — mantido para migração automática */
   imageUrl?: string;
   title?: string;
   subtitle?: string;
   categoryLabel?: string;
   ctaLabel?: string;
-  /** Link ao clicar (YouTube, landing, afiliado…) */
   linkUrl?: string;
   coverFocusX?: number;
   coverFocusY?: number;
   coverZoom?: number;
+  /** Campanhas veiculadas no destaque */
+  campaigns?: HeroCampaign[];
+  /** Como escolher entre campanhas ativas no período */
+  campaignRotation?: HeroCampaignRotation;
+  /** Métricas por campanha (impressões / cliques) */
+  stats?: Record<string, HeroCampaignStats>;
 }
 
 export interface AppSettings {

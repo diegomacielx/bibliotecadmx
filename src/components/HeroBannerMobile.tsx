@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { getCoverFrameStyle } from '../lib/coverFocus';
 import { Icon } from './Icon';
 import { useExerciseCover } from '../hooks/useExerciseCover';
@@ -6,15 +7,27 @@ import type { HeroDisplayContent } from '../lib/heroSpotlight';
 interface HeroBannerMobileProps {
   hero: HeroDisplayContent;
   onWatch: (ex: import('../types').Exercise) => void;
-  onCampaignClick?: (linkUrl: string) => void;
+  onCampaignClick?: (linkUrl: string, campaignId?: string) => void;
+  onCampaignImpression?: (campaignId: string) => void;
 }
 
 /**
  * Destaque do dia — versão mobile isolada.
  * Sem Framer Motion, sem cinematic-card, sem animações de scroll.
  */
-export function HeroBannerMobile({ hero, onWatch, onCampaignClick }: HeroBannerMobileProps) {
+export function HeroBannerMobile({
+  hero,
+  onWatch,
+  onCampaignClick,
+  onCampaignImpression,
+}: HeroBannerMobileProps) {
   const isCampaign = hero.mode === 'campaign';
+
+  useEffect(() => {
+    if (isCampaign && hero.campaignId) {
+      onCampaignImpression?.(hero.campaignId);
+    }
+  }, [isCampaign, hero.campaignId, onCampaignImpression]);
   const coverSource = hero.exercise
     ? {
         firestoreId: hero.exercise.firestoreId,
@@ -35,7 +48,7 @@ export function HeroBannerMobile({ hero, onWatch, onCampaignClick }: HeroBannerM
 
   const handleClick = () => {
     if (isCampaign && hero.linkUrl) {
-      onCampaignClick?.(hero.linkUrl);
+      onCampaignClick?.(hero.linkUrl, hero.campaignId);
       return;
     }
     if (hero.exercise) onWatch(hero.exercise);
@@ -45,7 +58,7 @@ export function HeroBannerMobile({ hero, onWatch, onCampaignClick }: HeroBannerM
     <article className="m-hero" data-testid="hero-mobile">
       <div className="m-hero__text-block">
         <p className="m-hero__eyebrow">
-          <span className="m-hero__eyebrow-accent">{isCampaign ? 'Outdoor' : 'Destaque do dia'}</span>
+          <span className="m-hero__eyebrow-accent">{isCampaign ? 'Patrocinado' : 'Destaque do dia'}</span>
           <span className="m-hero__eyebrow-sep" aria-hidden="true">
             ·
           </span>

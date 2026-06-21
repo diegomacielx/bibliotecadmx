@@ -91,7 +91,7 @@ export default {
       aspectRatio: {
         'card-mobile': '9 / 16',
         'card-poster': '4 / 5',
-        hero: '21 / 9',
+        hero: '16 / 9',
         'hero-compact': '16 / 9',
       },
       transitionTimingFunction: {
