@@ -76,7 +76,7 @@ import { LoadingScreen } from './components/LoadingScreen';
 import { LoginScreen } from './components/LoginScreen';
 import { PendingAccessScreen } from './components/PendingAccessScreen';
 import { BlockedAccessScreen } from './components/BlockedAccessScreen';
-import { primeVideoPlaybackIntent, primeYouTubePlayerApi } from './lib/videoPlaybackPrime';
+import { disposeYouTubeWarmup, primeVideoPlaybackIntent, primeYouTubePlayerApi } from './lib/videoPlaybackPrime';
 import { HeroBanner } from './components/HeroBanner';
 import { ExerciseCard } from './components/ExerciseCard';
 import { GridSkeleton } from './components/Skeleton';
@@ -1963,6 +1963,7 @@ export default function App() {
   const closeLightbox = useCallback(() => {
     setActiveVideo(null);
     setCompareEx(null);
+    disposeYouTubeWarmup();
   }, []);
 
   const watchExercise = useCallback(
@@ -2109,7 +2110,7 @@ export default function App() {
     : `browse-${activeCategory}`;
 
   useEffect(() => {
-    if (loading || !isLoggedIn) return;
+    if (loading || !isLoggedIn || isMobileUi()) return;
 
     const run = () => primeYouTubePlayerApi();
     if (typeof window.requestIdleCallback === 'function') {

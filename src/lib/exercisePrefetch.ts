@@ -1,5 +1,6 @@
 import type { Exercise } from '../types';
 import { resolveExerciseCoverUrl } from './coverResolver';
+import { isMobileUi } from '../hooks/useMediaQuery';
 import { primeVideoPlaybackIntent } from './videoPlaybackPrime';
 
 type CoverSource = Pick<Exercise, 'firestoreId' | 'id' | 'thumbnail' | 'youtubeUrl'>;
@@ -26,14 +27,14 @@ export function prefetchExerciseCover(ex: CoverSource, priority: 'critical' | 'h
 
 /** Hover no card — capa atual + vizinhos + aquecimento de vídeo */
 export function prefetchExerciseHoverBundle(ex: CoverSource, peers: CoverSource[] = []): void {
-  primeVideoPlaybackIntent(ex);
+  if (!isMobileUi()) primeVideoPlaybackIntent(ex);
   prefetchExerciseCover(ex, 'critical');
   if (peers.length === 0) return;
 
   scheduleIdle(() => {
     for (const peer of peers) {
       prefetchExerciseCover(peer, 'high');
-      primeVideoPlaybackIntent(peer);
+      if (!isMobileUi()) primeVideoPlaybackIntent(peer);
     }
   });
 }
@@ -46,8 +47,10 @@ export function prefetchExerciseNeighbors(list: Exercise[], activeIndex: number)
   if (activeIndex > 0) targets.push(list[activeIndex - 1]);
   if (activeIndex < list.length - 1) targets.push(list[activeIndex + 1]);
 
-  for (const ex of targets) {
-    primeVideoPlaybackIntent(ex);
+  if (!isMobileUi()) {
+    for (const ex of targets) {
+      primeVideoPlaybackIntent(ex);
+    }
   }
 
   scheduleIdle(() => {

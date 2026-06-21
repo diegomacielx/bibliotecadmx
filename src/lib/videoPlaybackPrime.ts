@@ -1,6 +1,7 @@
 import type { Exercise } from '../types';
 import { getYouTubeId } from './utils';
 import { preloadYouTubePlayerApi } from '../components/YouTubePlayer';
+import { isMobileUi } from '../hooks/useMediaQuery';
 
 let warmVideoId: string | null = null;
 let warmIframe: HTMLIFrameElement | null = null;
@@ -28,9 +29,18 @@ export function primeYouTubePlayerApi(): void {
   void preloadYouTubePlayerApi();
 }
 
+/** Remove iframe oculto de aquecimento (libera memória no Safari/iOS). */
+export function disposeYouTubeWarmup(): void {
+  if (typeof window === 'undefined') return;
+  warmIframe?.remove();
+  warmIframe = null;
+  warmVideoId = null;
+}
+
 /** Iframe oculto com vídeo em fila — aquece CDN/conexão antes do clique */
 export function warmYouTubeVideo(videoId: string): void {
   if (!videoId || typeof window === 'undefined') return;
+  if (isMobileUi()) return;
 
   primeYouTubePlayerApi();
 
@@ -57,6 +67,11 @@ export function warmYouTubeVideo(videoId: string): void {
 
 /** Hover / pointerdown / abrir lightbox — máxima prioridade para playback instantâneo */
 export function primeVideoPlaybackIntent(ex: Pick<Exercise, 'youtubeUrl'>): void {
+  if (isMobileUi()) {
+    void preloadYouTubePlayerApi();
+    return;
+  }
+
   primeYouTubePlayerApi();
   const videoId = getYouTubeId(ex.youtubeUrl);
   if (videoId) warmYouTubeVideo(videoId);

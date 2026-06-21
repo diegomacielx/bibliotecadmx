@@ -371,12 +371,6 @@ export function ExerciseCard({
 
           {!coverMissing && <div className="card-cover-vignette" aria-hidden="true" />}
 
-          {touchLayout && selectionMode && playlistSequence != null && (
-            <div className="card-selection-order-aside" aria-label={`${playlistSequence}º no treino`}>
-              {playlistSequence}
-            </div>
-          )}
-
           {!showPreview && !previewPlaying && showCenterPlay && (
             <button
               type="button"
@@ -440,10 +434,20 @@ export function ExerciseCard({
                   e.stopPropagation();
                   onTogglePlaylist(ex);
                 }}
-                className={actionBtnClass(isInPlaylist ? 'card-action-btn--active' : '')}
-                aria-label={isInPlaylist ? 'Remover do treino' : 'Adicionar ao treino'}
+                className={actionBtnClass(
+                  isInPlaylist ? 'card-action-btn--active card-action-btn--selection-order' : ''
+                )}
+                aria-label={
+                  isInPlaylist && playlistSequence != null
+                    ? `${playlistSequence}º no treino — remover`
+                    : 'Adicionar ao treino'
+                }
               >
-                <Icon name={isInPlaylist ? 'check' : 'plus'} className="w-3.5 h-3.5" />
+                {isInPlaylist && playlistSequence != null ? (
+                  <span className="card-selection-order-number">{playlistSequence}</span>
+                ) : (
+                  <Icon name="plus" className="w-3.5 h-3.5" />
+                )}
               </button>
             ) : (
               <>

@@ -12,7 +12,7 @@ interface MobileWorkoutScreenProps {
   onRemoveFromPlaylist: (ex: Exercise) => void;
 }
 
-function WorkoutRow({
+function WorkoutCoverCard({
   ex,
   sequence,
   onWatch,
@@ -24,35 +24,41 @@ function WorkoutRow({
   onRemove: () => void;
 }) {
   const { imgSrc, imgLoaded, coverMissing, placeholderSrc, webpSrc, handleLoad, handleError } =
-    useExerciseCover(ex, { priority: 'normal' });
+    useExerciseCover(ex, { priority: sequence <= 2 ? 'high' : 'normal' });
 
   return (
-    <article className="mobile-workout-row">
-      <button type="button" className="mobile-workout-row__main" onClick={onWatch}>
-        <span className="mobile-workout-row__sequence">{sequence}</span>
-        <div className="mobile-workout-row__thumb">
-          <ExerciseCoverImage
-            imgSrc={imgSrc}
-            imgLoaded={imgLoaded}
-            placeholderSrc={placeholderSrc}
-            webpSrc={webpSrc}
-            alt=""
-            frameSource={ex}
-            exerciseId={ex.id}
-            exerciseCategory={ex.category}
-            coverMissing={coverMissing}
-            loading="lazy"
-            useBlurUp={false}
-            onLoad={handleLoad}
-            onError={handleError}
-            imgClassName="mobile-workout-row__img"
-          />
+    <article className="mobile-workout-cover">
+      <button type="button" className="mobile-workout-cover__frame aspect-card-poster" onClick={onWatch}>
+        <ExerciseCoverImage
+          imgSrc={imgSrc}
+          imgLoaded={imgLoaded}
+          placeholderSrc={placeholderSrc}
+          webpSrc={webpSrc}
+          alt=""
+          frameSource={ex}
+          exerciseId={ex.id}
+          exerciseCategory={ex.category}
+          coverMissing={coverMissing}
+          loading={sequence <= 2 ? 'eager' : 'lazy'}
+          fetchPriority={sequence <= 2 ? 'high' : 'auto'}
+          useBlurUp={false}
+          onLoad={handleLoad}
+          onError={handleError}
+          imgClassName="mobile-workout-cover__img"
+        />
+        {!coverMissing && <div className="card-cover-vignette" aria-hidden="true" />}
+        <span className="card-selection-order-badge" aria-label={`${sequence}º no treino`}>
+          {sequence}
+        </span>
+        <div className="card-meta-footer card-meta-footer--touch-top">
+          <h3 className="card-meta-title" title={ex.name}>
+            {ex.name}
+          </h3>
         </div>
-        <span className="mobile-workout-row__title">{ex.name}</span>
       </button>
       <button
         type="button"
-        className="mobile-workout-row__remove"
+        className="mobile-workout-cover__remove"
         onClick={onRemove}
         aria-label={`Remover ${ex.name} do treino`}
       >
@@ -107,18 +113,17 @@ export function MobileWorkoutScreen({
               Iniciar treino
             </button>
           </div>
-          <ul className="mobile-workout-screen__list cinema-container">
+          <div className="mobile-workout-screen__covers cinema-container">
             {playlist.map((ex, index) => (
-              <li key={ex.firestoreId}>
-                <WorkoutRow
-                  ex={ex}
-                  sequence={index + 1}
-                  onWatch={() => onWatch(ex)}
-                  onRemove={() => onRemoveFromPlaylist(ex)}
-                />
-              </li>
+              <WorkoutCoverCard
+                key={ex.firestoreId}
+                ex={ex}
+                sequence={index + 1}
+                onWatch={() => onWatch(ex)}
+                onRemove={() => onRemoveFromPlaylist(ex)}
+              />
             ))}
-          </ul>
+          </div>
           <div className="mobile-workout-screen__footer cinema-container">
             <button type="button" className="mobile-workout-screen__add-btn" onClick={onAddExercises}>
               <Icon name="plus" className="w-4 h-4" />
