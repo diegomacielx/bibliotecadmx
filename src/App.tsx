@@ -111,7 +111,7 @@ import { AdvancedFiltersBar } from './components/AdvancedFiltersBar';
 import { useAdvancedFilters } from './hooks/useAdvancedFilters';
 import { applyAdvancedFilters, countActiveAdvancedFilterGroups, hasActiveAdvancedFilters } from './lib/exerciseFilters';
 import { MobileShell, type MobileTab } from './components/mobile/MobileShell';
-import { MobileSearchScreen } from './components/mobile/MobileSearchScreen';
+import { MobileWorkoutScreen } from './components/mobile/MobileWorkoutScreen';
 import { MobileAccountScreen } from './components/mobile/MobileAccountScreen';
 import { MobileFilterSheet } from './components/mobile/MobileFilterSheet';
 import { MobileCatalog } from './components/mobile/MobileCatalog';
@@ -1353,7 +1353,11 @@ export default function App() {
       return;
     }
     const active = selectionMode || playlistOrder.length > 0;
-    document.documentElement.toggleAttribute('data-mobile-playlist-active', active);
+    if (active) {
+      document.documentElement.setAttribute('data-mobile-playlist-active', 'true');
+    } else {
+      document.documentElement.removeAttribute('data-mobile-playlist-active');
+    }
   }, [useMobileShell, selectionMode, playlistOrder.length]);
 
   useEffect(() => {
@@ -1362,7 +1366,11 @@ export default function App() {
       document.documentElement.removeAttribute('data-mobile-playback-active');
       return;
     }
-    document.documentElement.toggleAttribute('data-mobile-playback-active', !!activeVideo);
+    if (activeVideo) {
+      document.documentElement.setAttribute('data-mobile-playback-active', 'true');
+    } else {
+      document.documentElement.removeAttribute('data-mobile-playback-active');
+    }
   }, [useMobileShell, activeVideo]);
 
   /** Exercícios visíveis para alunos — somente com YouTube válido, na ordem escolhida */
@@ -1564,15 +1572,30 @@ export default function App() {
         categoryBeforeFavoritesTabRef.current = activeCategory;
         setActiveCategory('Favoritos');
         setSearchTerm('');
+        setSelectionMode(false);
       } else if (tab === 'home') {
         if (activeCategory === 'Favoritos') {
           setActiveCategory(categoryBeforeFavoritesTabRef.current || 'Todos');
         }
+      } else if (tab === 'workout') {
+        setSearchTerm('');
+        setSelectionMode(false);
+        if (activeCategory === 'Favoritos') {
+          setActiveCategory(categoryBeforeFavoritesTabRef.current || 'Todos');
+        }
+      } else if (tab === 'account') {
+        setSelectionMode(false);
       }
       window.scrollTo({ top: 0, behavior: 'auto' });
     },
     [activeCategory, activeVideo]
   );
+
+  const handleMobileAddToWorkout = useCallback(() => {
+    setSelectionMode(true);
+    setMobileTab('home');
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, []);
 
   const handleAdminMobileTabChange = useCallback((tab: MobileAdminTab) => {
     setAdminMobileTab(tab);
@@ -1614,6 +1637,9 @@ export default function App() {
 
   const handleSearchChange = useCallback(
     (value: string) => {
+      if (useMobileShell && value.trim() && mobileTab === 'workout') {
+        setMobileTab('home');
+      }
       setSearchTerm((prev) => {
         if (!prev.trim() && value.trim()) {
           categoryBeforeSearchRef.current = activeCategory;
@@ -1621,7 +1647,7 @@ export default function App() {
         return value;
       });
     },
-    [activeCategory]
+    [activeCategory, mobileTab, useMobileShell]
   );
 
   const handleSelectSearchHistory = useCallback(
@@ -2325,7 +2351,8 @@ export default function App() {
         enableStudentGuide={!showAdminUI}
         mobileShellMode={useMobileShell}
         mobileCompactHeader={useMobileAdminShell}
-        mobileSearchScreenActive={useMobileShell && mobileTab === 'search'}
+        mobileAccountScreenActive={useMobileShell && mobileTab === 'account'}
+        mobileSearchWithCategory={useMobileShell && !!searchTerm.trim() && mobileTab !== 'account'}
         mobileSearchCategories={MOBILE_CATEGORY_NAV}
         mobileSearchActiveCategory={activeCategory}
         onMobileSearchCategoryChange={handleSearchScreenCategoryChange}
@@ -2535,69 +2562,10 @@ export default function App() {
             onTabChange={handleMobileTabChange}
             onBrandPress={handleMobileBrandPress}
             favoritesCount={favorites.size}
+            workoutCount={playlist.length}
             playbackElevated={!!activeVideo}
           >
-            {mobileTab === 'search' ? (
-              <MobileSearchScreen
-                searchTerm={searchTerm}
-                onSearchChange={handleSearchChange}
-                onSearchCommit={handleSearchCommit}
-                searchHistory={visibleSearchHistory}
-                searchRecents={visibleRecents}
-                onSelectHistory={handleSelectSearchHistory}
-                onSelectRecent={handleSelectRecentExercise}
-                onRemoveHistoryItem={removeHistoryItem}
-                onClearHistory={clearHistory}
-                searchSuggestions={searchSuggestions}
-                onSelectSuggestion={(ex) => {
-                  if (!hasValidYouTubeUrl(ex.youtubeUrl)) return;
-                  if (saveSearchHistory) addSearch(ex.name);
-                  watchExercise(ex);
-                }}
-                onSearchAll={() => handleSearchCommit(searchTerm.trim())}
-                onSuggest={() => setShowRequestModal(true)}
-                loading={loading}
-                slowConnection={slowConnection}
-                filteredExercises={filteredExercises}
-                gridExercises={gridExercises}
-                emptyStateVariant={emptyStateVariant}
-                activeCategory={activeCategory}
-                onClearFilters={handleEmptyClearFilters}
-                onSearchAllCategories={
-                  emptyStateVariant === 'search' && activeCategory !== 'Todos'
-                    ? handleGoToTodosKeepSearch
-                    : undefined
-                }
-                onGoHome={handleGoHome}
-                filterTrigger={
-                  <MobileCatalogToolbar
-                    filterActiveCount={mobileFilterActiveCount}
-                    onOpenFilters={() => setMobileFilterOpen(true)}
-                    catalogView={catalogView}
-                    onCatalogViewChange={setCatalogView}
-                  />
-                }
-                catalogView={catalogView}
-                isAdmin={showAdminUI}
-                isExerciseIncomplete={isExerciseIncomplete}
-                handleDownloadCheck={handleDownloadCheck}
-                setForm={setForm}
-                setEditingId={setEditingId}
-                setAdminTab={setAdminTab}
-                setShowAdminPanel={setShowAdminPanel}
-                copyLink={copyLink}
-                copiedId={copiedId}
-                onWatch={watchExercise}
-                selectionMode={false}
-                playlistOrder={[]}
-                onTogglePlaylist={togglePlaylistItem}
-                isFavorite={isFavorite}
-                onToggleFavorite={toggleFavorite}
-                comparePickId={comparePick?.firestoreId}
-                cardHoverPreview={cardHoverPreview}
-                cardCoverParallax={cardCoverParallax}
-              />
-            ) : mobileTab === 'account' ? (
+            {mobileTab === 'account' ? (
               <MobileAccountScreen
                 user={user}
                 userProfile={userProfile}
@@ -2608,9 +2576,18 @@ export default function App() {
                 onSuggest={() => setShowRequestModal(true)}
                 onLogout={handleLogout}
               />
+            ) : mobileTab === 'workout' ? (
+              <MobileWorkoutScreen
+                playlist={playlist}
+                onPlay={playPlaylist}
+                onClear={() => setPlaylistOrder([])}
+                onAddExercises={handleMobileAddToWorkout}
+                onWatch={watchExercise}
+                onRemoveFromPlaylist={togglePlaylistItem}
+              />
             ) : (
               <div key={pageKey}>
-                {mobileTab === 'home' && (
+                {mobileTab === 'home' && !searchTerm.trim() && (
                   <CategoryNav
                     categories={MOBILE_CATEGORY_NAV}
                     activeCategory={activeCategory}
@@ -2627,12 +2604,14 @@ export default function App() {
                     </p>
                   </header>
                 )}
-                <MobileCatalogToolbar
-                  filterActiveCount={mobileFilterActiveCount}
-                  onOpenFilters={() => setMobileFilterOpen(true)}
-                  catalogView={catalogView}
-                  onCatalogViewChange={setCatalogView}
-                />
+                {(mobileTab === 'home' || mobileTab === 'favorites' || searchTerm.trim()) && (
+                  <MobileCatalogToolbar
+                    filterActiveCount={mobileFilterActiveCount}
+                    onOpenFilters={() => setMobileFilterOpen(true)}
+                    catalogView={catalogView}
+                    onCatalogViewChange={setCatalogView}
+                  />
+                )}
                 {mobileTab === 'home' && !searchTerm && activeCategory === 'Todos' && heroDisplay && (
                   <HeroBanner
                     hero={heroDisplay}
@@ -2641,6 +2620,13 @@ export default function App() {
                     onCampaignImpression={handleCampaignImpression}
                     mobileCompact
                   />
+                )}
+                {searchTerm.trim() && !loading && filteredExercises.length > 0 && (
+                  <p className="search-results-summary mb-fluid-md cinema-container">
+                    <span className="search-results-count">{filteredExercises.length}</span>
+                    {filteredExercises.length === 1 ? ' resultado' : ' resultados'}
+                    <span className="search-results-meta"> · ordenados por relevância</span>
+                  </p>
                 )}
                 {loading ? (
                   <div className="py-fluid-2xl">
@@ -2656,8 +2642,21 @@ export default function App() {
                     variant={emptyStateVariant}
                     searchTerm={searchTerm}
                     category={activeCategory}
+                    onSuggest={
+                      searchTerm.trim()
+                        ? () => {
+                            setRequestForm({ name: searchTerm, details: '' });
+                            setShowRequestModal(true);
+                          }
+                        : undefined
+                    }
                     onClearFilters={handleEmptyClearFilters}
-                    onGoHome={handleGoHome}
+                    onSearchAllCategories={
+                      emptyStateVariant === 'search' && activeCategory !== 'Todos'
+                        ? handleGoToTodosKeepSearch
+                        : undefined
+                    }
+                    onGoHome={emptyStateVariant === 'search' ? handleGoHome : undefined}
                   />
                 ) : (
                   <MobileCatalog
@@ -2673,8 +2672,8 @@ export default function App() {
                     copyLink={copyLink}
                     copiedId={copiedId}
                     onWatch={watchExercise}
-                    selectionMode={false}
-                    playlistOrder={[]}
+                    selectionMode={selectionMode}
+                    playlistOrder={playlistOrder}
                     onTogglePlaylist={togglePlaylistItem}
                     isFavorite={isFavorite}
                     onToggleFavorite={toggleFavorite}

@@ -60,12 +60,14 @@ interface SiteHeaderProps {
   onGoHome?: () => void;
   /** Exibe «Guia de uso» no menu da conta (alunos) */
   enableStudentGuide?: boolean;
-  /** Shell mobile: header compacto sem busca nem menu de conta */
+  /** Shell mobile: header compacto com busca centralizada */
   mobileShellMode?: boolean;
   /** Admin mobile: header compacto sem busca, mantém menu de conta */
   mobileCompactHeader?: boolean;
-  /** Aba Buscar ativa — troca lâmpada por filtro de categorias */
-  mobileSearchScreenActive?: boolean;
+  /** Aba Conta ativa — exibe marca no lugar da busca */
+  mobileAccountScreenActive?: boolean;
+  /** Busca ativa — troca lâmpada por filtro de categorias */
+  mobileSearchWithCategory?: boolean;
   mobileSearchCategories?: readonly string[];
   mobileSearchActiveCategory?: string;
   onMobileSearchCategoryChange?: (cat: string) => void;
@@ -132,7 +134,8 @@ export function SiteHeader({
   enableStudentGuide = false,
   mobileShellMode = false,
   mobileCompactHeader = false,
-  mobileSearchScreenActive = false,
+  mobileAccountScreenActive = false,
+  mobileSearchWithCategory = false,
   mobileSearchCategories,
   mobileSearchActiveCategory = 'Todos',
   onMobileSearchCategoryChange,
@@ -212,6 +215,78 @@ export function SiteHeader({
   const showSuggestions = searchFocused && searchTerm.trim().length >= 2;
   const showChips =
     searchFocused && !searchTerm.trim() && (searchHistory.length > 0 || searchRecents.length > 0);
+
+  const renderMobileShellSearch = () => (
+    <div
+      className={`mobile-shell-header__search search-bar-wrap w-full min-w-0 ${
+        searchFocused ? 'search-bar-wrap--focused' : ''
+      }`}
+    >
+      <div className="search-bar-premium search-bar-premium--header w-full">
+        <span className="search-bar-icon-ring" aria-hidden="true">
+          <Icon name="search" className="w-3.5 h-3.5" />
+        </span>
+        <input
+          ref={mobileSearchRef}
+          type="search"
+          enterKeyHint="search"
+          placeholder="Buscar exercícios…"
+          className="search-bar-input search-bar-input--header flex-1 text-[var(--dmx-fg)]"
+          value={searchTerm}
+          onChange={(e) => onSearchChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && searchTerm.trim()) {
+              onSearchCommit?.(searchTerm.trim());
+              setSearchFocused(false);
+            }
+          }}
+          onFocus={() => setSearchFocused(true)}
+          onBlur={() => setTimeout(() => setSearchFocused(false), 180)}
+          aria-expanded={showSuggestions || showChips}
+          aria-autocomplete="list"
+          aria-label="Buscar exercícios"
+        />
+        {searchTerm ? (
+          <button
+            type="button"
+            onClick={() => onSearchChange('')}
+            className="search-bar-clear"
+            aria-label="Limpar busca"
+          >
+            <Icon name="x" className="w-3.5 h-3.5" />
+          </button>
+        ) : null}
+      </div>
+      <SearchSuggestions
+        query={searchTerm}
+        suggestions={searchSuggestions}
+        visible={showSuggestions}
+        onSelect={(ex) => {
+          onSelectSuggestion?.(ex);
+          setSearchFocused(false);
+        }}
+        onSearchAll={() => {
+          onSearchCommit?.(searchTerm.trim());
+          setSearchFocused(false);
+        }}
+      />
+      <SearchChips
+        history={searchHistory}
+        recents={searchRecents}
+        visible={showChips}
+        onSelectHistory={(term) => {
+          onSelectHistory?.(term);
+          setSearchFocused(false);
+        }}
+        onSelectRecent={(id, name) => {
+          onSelectRecent?.(id, name);
+          setSearchFocused(false);
+        }}
+        onRemoveHistory={(term) => onRemoveHistoryItem?.(term)}
+        onClearHistory={() => onClearHistory?.()}
+      />
+    </div>
+  );
 
   const renderSearchField = (inputRef: React.RefObject<HTMLInputElement | null>, showKbd: boolean) => (
     <div className={`search-bar-wrap relative w-full ${searchFocused ? 'search-bar-wrap--focused' : ''}`}>
@@ -388,7 +463,9 @@ export function SiteHeader({
       <div className="site-header-inner cinema-container">
         {mobileShellMode ? (
           <div className="mobile-shell-header-row">
-            {mobileSearchScreenActive && mobileSearchCategories && onMobileSearchCategoryChange ? (
+            {mobileAccountScreenActive ? (
+              <div className="mobile-shell-header__brand-only" aria-hidden="true" />
+            ) : mobileSearchWithCategory && mobileSearchCategories && onMobileSearchCategoryChange ? (
               <MobileSearchCategoryMenu
                 categories={mobileSearchCategories}
                 activeCategory={mobileSearchActiveCategory}
@@ -408,9 +485,13 @@ export function SiteHeader({
               </button>
             )}
 
-            <h1 className="header-brand-title mobile-shell-header__title">
-              Biblioteca <span className="text-red-500">DMX</span>
-            </h1>
+            {mobileAccountScreenActive ? (
+              <h1 className="header-brand-title mobile-shell-header__title">
+                Biblioteca <span className="text-red-500">DMX</span>
+              </h1>
+            ) : (
+              renderMobileShellSearch()
+            )}
 
             <div className="mobile-shell-header__actions header-actions">
               {renderNotifications()}

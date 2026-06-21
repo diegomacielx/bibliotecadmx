@@ -308,7 +308,7 @@ export function ExerciseCard({
         isComparePick
           ? 'border-red-500 ring-2 ring-red-500/40'
           : isInPlaylist
-            ? 'border-emerald-500/50 ring-1 ring-emerald-500/30'
+            ? 'border-red-500/50 ring-1 ring-red-500/30'
             : 'border-transparent hover:border-white/10'
       } focus-within:outline-none`}
       whileHover={
@@ -372,7 +372,7 @@ export function ExerciseCard({
           {!coverMissing && <div className="card-cover-vignette" aria-hidden="true" />}
 
           {touchLayout && selectionMode && playlistSequence != null && (
-            <div className="card-selection-order-mobile" aria-label={`${playlistSequence}º no treino`}>
+            <div className="card-selection-order-aside" aria-label={`${playlistSequence}º no treino`}>
               {playlistSequence}
             </div>
           )}
@@ -427,11 +427,6 @@ export function ExerciseCard({
             {playlistSequence != null && !touchLayout && (
               <span className="card-playlist-order" title={`${playlistSequence}º na sequência`}>
                 {playlistSequence}
-              </span>
-            )}
-            {playlistSequence != null && touchLayout && selectionMode && (
-              <span className="card-playlist-order card-playlist-order--selection" title={`${playlistSequence}º na sequência`}>
-                {playlistSequence}º
               </span>
             )}
           </div>

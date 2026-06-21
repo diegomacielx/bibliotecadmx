@@ -76,15 +76,18 @@ export function MobileExerciseListRow({
               onError={handleError}
               imgClassName="mobile-exercise-row__img"
             />
-            {selectionMode && playlistSequence != null && (
-              <span className="mobile-exercise-row__sequence">{playlistSequence}</span>
-            )}
           </div>
 
           <div className="mobile-exercise-row__body">
             <h3 className="mobile-exercise-row__title">{ex.name}</h3>
           </div>
         </button>
+
+        {selectionMode && playlistSequence != null && (
+          <span className="mobile-exercise-row__sequence" aria-label={`${playlistSequence}º no treino`}>
+            {playlistSequence}
+          </span>
+        )}
 
         {!selectionMode && (
           <MobileExerciseCardMenu

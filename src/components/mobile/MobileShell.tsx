@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { BrandLogo } from '../BrandLogo';
 import { Icon } from '../Icon';
 
-export type MobileTab = 'home' | 'favorites' | 'search' | 'account';
+export type MobileTab = 'home' | 'favorites' | 'workout' | 'account';
 
 const NAV_LAYER_ID = 'dmx-mobile-nav-layer';
 
@@ -12,6 +12,7 @@ interface MobileShellProps {
   onTabChange: (tab: MobileTab) => void;
   onBrandPress: () => void;
   favoritesCount: number;
+  workoutCount?: number;
   /** Lightbox de reprodução aberto — nav deve ficar acima de tudo */
   playbackElevated?: boolean;
   children: React.ReactNode;
@@ -20,7 +21,7 @@ interface MobileShellProps {
 const SIDE_TABS: { id: MobileTab; label: string; icon: string }[] = [
   { id: 'home', label: 'Início', icon: 'home' },
   { id: 'favorites', label: 'Favoritos', icon: 'heart' },
-  { id: 'search', label: 'Busca', icon: 'search' },
+  { id: 'workout', label: 'Treino', icon: 'listvideo' },
   { id: 'account', label: 'Conta', icon: 'user' },
 ];
 
@@ -79,6 +80,7 @@ export function MobileShell({
   onTabChange,
   onBrandPress,
   favoritesCount,
+  workoutCount = 0,
   playbackElevated = false,
   children,
 }: MobileShellProps) {
@@ -112,8 +114,8 @@ export function MobileShell({
           key={tab.id}
           {...tab}
           active={activeTab === tab.id}
-          showBadge={tab.id === 'favorites'}
-          badgeCount={favoritesCount}
+          showBadge={tab.id === 'favorites' || tab.id === 'workout'}
+          badgeCount={tab.id === 'favorites' ? favoritesCount : tab.id === 'workout' ? workoutCount : undefined}
           onTabChange={onTabChange}
         />
       ))}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef, useCallback, type CSSProperties, type WheelEvent } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback, useLayoutEffect, type CSSProperties, type WheelEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Exercise } from '../types';
@@ -12,7 +12,6 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useTouchLayout } from '../hooks/useMediaQuery';
 import { useTheme } from '../hooks/useTheme';
 import { useExerciseCover } from '../hooks/useExerciseCover';
-import { useHorizontalSwipe } from '../hooks/useHorizontalSwipe';
 import { primeVideoPlaybackIntent } from '../lib/videoPlaybackPrime';
 import { MobileMusclesDropup } from './mobile/MobileMusclesDropup';
 import { getCoverPlaceholderStyle } from './ExerciseCoverPlaceholder';
@@ -240,12 +239,14 @@ function MobileCoverPlayer({
   ex,
   ytId,
   hero = false,
+  preview = false,
 }: {
   ex: Exercise;
   ytId: string;
   hero?: boolean;
+  preview?: boolean;
 }) {
-  const [isPlaying, setIsPlaying] = useState(hero);
+  const [isPlaying, setIsPlaying] = useState(hero && !preview);
   const playerRef = useRef<YouTubePlayerHandle>(null);
   const { imgSrc, coverMissing, handleLoad, handleError } = useExerciseCover(ex, { priority: 'high' });
   const isVertical =
@@ -255,12 +256,12 @@ function MobileCoverPlayer({
     }) === 'vertical';
 
   useEffect(() => {
-    setIsPlaying(hero);
-  }, [ex.firestoreId, hero]);
+    setIsPlaying(hero && !preview);
+  }, [ex.firestoreId, hero, preview]);
 
   useEffect(() => {
-    primeVideoPlaybackIntent(ex);
-  }, [ex]);
+    if (!preview) primeVideoPlaybackIntent(ex);
+  }, [ex, preview]);
 
   const handlePlay = () => {
     primeVideoPlaybackIntent(ex);
@@ -322,16 +323,177 @@ function MobileCoverPlayer({
               className="cinema-mobile-cover-poster"
             />
           )}
-          <button
-            type="button"
-            className="cinema-mobile-yt-play-btn"
-            onClick={handlePlay}
-            aria-label="Reproduzir vídeo"
-          >
-            <Icon name="play" className="w-5 h-5 ml-0.5" strokeWidth={2} fill="currentColor" />
-          </button>
+          {!preview && (
+            <button
+              type="button"
+              className="cinema-mobile-yt-play-btn"
+              onClick={handlePlay}
+              aria-label="Reproduzir vídeo"
+            >
+              <Icon name="play" className="w-5 h-5 ml-0.5" strokeWidth={2} fill="currentColor" />
+            </button>
+          )}
         </>
       )}
+    </div>
+  );
+}
+
+type ReelsSlideKind = 'prev' | 'current' | 'next';
+
+interface ReelsSlide {
+  ex: Exercise;
+  kind: ReelsSlideKind;
+}
+
+function buildReelsSlides(navList: Exercise[], navIndex: number): ReelsSlide[] {
+  const slides: ReelsSlide[] = [];
+  if (navIndex > 0) slides.push({ ex: navList[navIndex - 1], kind: 'prev' });
+  slides.push({ ex: navList[navIndex], kind: 'current' });
+  if (navIndex < navList.length - 1) slides.push({ ex: navList[navIndex + 1], kind: 'next' });
+  return slides;
+}
+
+function MobileReelsFeed({
+  navList,
+  navIndex,
+  onNavPrev,
+  onNavNext,
+  navPrevDisabled,
+  navNextDisabled,
+}: {
+  navList: Exercise[];
+  navIndex: number;
+  onNavPrev: () => void;
+  onNavNext: () => void;
+  navPrevDisabled: boolean;
+  navNextDisabled: boolean;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const navigatingRef = useRef(false);
+  const scrollEndTimerRef = useRef(0);
+
+  const slides = useMemo(() => buildReelsSlides(navList, navIndex), [navList, navIndex]);
+
+  const currentSlideIndex = useMemo(
+    () => slides.findIndex((s) => s.kind === 'current'),
+    [slides]
+  );
+
+  const scrollToSlide = useCallback((idx: number, behavior: ScrollBehavior = 'instant') => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const h = el.clientHeight;
+    if (h <= 0 || idx < 0) return;
+    el.scrollTo({ top: idx * h, behavior });
+  }, []);
+
+  const setFeedScrolling = useCallback((active: boolean) => {
+    if (typeof document === 'undefined') return;
+    if (active) {
+      document.documentElement.setAttribute('data-reels-feed-scrolling', 'true');
+    } else {
+      document.documentElement.removeAttribute('data-reels-feed-scrolling');
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    scrollToSlide(currentSlideIndex, 'instant');
+  }, [navIndex, currentSlideIndex, scrollToSlide]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const handleScrollEnd = () => {
+      window.clearTimeout(scrollEndTimerRef.current);
+      setFeedScrolling(false);
+
+      if (navigatingRef.current) return;
+
+      const h = el.clientHeight;
+      if (h <= 0) return;
+
+      const scrollIdx = Math.round(el.scrollTop / h);
+      const slide = slides[scrollIdx];
+
+      if (!slide || slide.kind === 'current') {
+        const drift = Math.abs(el.scrollTop - currentSlideIndex * h);
+        if (drift > 6) scrollToSlide(currentSlideIndex, 'smooth');
+        return;
+      }
+
+      navigatingRef.current = true;
+      if (slide.kind === 'prev' && !navPrevDisabled) {
+        onNavPrev();
+      } else if (slide.kind === 'next' && !navNextDisabled) {
+        onNavNext();
+      } else {
+        navigatingRef.current = false;
+        scrollToSlide(currentSlideIndex, 'smooth');
+      }
+    };
+
+    const scheduleScrollEnd = () => {
+      setFeedScrolling(true);
+      window.clearTimeout(scrollEndTimerRef.current);
+      scrollEndTimerRef.current = window.setTimeout(handleScrollEnd, 220);
+    };
+
+    const onTouchStart = () => setFeedScrolling(true);
+
+    el.addEventListener('scroll', scheduleScrollEnd, { passive: true });
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+
+    return () => {
+      el.removeEventListener('scroll', scheduleScrollEnd);
+      el.removeEventListener('touchstart', onTouchStart);
+      window.clearTimeout(scrollEndTimerRef.current);
+      setFeedScrolling(false);
+      navigatingRef.current = false;
+    };
+  }, [
+    slides,
+    currentSlideIndex,
+    onNavPrev,
+    onNavNext,
+    navPrevDisabled,
+    navNextDisabled,
+    scrollToSlide,
+    setFeedScrolling,
+  ]);
+
+  useEffect(() => {
+    navigatingRef.current = false;
+  }, [navIndex]);
+
+  return (
+    <div ref={scrollRef} className="mobile-reels-feed" aria-label="Feed de exercícios">
+      {slides.map((slide) => {
+        const slideYtId = getYouTubeId(slide.ex.youtubeUrl);
+        const isActive = slide.kind === 'current';
+        const placeholderStyle = getCoverPlaceholderStyle(slide.ex.id, slide.ex.category);
+
+        return (
+          <div
+            key={`${slide.ex.firestoreId}-${slide.kind}`}
+            className="mobile-reels-feed__slide"
+            style={placeholderStyle}
+            data-reels-slide={slide.kind}
+          >
+            {slideYtId ? (
+              <MobileCoverPlayer ex={slide.ex} ytId={slideYtId} hero preview={!isActive} />
+            ) : (
+              <div className="cinema-mobile-cover-frame cinema-mobile-cover-frame--hero cinema-mobile-cover-frame--empty">
+                <Icon name="youtube" className="w-10 h-10 text-zinc-500" strokeWidth={1} />
+                <p className="text-2xs font-medium uppercase tracking-cinematic-wide text-zinc-500">
+                  Execução pendente
+                </p>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -339,12 +501,14 @@ function MobileCoverPlayer({
 function MobileExerciseSheet({
   ex,
   ytId,
+  navList,
   isCopied,
   onCopy,
   onDownload,
   isFavorite,
   onToggleFavorite,
   hasNav,
+  navIndex,
   onNavPrev,
   onNavNext,
   navPrevDisabled,
@@ -352,6 +516,7 @@ function MobileExerciseSheet({
 }: {
   ex: Exercise;
   ytId: string | null;
+  navList: Exercise[];
   onClose: () => void;
   isCopied: boolean;
   onCopy: () => void;
@@ -368,29 +533,27 @@ function MobileExerciseSheet({
   navNextDisabled: boolean;
 }) {
   const [musclesOpen, setMusclesOpen] = useState(false);
-  const swipeEnabled = hasNav && (!navPrevDisabled || !navNextDisabled);
+  const useVerticalFeed = hasNav && navList.length > 1;
 
   useEffect(() => {
     setMusclesOpen(false);
   }, [ex.firestoreId]);
-  const swipeHandlers = useHorizontalSwipe({
-    enabled: swipeEnabled,
-    onSwipeLeft: navNextDisabled ? undefined : onNavNext,
-    onSwipeRight: navPrevDisabled ? undefined : onNavPrev,
-  });
 
   const stagePlaceholderStyle = getCoverPlaceholderStyle(ex.id, ex.category);
 
   return (
     <div className="cinema-mobile-sheet cinema-mobile-sheet--reels" style={stagePlaceholderStyle}>
-      <div
-        className="cinema-mobile-reels-stage"
-        style={stagePlaceholderStyle}
-        onTouchStart={swipeHandlers.onTouchStart}
-        onTouchEnd={swipeHandlers.onTouchEnd}
-        onTouchCancel={swipeHandlers.onTouchCancel}
-      >
-        {ytId ? (
+      <div className="cinema-mobile-reels-stage" style={stagePlaceholderStyle}>
+        {useVerticalFeed ? (
+          <MobileReelsFeed
+            navList={navList}
+            navIndex={navIndex}
+            onNavPrev={onNavPrev}
+            onNavNext={onNavNext}
+            navPrevDisabled={navPrevDisabled}
+            navNextDisabled={navNextDisabled}
+          />
+        ) : ytId ? (
           <MobileCoverPlayer ex={ex} ytId={ytId} hero />
         ) : (
           <div className="cinema-mobile-cover-frame cinema-mobile-cover-frame--hero cinema-mobile-cover-frame--empty">
@@ -927,6 +1090,7 @@ export function CinemaLightbox({
           <MobileExerciseSheet
             ex={ex}
             ytId={ytId}
+            navList={effectiveNavList}
             onClose={onClose}
             isCopied={isCopied}
             onCopy={() => copyLink(ex.youtubeUrl, ex.firestoreId)}
