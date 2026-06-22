@@ -23,6 +23,7 @@ import { Icon } from './Icon';
 import { CardVideoPreview } from './CardVideoPreview';
 import { prefetchExerciseHoverBundle } from '../lib/exercisePrefetch';
 import { primeVideoPlaybackIntent } from '../lib/videoPlaybackPrime';
+import { signalMobilePlaybackGesture } from '../lib/mobilePlaybackSession';
 import { MobileExerciseCardMenu } from './mobile/MobileExerciseCardMenu';
 import {
   CARD_PREVIEW_HOVER_DELAY_MS,
@@ -264,13 +265,15 @@ export function ExerciseCard({
     e.stopPropagation();
     e.preventDefault();
     deactivatePreview();
-    primeVideoPlaybackIntent(ex);
+    signalMobilePlaybackGesture();
+    primeVideoPlaybackIntent(ex, { force: true });
     onWatch(ex);
   };
 
   const handlePlayClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    primeVideoPlaybackIntent(ex);
+    signalMobilePlaybackGesture();
+    primeVideoPlaybackIntent(ex, { force: true });
     onWatch(ex);
   };
 

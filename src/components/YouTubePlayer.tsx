@@ -48,6 +48,10 @@ export interface YouTubePlayerHandle {
   getVideoLoadedFraction: () => number;
   getPlayerState: () => number;
   requestFullscreen: () => void;
+  mute: () => void;
+  unMute: () => void;
+  isMuted: () => boolean;
+  setPlaybackRate: (rate: number) => void;
 }
 
 interface YouTubePlayerProps {
@@ -61,6 +65,8 @@ interface YouTubePlayerProps {
   largeSurface?: boolean;
   onEnded?: () => void;
   onPlayStateChange?: (playing: boolean) => void;
+  /** Primeiro frame visível (PLAYING ou BUFFERING) — esconde splash do YouTube */
+  onFrameVisible?: () => void;
   onReady?: () => void;
   /** Aguarda play externo (ex.: sync no comparador) */
   deferAutoplay?: boolean;
@@ -79,6 +85,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
     largeSurface = false,
     onEnded,
     onPlayStateChange,
+    onFrameVisible,
     onReady,
     deferAutoplay = false,
     mobileVertical = false,
@@ -88,16 +95,19 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
   const hostRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YT.Player | null>(null);
+  const muteRef = useRef(mute);
   const onReadyRef = useRef(onReady);
   const onEndedRef = useRef(onEnded);
   const onPlayStateChangeRef = useRef(onPlayStateChange);
+  const onFrameVisibleRef = useRef(onFrameVisible);
   const domId = useId().replace(/:/g, '');
 
   useEffect(() => {
     onReadyRef.current = onReady;
     onEndedRef.current = onEnded;
     onPlayStateChangeRef.current = onPlayStateChange;
-  }, [onReady, onEnded, onPlayStateChange]);
+    onFrameVisibleRef.current = onFrameVisible;
+  }, [onReady, onEnded, onPlayStateChange, onFrameVisible]);
 
   useImperativeHandle(ref, () => ({
     playVideo: () => {
@@ -171,7 +181,45 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
         fsEl.webkitRequestFullscreen?.();
       }
     },
+    mute: () => {
+      try {
+        playerRef.current?.mute();
+      } catch {
+        /* ignore */
+      }
+    },
+    unMute: () => {
+      try {
+        playerRef.current?.unMute();
+      } catch {
+        /* ignore */
+      }
+    },
+    isMuted: () => {
+      try {
+        return playerRef.current?.isMuted() ?? true;
+      } catch {
+        return true;
+      }
+    },
+    setPlaybackRate: (rate: number) => {
+      try {
+        playerRef.current?.setPlaybackRate(rate);
+      } catch {
+        /* ignore */
+      }
+    },
   }));
+
+  useEffect(() => {
+    muteRef.current = mute;
+    try {
+      if (mute) playerRef.current?.mute();
+      else playerRef.current?.unMute();
+    } catch {
+      /* ignore */
+    }
+  }, [mute]);
 
   useEffect(() => {
     let cancelled = false;
@@ -183,6 +231,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
       playerRef.current = null;
 
       const showControls = controls;
+      const startMuted = muteRef.current;
 
       const player = new window.YT.Player(hostRef.current, {
         videoId,
@@ -190,8 +239,8 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
         height: '100%',
         host: 'https://www.youtube.com',
         playerVars: {
-          autoplay: autoplay ? 1 : 0,
-          mute: mute ? 1 : 0,
+          autoplay: 0,
+          mute: startMuted ? 1 : 0,
           controls: showControls ? 1 : 0,
           modestbranding: 1,
           rel: 0,
@@ -210,7 +259,10 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
           },
           onStateChange: (event) => {
             if (event.data === 0) onEndedRef.current?.();
-            if (event.data === 1) onPlayStateChangeRef.current?.(true);
+            if (event.data === 1 || event.data === 3) {
+              onFrameVisibleRef.current?.();
+              onPlayStateChangeRef.current?.(true);
+            }
             if (event.data === 2) onPlayStateChangeRef.current?.(false);
           },
         },
@@ -228,7 +280,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
       }
       playerRef.current = null;
     };
-  }, [videoId, autoplay, mute, controls, deferAutoplay, mobileVertical]);
+  }, [videoId, controls, mobileVertical, largeSurface]);
 
   const hostClass = ['dmx-yt-host', largeSurface ? 'dmx-yt-host--large' : ''].filter(Boolean).join(' ');
   const rootClass = [

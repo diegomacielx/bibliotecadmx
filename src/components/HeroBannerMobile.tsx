@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getCoverFrameStyle } from '../lib/coverFocus';
 import { MOBILE_HERO_COLLAPSED_KEY, readMobileHeroCollapsed } from '../lib/mobilePreferences';
+import { signalMobilePlaybackGesture } from '../lib/mobilePlaybackSession';
 import { Icon } from './Icon';
 import { useExerciseCover } from '../hooks/useExerciseCover';
 import type { HeroDisplayContent } from '../lib/heroSpotlight';
@@ -64,7 +65,10 @@ export function HeroBannerMobile({
       onCampaignClick?.(hero.linkUrl, hero.campaignId);
       return;
     }
-    if (hero.exercise) onWatch(hero.exercise);
+    if (hero.exercise) {
+      signalMobilePlaybackGesture();
+      onWatch(hero.exercise);
+    }
   };
 
   if (variant === 'compact') {

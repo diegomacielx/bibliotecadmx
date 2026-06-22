@@ -38,9 +38,9 @@ export function disposeYouTubeWarmup(): void {
 }
 
 /** Iframe oculto com vídeo em fila — aquece CDN/conexão antes do clique */
-export function warmYouTubeVideo(videoId: string): void {
+export function warmYouTubeVideo(videoId: string, options?: { force?: boolean }): void {
   if (!videoId || typeof window === 'undefined') return;
-  if (isMobileUi()) return;
+  if (isMobileUi() && !options?.force) return;
 
   primeYouTubePlayerApi();
 
@@ -70,9 +70,9 @@ export function primeVideoPlaybackIntent(
   ex: Pick<Exercise, 'youtubeUrl'>,
   options?: { force?: boolean }
 ): void {
+  primeYouTubePlayerApi();
   if (isMobileUi() && !options?.force) return;
 
-  primeYouTubePlayerApi();
   const videoId = getYouTubeId(ex.youtubeUrl);
-  if (videoId) warmYouTubeVideo(videoId);
+  if (videoId) warmYouTubeVideo(videoId, options);
 }

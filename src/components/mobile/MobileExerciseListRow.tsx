@@ -2,6 +2,7 @@ import type { Exercise } from '../../types';
 import { useExerciseCover } from '../../hooks/useExerciseCover';
 import { ExerciseCoverImage } from '../ExerciseCoverImage';
 import { primeVideoPlaybackIntent } from '../../lib/videoPlaybackPrime';
+import { signalMobilePlaybackGesture } from '../../lib/mobilePlaybackSession';
 import { MobileExerciseCardMenu } from './MobileExerciseCardMenu';
 
 interface MobileExerciseListRowProps {
@@ -37,7 +38,8 @@ export function MobileExerciseListRow({
       onTogglePlaylist(ex);
       return;
     }
-    primeVideoPlaybackIntent(ex);
+    signalMobilePlaybackGesture();
+    primeVideoPlaybackIntent(ex, { force: true });
     onWatch(ex);
   };
 

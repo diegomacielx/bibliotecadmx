@@ -628,34 +628,45 @@ html[data-touch-layout='true'] .cinema-container {
     overflow: hidden;
   }
 
-  /* Feed vertical estilo Reels — scroll snap entre exercícios */
+  /* Feed vertical estilo Reels — transform (como Instagram), sem scroll nativo */
   .mobile-reels-feed {
     position: absolute;
     inset: 0;
     z-index: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
-    scroll-snap-type: y mandatory;
-    -webkit-scroll-snap-type: y mandatory;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior-y: contain;
-    scrollbar-width: none;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
     touch-action: pan-y;
+    font-size: 0;
+    line-height: 0;
+    background: #000;
   }
 
-  .mobile-reels-feed::-webkit-scrollbar {
-    display: none;
+  .mobile-reels-feed__track {
+    position: relative;
+    width: 100%;
+    will-change: transform;
+    backface-visibility: hidden;
+  }
+
+  .mobile-reels-feed__track--snap {
+    transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .mobile-reels-feed__slide {
-    height: 100%;
-    min-height: 100%;
-    scroll-snap-align: start;
-    scroll-snap-stop: normal;
+    height: var(--mobile-reels-slide-h, 100%);
+    min-height: var(--mobile-reels-slide-h, 100%);
+    max-height: var(--mobile-reels-slide-h, 100%);
     position: relative;
     display: block;
     overflow: hidden;
-    background: #000;
+    background: #000 !important;
+    margin: 0;
+    padding: 0;
+    border: none;
+    flex-shrink: 0;
+    box-sizing: border-box;
+    contain: layout paint;
   }
 
   .cinema-mobile-reels-rail {
@@ -722,6 +733,68 @@ html[data-touch-layout='true'] .cinema-container {
 
   .cinema-mobile-cover-frame--hero .cinema-mobile-cover-poster {
     object-fit: cover;
+  }
+
+  /* Capa sobre o player até o primeiro frame — evita flash preto/branco no scroll */
+  .cinema-mobile-cover-poster--feed-buffer {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+    transition: opacity 160ms ease, visibility 160ms ease;
+  }
+
+  .cinema-mobile-cover-frame--hero .cinema-mobile-cover-poster--feed-buffer {
+    object-fit: cover;
+  }
+
+  .cinema-mobile-cover-poster--feed-buffer-hidden {
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  .cinema-mobile-cover-poster--feed-idle {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+  }
+
+  /* Máscara sobre iframe até o primeiro frame — evita logo do YouTube Shorts */
+  .cinema-mobile-cover-poster--reels-mask {
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+    background: #000;
+    transition: opacity 120ms ease, visibility 120ms ease;
+  }
+
+  .mobile-reels-feed .cinema-mobile-cover-player .dmx-yt-root {
+    opacity: 1;
+    transition: opacity 80ms ease;
+  }
+
+  .mobile-reels-feed .cinema-mobile-cover-player--awaiting-frame .dmx-yt-root {
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  .mobile-reels-feed .cinema-mobile-cover-player--vertical-theater .dmx-yt-root--chromeless .dmx-yt-host iframe {
+    transform: scale(1.12);
+    transform-origin: center center;
+    pointer-events: none !important;
+  }
+
+  .mobile-reels-feed .cinema-mobile-cover-player .dmx-yt-root--chromeless .dmx-yt-host iframe {
+    pointer-events: none !important;
   }
 
   .cinema-mobile-cover-frame--hero.cinema-mobile-cover-frame--playing {
@@ -1308,27 +1381,107 @@ html[data-mobile-playback-active='true'] .cinema-mobile-reels-stage::after {
 }
 
 html[data-mobile-playback-active='true'] .mobile-reels-feed {
-  height: 100svh;
-  max-height: 100svh;
+  height: 100%;
+  max-height: 100%;
 }
 
 html[data-mobile-playback-active='true'] .mobile-reels-feed__slide {
-  height: 100svh;
-  min-height: 100svh;
-  max-height: 100svh;
+  height: var(--mobile-reels-slide-h, 100%);
+  min-height: var(--mobile-reels-slide-h, 100%);
+  max-height: var(--mobile-reels-slide-h, 100%);
+  background: #000 !important;
 }
 
 @supports (height: 100dvh) {
   html[data-mobile-playback-active='true'] .mobile-reels-feed {
-    height: 100dvh;
-    max-height: 100dvh;
+    height: 100%;
+    max-height: 100%;
   }
 
   html[data-mobile-playback-active='true'] .mobile-reels-feed__slide {
-    height: 100dvh;
-    min-height: 100dvh;
-    max-height: 100dvh;
+    height: var(--mobile-reels-slide-h, 100%);
+    min-height: var(--mobile-reels-slide-h, 100%);
+    max-height: var(--mobile-reels-slide-h, 100%);
   }
+}
+
+/* Feed: vídeo colado slide a slide — ignora regra do stage com bottom da nav */
+html[data-mobile-playback-active='true'] .mobile-reels-feed .mobile-reels-feed__slide .cinema-mobile-cover-frame--hero {
+  position: absolute !important;
+  inset: 0 !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: #000 !important;
+  flex: none !important;
+}
+
+html[data-mobile-playback-active='true'] .mobile-reels-feed .mobile-reels-feed__slide .cinema-mobile-cover-player--reels-cover {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: hidden !important;
+  background: #000 !important;
+}
+
+html[data-mobile-playback-active='true'] .mobile-reels-feed .mobile-reels-feed__slide .cinema-mobile-cover-player--reels-cover .dmx-yt-root {
+  position: absolute !important;
+  inset: 0 !important;
+  left: 0 !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 100% !important;
+  min-height: 100% !important;
+  max-width: none !important;
+  transform: none !important;
+  aspect-ratio: unset !important;
+}
+
+html[data-mobile-playback-active='true'] .mobile-reels-feed .mobile-reels-feed__slide .cinema-mobile-cover-player--reels-cover .dmx-yt-root--chromeless .dmx-yt-host,
+html[data-mobile-playback-active='true'] .mobile-reels-feed .mobile-reels-feed__slide .cinema-mobile-cover-player--reels-cover .dmx-yt-root--chromeless .dmx-yt-host iframe {
+  position: absolute !important;
+  inset: 0 !important;
+  left: 0 !important;
+  top: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  object-fit: cover !important;
+}
+
+html[data-mobile-playback-active='true'] .mobile-reels-feed .mobile-reels-feed__slide .cinema-mobile-cover-player--vertical-theater .dmx-yt-root {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 100% !important;
+  min-height: 100% !important;
+  transform: none !important;
+}
+
+html[data-mobile-playback-active='true'] .mobile-reels-feed .mobile-reels-feed__slide .cinema-mobile-cover-poster--feed-buffer {
+  display: none !important;
+}
+
+html[data-mobile-playback-active='true'] .mobile-reels-feed .mobile-reels-feed__slide .cinema-mobile-cover-poster--feed-prime {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
 }
 
 /* Vídeo fullscreen — encosta no topo da nav; crop no topo (legendas embaixo) */
@@ -1566,6 +1719,80 @@ html[data-theme='light'] .mobile-reels-footer-blur__sheen {
   .mobile-reels-footer-blur__filter {
     display: none;
   }
+}
+
+/* Zonas laterais — segurar para 2× */
+.mobile-reels-speed-zones {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  pointer-events: none;
+}
+
+.mobile-reels-speed-zone {
+  position: absolute;
+  top: 0;
+  bottom: calc(var(--mobile-reels-footer-h, 3.625rem) + 1.5rem);
+  width: 22%;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+.mobile-reels-speed-zone--left {
+  left: 0;
+}
+
+.mobile-reels-speed-zone--right {
+  right: 0;
+}
+
+.mobile-reels-speed-badge {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 16;
+  padding: 0.35rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  pointer-events: none;
+  animation: mobile-reels-speed-in 140ms ease;
+}
+
+@keyframes mobile-reels-speed-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.mobile-reels-unmute-hint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--mobile-reels-footer-h, 3.625rem) + 1.75rem);
+  transform: translateX(-50%);
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(0, 0, 0, 0.48);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  pointer-events: none;
+  transition: opacity 200ms ease;
 }
 
 .mobile-bottom-nav--portaled {

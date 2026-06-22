@@ -48,6 +48,8 @@ declare namespace YT {
     pauseVideo(): void;
     mute(): void;
     unMute(): void;
+    isMuted(): boolean;
+    setPlaybackRate(rate: number): void;
     seekTo(seconds: number, allowSeekAhead: boolean): void;
     getCurrentTime(): number;
     getDuration(): number;

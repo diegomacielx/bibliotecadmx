@@ -77,6 +77,8 @@ import { LoginScreen } from './components/LoginScreen';
 import { PendingAccessScreen } from './components/PendingAccessScreen';
 import { BlockedAccessScreen } from './components/BlockedAccessScreen';
 import { disposeYouTubeWarmup, primeVideoPlaybackIntent, primeYouTubePlayerApi } from './lib/videoPlaybackPrime';
+import { reelsResetPlaybackMemory } from './lib/reelsPlaybackMemory';
+import { signalMobilePlaybackGesture } from './lib/mobilePlaybackSession';
 import { HeroBanner } from './components/HeroBanner';
 import { ExerciseCard } from './components/ExerciseCard';
 import { GridSkeleton } from './components/Skeleton';
@@ -221,6 +223,7 @@ export default function App() {
   const [batchInput, setBatchInput] = useState('');
   const [syncing, setSyncing] = useState(false);
   const [activeVideo, setActiveVideo] = useState<Exercise | null>(null);
+  const [spotlightExerciseId, setSpotlightExerciseId] = useState<string | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [compareEx, setCompareEx] = useState<Exercise | null>(null);
   const [comparePick, setComparePick] = useState<Exercise | null>(null);
@@ -1539,6 +1542,11 @@ export default function App() {
     }
   }, [useMobileShell, activeVideo]);
 
+  useEffect(() => {
+    if (!useMobileShell && !useMobileAdminShell) return;
+    primeYouTubePlayerApi();
+  }, [useMobileShell, useMobileAdminShell]);
+
   /** Exercícios visíveis para alunos — somente com YouTube válido, na ordem escolhida */
   const publicExercises = useMemo(() => {
     const list = exercises.filter((ex) => hasValidYouTubeUrl(ex.youtubeUrl));
@@ -2129,13 +2137,17 @@ export default function App() {
 
   const closeLightbox = useCallback(() => {
     setActiveVideo(null);
+    setSpotlightExerciseId(null);
     setCompareEx(null);
+    reelsResetPlaybackMemory();
     disposeYouTubeWarmup();
   }, []);
 
   const watchExercise = useCallback(
-    (ex: Exercise) => {
+    (ex: Exercise, options?: { fromSpotlight?: boolean }) => {
+      signalMobilePlaybackGesture();
       primeVideoPlaybackIntent(ex, { force: true });
+      setSpotlightExerciseId(options?.fromSpotlight ? ex.firestoreId : null);
       setCompareEx(null);
       setActiveVideo(ex);
       if (saveRecentVideos) addRecent(ex);
@@ -2465,6 +2477,7 @@ export default function App() {
             isAdmin={showAdminUI}
             videoLoop={videoLoop}
             compareLoopSync={compareLoopSync}
+            spotlightExerciseId={spotlightExerciseId}
           />
           </Suspense>
         )}
@@ -2801,7 +2814,7 @@ export default function App() {
                 {mobileTab === 'home' && !searchTerm && activeCategory === 'Todos' && heroDisplay && (
                   <HeroBanner
                     hero={heroDisplay}
-                    onWatch={watchExercise}
+                    onWatch={(ex) => watchExercise(ex, { fromSpotlight: true })}
                     onCampaignClick={handleCampaignClick}
                     onCampaignImpression={handleCampaignImpression}
                     mobileCompact
@@ -2875,7 +2888,7 @@ export default function App() {
         {!searchTerm && activeCategory === 'Todos' && heroDisplay && (
           <HeroBanner
             hero={heroDisplay}
-            onWatch={watchExercise}
+            onWatch={(ex) => watchExercise(ex, { fromSpotlight: true })}
             onCampaignClick={handleCampaignClick}
             onCampaignImpression={handleCampaignImpression}
           />
@@ -2966,7 +2979,7 @@ export default function App() {
         {!searchTerm && activeCategory === 'Todos' && heroDisplay && (
           <HeroBanner
             hero={heroDisplay}
-            onWatch={watchExercise}
+            onWatch={(ex) => watchExercise(ex, { fromSpotlight: true })}
             onCampaignClick={handleCampaignClick}
             onCampaignImpression={handleCampaignImpression}
           />
