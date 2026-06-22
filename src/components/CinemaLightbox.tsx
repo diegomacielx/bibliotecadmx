@@ -41,7 +41,9 @@ interface CinemaLightboxProps {
   compareEx?: Exercise | null;
   onClose: () => void;
   copyLink: (url: string, firestoreId: string) => void;
+  copyExerciseName: (name: string, firestoreId: string) => void;
   copiedId: string | null;
+  copiedNameId: string | null;
   onDownload: (ex: Exercise) => void;
   playlist?: Exercise[];
   playlistIndex?: number;
@@ -122,6 +124,8 @@ function ExerciseDetails({
   ex,
   isCopied,
   onCopy,
+  onCopyName,
+  nameCopied = false,
   onClose,
   onDownload,
   isFavorite,
@@ -134,6 +138,8 @@ function ExerciseDetails({
   ex: Exercise;
   isCopied: boolean;
   onCopy: () => void;
+  onCopyName?: () => void;
+  nameCopied?: boolean;
   onClose: () => void;
   onDownload: () => void;
   isFavorite?: boolean;
@@ -155,12 +161,26 @@ function ExerciseDetails({
           <p className="lightbox-kicker">
             #{ex.id} · {ex.category}
           </p>
-          <h2
-            id={compact ? undefined : 'cinema-lightbox-title'}
-            className={`lightbox-title ${compact ? 'lightbox-title--compact lightbox-title--wrap' : ''}`}
-          >
-            {ex.name}
-          </h2>
+          {onCopyName ? (
+            <button
+              type="button"
+              id={compact ? undefined : 'cinema-lightbox-title'}
+              onClick={onCopyName}
+              className={`lightbox-title lightbox-title--copyable ${
+                compact ? 'lightbox-title--compact lightbox-title--wrap' : ''
+              }${nameCopied ? ' lightbox-title--copied' : ''}`}
+              title={nameCopied ? 'Nome copiado' : 'Clique para copiar o nome'}
+            >
+              {ex.name}
+            </button>
+          ) : (
+            <h2
+              id={compact ? undefined : 'cinema-lightbox-title'}
+              className={`lightbox-title ${compact ? 'lightbox-title--compact lightbox-title--wrap' : ''}`}
+            >
+              {ex.name}
+            </h2>
+          )}
         </div>
 
         {!compact && <MuscleGroupList groups={ex.muscleGroups} compact={compact} />}
@@ -349,19 +369,19 @@ function MobileCoverPlayer({
 
     if (shouldPreloadAdjacent) {
       if (feedScrollActive) {
-        if (!isPlaying) {
-          player.seekTo(seekAt);
-          player.playVideo();
-        }
+        // Scroll in progress — keep the player running so the iframe shows live frames.
+        if (!isPlaying) player.playVideo();
         return;
       }
-      if (!bufferPrimedRef.current) {
+      // Scroll ended. If already primed (first frame rendered), pause at seek position.
+      if (bufferPrimedRef.current) {
+        if (isPlaying) player.pauseVideo();
         player.seekTo(seekAt);
-        player.playVideo();
         return;
       }
-      if (isPlaying) player.pauseVideo();
+      // Not primed yet — start playing briefly to buffer and get a frame.
       player.seekTo(seekAt);
+      player.playVideo();
       return;
     }
 
@@ -505,12 +525,11 @@ function MobileCoverPlayer({
                 inReelsFeed &&
                 shouldPreloadAdjacent &&
                 !shouldRunVideo &&
-                !bufferPrimedRef.current &&
-                playerRef.current
+                !feedScrollActive
               ) {
                 bufferPrimedRef.current = true;
-                const s = playerRef.current.getPlayerState();
-                if (s === 1 || s === 3) playerRef.current.pauseVideo();
+                const s = playerRef.current?.getPlayerState() ?? -1;
+                if (s === 1 || s === 3) playerRef.current?.pauseVideo();
               }
             }}
           />
@@ -631,7 +650,6 @@ function MobileReelsFeed({
   const touchVelRef = useRef(0);
   const totalMovementRef = useRef(0);
   const activePointerIdRef = useRef<number | null>(null);
-  const stationarySinceRef = useRef(0);
   const pendingNavRef = useRef<'next' | 'prev' | null>(null);
   const snappingBackRef = useRef(false);
   const snapTimerRef = useRef(0);
@@ -836,6 +854,8 @@ function MobileReelsFeed({
     if (pending === 'next') {
       pendingNavRef.current = null;
       snappingBackRef.current = false;
+      // Ensure the winning slide is still playing before the React nav update.
+      ensureSlidePlaying('next');
       dragOffsetRef.current = 0;
       setDragOffset(0);
       setIsSnapping(false);
@@ -847,6 +867,7 @@ function MobileReelsFeed({
     if (pending === 'prev') {
       pendingNavRef.current = null;
       snappingBackRef.current = false;
+      ensureSlidePlaying('prev');
       dragOffsetRef.current = 0;
       setDragOffset(0);
       setIsSnapping(false);
@@ -857,11 +878,12 @@ function MobileReelsFeed({
 
     if (snappingBackRef.current) {
       snappingBackRef.current = false;
+      ensureSlidePlaying('current');
       setIsSnapping(false);
       setPlaybackKind('current');
       endGesture();
     }
-  }, [handleFeedNavNext, handleFeedNavPrev, endGesture]);
+  }, [handleFeedNavNext, handleFeedNavPrev, ensureSlidePlaying, endGesture]);
 
   const scheduleSnapFallback = useCallback(() => {
     window.clearTimeout(snapTimerRef.current);
@@ -1001,7 +1023,6 @@ function MobileReelsFeed({
       touchLastRef.current = { y: e.clientY, t: performance.now() };
       touchVelRef.current = 0;
       totalMovementRef.current = 0;
-      stationarySinceRef.current = 0;
       activePointerIdRef.current = e.pointerId;
       gestureActiveRef.current = true;
 
@@ -1009,6 +1030,16 @@ function MobileReelsFeed({
       gestureApiRef.current.setFeedScrolling(true);
       gestureApiRef.current.setIsSnapping(false);
       primeYouTubePlayerApi();
+      signalMobilePlaybackGesture();
+
+      // Start all adjacent slide players within the gesture (iOS requires user-gesture
+      // context for programmatic playVideo even when muted).
+      for (const player of slidePlayersRef.current.values()) {
+        try {
+          const state = player.getPlayerState();
+          if (state !== 1 && state !== 3) player.playVideo();
+        } catch { /* ignore */ }
+      }
 
       layer.setPointerCapture(e.pointerId);
     };
@@ -1033,25 +1064,6 @@ function MobileReelsFeed({
       const dy = touchStartYRef.current - e.clientY;
       totalMovementRef.current = Math.max(totalMovementRef.current, Math.abs(dy));
       gestureApiRef.current.setDrag(dragStartOffsetRef.current + dy);
-
-      const h = gestureApiRef.current.slideHeight;
-      if (h <= 0) return;
-
-      const ratio = dragOffsetRef.current / h;
-      const absRatio = Math.abs(ratio);
-      const absVel = Math.abs(touchVelRef.current);
-
-      if (absRatio >= 0.5 && absVel < 0.1) {
-        if (!stationarySinceRef.current) stationarySinceRef.current = now;
-        else if (now - stationarySinceRef.current > 120) {
-          gestureActiveRef.current = false;
-          gestureApiRef.current.setGestureActive(false);
-          if (activePointerIdRef.current != null) releaseCapture(activePointerIdRef.current);
-          gestureApiRef.current.settleGesture();
-        }
-      } else {
-        stationarySinceRef.current = 0;
-      }
     };
 
     const finishPointer = () => {
@@ -1108,11 +1120,9 @@ function MobileReelsFeed({
           const isPlaybackLeader = slide.kind === dominantKind;
           const allowSoundControl =
             isPlaybackLeader && !!spotlightExerciseId && slide.ex.firestoreId === spotlightExerciseId;
-          const slideScrollActive =
-            scrollPhaseActive &&
-            (slide.kind === dominantKind ||
-              (dominantKind === 'next' && slide.kind === 'next') ||
-              (dominantKind === 'prev' && slide.kind === 'prev'));
+          // During any scroll phase, all slides stay active so their players are already
+          // playing (and showing a frame) when they cross into view.
+          const slideScrollActive = scrollPhaseActive;
 
           return (
             <div
@@ -1160,6 +1170,8 @@ function MobileExerciseSheet({
   navList,
   isCopied,
   onCopy,
+  copiedNameId,
+  copyExerciseName,
   onDownload,
   isFavorite,
   onToggleFavorite,
@@ -1177,6 +1189,8 @@ function MobileExerciseSheet({
   onClose: () => void;
   isCopied: boolean;
   onCopy: () => void;
+  copiedNameId: string | null;
+  copyExerciseName: (name: string, firestoreId: string) => void;
   onDownload: () => void;
   isFavorite?: boolean;
   onToggleFavorite?: () => void;
@@ -1344,6 +1358,23 @@ function MobileExerciseSheet({
           <button
             type="button"
             className={`cinema-mobile-reels-rail-btn ${
+              copiedNameId === displayEx.firestoreId ? 'cinema-mobile-reels-rail-btn--success' : ''
+            }`}
+            onClick={() => copyExerciseName(displayEx.name, displayEx.firestoreId)}
+            aria-label={
+              copiedNameId === displayEx.firestoreId ? 'Nome copiado' : 'Copiar nome do exercício'
+            }
+            title={copiedNameId === displayEx.firestoreId ? 'Copiado' : 'Copiar nome'}
+          >
+            <Icon
+              name={copiedNameId === displayEx.firestoreId ? 'check' : 'type'}
+              className="w-6 h-6"
+              strokeWidth={1.75}
+            />
+          </button>
+          <button
+            type="button"
+            className={`cinema-mobile-reels-rail-btn ${
               isCopied ? 'cinema-mobile-reels-rail-btn--success' : ''
             }`}
             onClick={onCopy}
@@ -1462,7 +1493,9 @@ export function CinemaLightbox({
   compareEx,
   onClose,
   copyLink,
+  copyExerciseName,
   copiedId,
+  copiedNameId,
   onDownload,
   playlist = [],
   playlistIndex = 0,
@@ -1518,6 +1551,21 @@ export function CinemaLightbox({
   const isVertical = orientation === 'vertical';
   const ytId = getYouTubeId(ex.youtubeUrl);
   const isCopied = copiedId === ex.firestoreId;
+  const isNameCopied = copiedNameId === ex.firestoreId;
+  const desktopTitleCopy =
+    !isMobileLayout
+      ? {
+          onCopyName: () => copyExerciseName(ex.name, ex.firestoreId),
+          nameCopied: isNameCopied,
+        }
+      : {};
+  const desktopCompareTitleCopy = (target: Exercise) =>
+    !isMobileLayout
+      ? {
+          onCopyName: () => copyExerciseName(target.name, target.firestoreId),
+          nameCopied: copiedNameId === target.firestoreId,
+        }
+      : {};
   const effectiveNavList = navList.length > 1 ? navList : playlist.length > 1 ? playlist : [];
   const effectiveNavIndex = navList.length > 1 ? navIndex : playlistIndex;
   const effectiveNavNext = navList.length > 1 ? onNavNext : onPlaylistNext;
@@ -1831,6 +1879,8 @@ export function CinemaLightbox({
             onClose={onClose}
             isCopied={isCopied}
             onCopy={() => copyLink(ex.youtubeUrl, ex.firestoreId)}
+            copiedNameId={copiedNameId}
+            copyExerciseName={copyExerciseName}
             onDownload={() => onDownload(ex)}
             isFavorite={isFavorite}
             onToggleFavorite={onToggleFavorite}
@@ -2051,6 +2101,7 @@ export function CinemaLightbox({
                     ex={ex}
                     isCopied={isCopied}
                     onCopy={() => copyLink(ex.youtubeUrl, ex.firestoreId)}
+                    {...desktopTitleCopy}
                     onClose={onClose}
                     onDownload={() => onDownload(ex)}
                     compact
@@ -2063,6 +2114,7 @@ export function CinemaLightbox({
                       ex={compareEx}
                       isCopied={copiedId === compareEx.firestoreId}
                       onCopy={() => copyLink(compareEx.youtubeUrl, compareEx.firestoreId)}
+                      {...desktopCompareTitleCopy(compareEx)}
                       onClose={onClose}
                       onDownload={() => onDownload(compareEx)}
                       compact
@@ -2080,6 +2132,7 @@ export function CinemaLightbox({
                     ex={ex}
                     isCopied={isCopied}
                     onCopy={() => copyLink(ex.youtubeUrl, ex.firestoreId)}
+                    {...desktopTitleCopy}
                     onClose={onClose}
                     onDownload={() => onDownload(ex)}
                     isFavorite={isFavorite}

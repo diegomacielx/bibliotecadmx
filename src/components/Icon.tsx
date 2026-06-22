@@ -4,7 +4,7 @@ import {
   EyeOff, Download, Cloud, Server, Bell, Users, Settings, Mail, 
   Lightbulb, ListTodo, Play, MoreHorizontal, MoreVertical, SlidersHorizontal, LayoutDashboard,
   Heart, Columns2, ListVideo, Pause, Maximize, SkipForward, SkipBack, Clock, GitCompare,
-  Moon, Sun, CircleHelp, Inbox, Shield, RotateCw, ArrowDownAZ, User, Home, Dumbbell, BicepsFlexed
+  Moon, Sun, CircleHelp, Inbox, Shield, RotateCw, ArrowDownAZ, User, Home, Dumbbell, BicepsFlexed, Type
 } from 'lucide-react';
 
 const iconMap: Record<string, React.ComponentType<any>> = {
@@ -61,6 +61,7 @@ const iconMap: Record<string, React.ComponentType<any>> = {
   home: Home,
   dumbbell: Dumbbell,
   biceps: BicepsFlexed,
+  type: Type,
 };
 
 interface IconProps {

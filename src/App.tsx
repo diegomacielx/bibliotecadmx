@@ -211,6 +211,7 @@ export default function App() {
   const catalogSortOrder: ExerciseSortOrder = isMobileLayout ? 'alpha' : exerciseSortOrder;
   const categoryBeforeSearchRef = useRef(activeCategory);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedNameId, setCopiedNameId] = useState<string | null>(null);
   const { filters: advancedFilters, setFilters: setAdvancedFilters, resetFilters: resetAdvancedFilters } =
     useAdvancedFilters();
   const [adminFilter, setAdminFilter] = useState<AdminFilter>('all');
@@ -2135,6 +2136,26 @@ export default function App() {
     }
   };
 
+  const copyExerciseName = (name: string, firestoreId: string) => {
+    const write = () => {
+      setCopiedNameId(firestoreId);
+      showToast('Nome do exercício copiado!');
+      setTimeout(() => setCopiedNameId(null), 2000);
+    };
+
+    try {
+      navigator.clipboard.writeText(name).then(write);
+    } catch {
+      const el = document.createElement('textarea');
+      el.value = name;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      write();
+    }
+  };
+
   const closeLightbox = useCallback(() => {
     setActiveVideo(null);
     setSpotlightExerciseId(null);
@@ -2461,7 +2482,9 @@ export default function App() {
             compareEx={compareEx}
             onClose={closeLightbox}
             copyLink={copyLink}
+            copyExerciseName={copyExerciseName}
             copiedId={copiedId}
+            copiedNameId={copiedNameId}
             onDownload={downloadExercise}
             playlist={isPlaylistActive ? playlist : []}
             playlistIndex={activePlaylistIndex}
