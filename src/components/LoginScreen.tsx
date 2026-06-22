@@ -101,21 +101,21 @@ export function LoginScreen({
             <div className="auth-reset-sent__icon-wrap mx-auto mb-5">
               <Icon name="mail" className="w-8 h-8 text-red-500" />
             </div>
-            <p className="text-sm text-zinc-300 text-center leading-relaxed mb-4">
+            <p className="auth-reset-sent__lead mb-4">
               Enviamos um link de recuperação para
             </p>
-            <p className="auth-reset-sent__email text-center font-bold text-white mb-5">{maskedEmail}</p>
+            <p className="auth-reset-sent__email text-center font-bold mb-5">{maskedEmail}</p>
             <ul className="auth-reset-sent__tips space-y-2.5 mb-6">
-              <li className="flex gap-2.5 text-xs text-zinc-400 leading-relaxed">
-                <Icon name="inbox" className="w-4 h-4 shrink-0 text-zinc-500 mt-0.5" />
+              <li className="auth-reset-sent__tip">
+                <Icon name="inbox" className="auth-reset-sent__tip-icon" />
                 <span>Confira a caixa de entrada e a pasta de spam ou promoções.</span>
               </li>
-              <li className="flex gap-2.5 text-xs text-zinc-400 leading-relaxed">
-                <Icon name="clock" className="w-4 h-4 shrink-0 text-zinc-500 mt-0.5" />
+              <li className="auth-reset-sent__tip">
+                <Icon name="clock" className="auth-reset-sent__tip-icon" />
                 <span>O link expira em cerca de 1 hora por segurança.</span>
               </li>
-              <li className="flex gap-2.5 text-xs text-zinc-400 leading-relaxed">
-                <Icon name="shield" className="w-4 h-4 shrink-0 text-zinc-500 mt-0.5" />
+              <li className="auth-reset-sent__tip">
+                <Icon name="shield" className="auth-reset-sent__tip-icon" />
                 <span>Se o e-mail não estiver cadastrado, nenhuma mensagem será enviada.</span>
               </li>
             </ul>
@@ -135,7 +135,7 @@ export function LoginScreen({
             <button
               type="button"
               onClick={() => setAuthMode('login')}
-              className="w-full mt-3 text-2xs text-zinc-400 hover:text-white font-bold uppercase tracking-widest py-3 ease-cinematic duration-cinematic"
+              className="auth-reset-sent__back"
             >
               Voltar ao login
             </button>

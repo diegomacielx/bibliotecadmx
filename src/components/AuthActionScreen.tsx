@@ -104,11 +104,11 @@ export function AuthActionScreen({ params, onDone }: AuthActionScreenProps) {
         {loading ? (
           <div className="flex flex-col items-center gap-3 py-8 relative z-10">
             <Icon name="loader" className="w-8 h-8 animate-spin text-red-500" />
-            <p className="text-sm text-zinc-400">Validando link…</p>
+            <p className="auth-action__status">Validando link…</p>
           </div>
         ) : success ? (
           <div className="space-y-4 relative z-10">
-            <p className="text-sm text-emerald-400">{success}</p>
+            <p className="auth-action__status auth-action__status--success">{success}</p>
             <button
               type="button"
               onClick={onDone}
@@ -119,11 +119,11 @@ export function AuthActionScreen({ params, onDone }: AuthActionScreenProps) {
           </div>
         ) : params.mode === 'resetPassword' && email ? (
           <form onSubmit={handleResetSubmit} className="space-y-3 relative z-10 text-left" noValidate>
-            <p className="text-sm text-zinc-400 text-center mb-2">
-              Crie uma nova senha para <span className="text-white font-medium">{email}</span>
+            <p className="auth-action__hint">
+              Crie uma nova senha para <strong>{email}</strong>
             </p>
             {error && (
-              <p className="text-sm text-red-400 text-center" role="alert">
+              <p className="auth-action__status auth-action__status--error text-center" role="alert">
                 {error}
               </p>
             )}
@@ -181,7 +181,7 @@ export function AuthActionScreen({ params, onDone }: AuthActionScreenProps) {
           </form>
         ) : (
           <div className="space-y-4 relative z-10">
-            <p className="text-sm text-red-400">{error || 'Link inválido ou expirado.'}</p>
+            <p className="auth-action__status auth-action__status--error">{error || 'Link inválido ou expirado.'}</p>
             <button
               type="button"
               onClick={onDone}

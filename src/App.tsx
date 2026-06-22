@@ -1968,7 +1968,7 @@ export default function App() {
 
   const watchExercise = useCallback(
     (ex: Exercise) => {
-      primeVideoPlaybackIntent(ex);
+      primeVideoPlaybackIntent(ex, { force: true });
       setCompareEx(null);
       setActiveVideo(ex);
       if (saveRecentVideos) addRecent(ex);

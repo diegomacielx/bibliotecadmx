@@ -86,7 +86,7 @@ export function MobileAccountScreen({
 
       {emailUnverified && onResendVerification && (
         <div className="mobile-account-screen__banner">
-          <p className="text-xs text-amber-200/90">Confirme seu e-mail para acesso completo.</p>
+          <p className="mobile-account-screen__banner-text">Confirme seu e-mail para acesso completo.</p>
           <button
             type="button"
             className="mobile-account-screen__banner-btn"

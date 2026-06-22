@@ -359,6 +359,16 @@ input:focus, select:focus, textarea:focus {
 }
 
 /* ─── Layout & superfícies ─── */
+html {
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  touch-action: manipulation;
+}
+
 .page-canvas {
   min-height: 100vh;
   background-color: var(--color-canvas);
@@ -416,13 +426,100 @@ input:focus, select:focus, textarea:focus {
   border-radius: 1rem;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--dmx-border-subtle);
+  color: var(--dmx-fg);
 }
 
 .auth-reset-sent__tips {
+  list-style: none;
+  margin: 0;
   padding: 1rem;
   border-radius: 1rem;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--dmx-border-subtle);
+}
+
+.auth-reset-sent__lead {
+  font-size: 0.875rem;
+  line-height: 1.625;
+  text-align: center;
+  color: var(--dmx-fg-muted);
+}
+
+.auth-reset-sent__tip {
+  display: flex;
+  gap: 0.625rem;
+  font-size: 0.75rem;
+  line-height: 1.625;
+  color: var(--dmx-fg-muted);
+}
+
+.auth-reset-sent__tip-icon {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.125rem;
+  color: var(--dmx-fg-subtle, var(--dmx-fg-muted));
+}
+
+.auth-reset-sent__back {
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 0.75rem 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dmx-fg-muted);
+  background: transparent;
+  border: none;
+  touch-action: manipulation;
+}
+
+.auth-reset-sent__back:hover {
+  color: var(--dmx-fg);
+}
+
+html[data-theme='light'] .auth-reset-sent__email {
+  background: rgba(26, 24, 22, 0.04);
+  border-color: rgba(26, 24, 22, 0.1);
+}
+
+html[data-theme='light'] .auth-reset-sent__tips {
+  background: rgba(26, 24, 22, 0.03);
+  border-color: rgba(26, 24, 22, 0.08);
+}
+
+.auth-action__status {
+  font-size: 0.875rem;
+  color: var(--dmx-fg-muted);
+}
+
+.auth-action__status--success {
+  color: #34d399;
+}
+
+html[data-theme='light'] .auth-action__status--success {
+  color: #059669;
+}
+
+.auth-action__status--error {
+  color: #f87171;
+}
+
+html[data-theme='light'] .auth-action__status--error {
+  color: #dc2626;
+}
+
+.auth-action__hint {
+  font-size: 0.875rem;
+  color: var(--dmx-fg-muted);
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+
+.auth-action__hint strong {
+  color: var(--dmx-fg);
+  font-weight: 600;
 }
 
 .pending-access-spinner {

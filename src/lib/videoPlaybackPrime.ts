@@ -66,11 +66,11 @@ export function warmYouTubeVideo(videoId: string): void {
 }
 
 /** Hover / pointerdown / abrir lightbox — máxima prioridade para playback instantâneo */
-export function primeVideoPlaybackIntent(ex: Pick<Exercise, 'youtubeUrl'>): void {
-  if (isMobileUi()) {
-    void preloadYouTubePlayerApi();
-    return;
-  }
+export function primeVideoPlaybackIntent(
+  ex: Pick<Exercise, 'youtubeUrl'>,
+  options?: { force?: boolean }
+): void {
+  if (isMobileUi() && !options?.force) return;
 
   primeYouTubePlayerApi();
   const videoId = getYouTubeId(ex.youtubeUrl);

@@ -10,6 +10,10 @@ initTheme()
 registerCoverServiceWorker()
 bootstrapCoverCache()
 
+if (typeof document !== 'undefined') {
+  document.addEventListener('gesturestart', (event) => event.preventDefault(), { passive: false })
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
