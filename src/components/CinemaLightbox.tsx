@@ -518,7 +518,7 @@ function MobileCoverPlayer({
               <span>Toque para o som</span>
             </div>
           )}
-          {(!inReelsFeed || isPlaybackLeader) && (
+          {!inReelsFeed && (
             <button
               type="button"
               className="cinema-play-catch cinema-mobile-play-catch absolute inset-0 z-[2]"
@@ -600,20 +600,41 @@ function MobileReelsFeed({
   onVisibleExerciseChange?: (exercise: Exercise) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const gestureRef = useRef<HTMLDivElement>(null);
   const slidePlayersRef = useRef<Map<string, YouTubePlayerHandle>>(new Map());
+  const leaderPlayerRef = useRef<YouTubePlayerHandle | null>(null);
   const dragOffsetRef = useRef(0);
   const dragStartOffsetRef = useRef(0);
   const touchStartYRef = useRef(0);
   const touchLastRef = useRef({ y: 0, t: 0 });
   const touchVelRef = useRef(0);
+  const totalMovementRef = useRef(0);
   const gestureActiveRef = useRef(false);
-  const animatingRef = useRef(false);
+  const gestureLeaderRef = useRef<ReelsSlideRole>('current');
+  const playbackKindRef = useRef<ReelsSlideRole>('current');
+  const gestureApiRef = useRef({
+    slideHeight: 0,
+    hasPrev: false,
+    hasNext: false,
+    setDrag: (_n: number) => {},
+    settleGesture: () => {},
+    endGesture: () => {},
+    setFeedScrolling: (_a: boolean) => {},
+    snapBack: () => {},
+    handleFeedNavNext: () => {},
+    handleFeedNavPrev: () => {},
+    syncVisibleExercise: (_k: ReelsSlideRole) => {},
+    setPlaybackKind: (_k: ReelsSlideRole) => {},
+    setGestureActive: (_a: boolean) => {},
+    setIsSnapping: (_a: boolean) => {},
+    setDragOffset: (_n: number) => {},
+  });
   const [slideHeight, setSlideHeight] = useState(0);
   const [entrySeekAt, setEntrySeekAt] = useState(0);
   const [dragOffset, setDragOffset] = useState(0);
   const [gestureActive, setGestureActive] = useState(false);
   const [isSnapping, setIsSnapping] = useState(false);
-  const [dominantKind, setDominantKind] = useState<ReelsSlideRole>('current');
+  const [playbackKind, setPlaybackKind] = useState<ReelsSlideRole>('current');
 
   const slides = useMemo(() => buildReelsSlides(navList, navIndex), [navList, navIndex]);
 
@@ -638,21 +659,31 @@ function MobileReelsFeed({
     [exerciseForKind, onVisibleExerciseChange]
   );
 
-  const syncDominantFromDrag = useCallback(
+  const kindFromOffset = useCallback(
     (offset: number) => {
-      if (slideHeight <= 0) return;
+      if (slideHeight <= 0) return 'current' as ReelsSlideRole;
       const ratio = offset / slideHeight;
-      let kind: ReelsSlideRole = 'current';
-      if (ratio > 0.5) kind = 'next';
-      else if (ratio < -0.5) kind = 'prev';
-      setDominantKind((prev) => {
-        if (prev === kind) return prev;
-        syncVisibleExercise(kind);
-        return kind;
-      });
+      if (ratio >= 0.5) return 'next';
+      if (ratio <= -0.5) return 'prev';
+      return 'current';
     },
-    [slideHeight, syncVisibleExercise]
+    [slideHeight]
   );
+
+  const syncTitleFromOffset = useCallback(
+    (offset: number) => {
+      const kind = kindFromOffset(offset);
+      syncVisibleExercise(kind);
+    },
+    [kindFromOffset, syncVisibleExercise]
+  );
+
+  const dragTowardKind = useCallback((): ReelsSlideRole | null => {
+    if (slideHeight <= 0 || dragOffset === 0) return null;
+    if (dragOffset > slideHeight * 0.04) return 'next';
+    if (dragOffset < -slideHeight * 0.04) return 'prev';
+    return null;
+  }, [slideHeight, dragOffset]);
 
   const registerSlidePlayer = useCallback((exerciseId: string, player: YouTubePlayerHandle | null) => {
     if (player) slidePlayersRef.current.set(exerciseId, player);
@@ -661,6 +692,7 @@ function MobileReelsFeed({
 
   const registerCurrentPlayer = useCallback(
     (player: YouTubePlayerHandle | null) => {
+      leaderPlayerRef.current = player;
       registerActivePlayer?.(player);
     },
     [registerActivePlayer]
@@ -715,15 +747,15 @@ function MobileReelsFeed({
       const clamped = clampDragOffset(next);
       dragOffsetRef.current = clamped;
       setDragOffset(clamped);
-      syncDominantFromDrag(clamped);
+      syncTitleFromOffset(clamped);
     },
-    [clampDragOffset, syncDominantFromDrag]
+    [clampDragOffset, syncTitleFromOffset]
   );
 
   const resetDrag = useCallback(() => {
     dragOffsetRef.current = 0;
     setDragOffset(0);
-    setDominantKind('current');
+    setPlaybackKind('current');
     syncVisibleExercise('current');
   }, [syncVisibleExercise]);
 
@@ -759,18 +791,19 @@ function MobileReelsFeed({
   }, [setFeedScrolling]);
 
   const snapBack = useCallback(() => {
-    animatingRef.current = true;
-    setIsSnapping(true);
-    resetDrag();
+    gestureApiRef.current.setIsSnapping(true);
+    dragOffsetRef.current = 0;
+    gestureApiRef.current.setDragOffset(0);
+    gestureApiRef.current.syncVisibleExercise('current');
     window.setTimeout(() => {
-      animatingRef.current = false;
-      setIsSnapping(false);
-      endGesture();
-    }, 280);
-  }, [resetDrag, endGesture]);
+      gestureApiRef.current.setIsSnapping(false);
+      gestureApiRef.current.setPlaybackKind('current');
+      gestureApiRef.current.endGesture();
+    }, 260);
+  }, []);
 
   const settleGesture = useCallback(() => {
-    const h = slideHeight;
+    const h = gestureApiRef.current.slideHeight;
     if (h <= 0) {
       snapBack();
       return;
@@ -780,32 +813,61 @@ function MobileReelsFeed({
     const vel = touchVelRef.current;
     const ratio = offset / h;
 
-    let commitNext = ratio > 0.5;
-    let commitPrev = ratio < -0.5;
+    let commitNext = ratio >= 0.5;
+    let commitPrev = ratio <= -0.5;
 
     if (!commitNext && !commitPrev) {
-      if (vel > 0.45 && ratio > 0.1) commitNext = true;
-      else if (vel < -0.45 && ratio < -0.1) commitPrev = true;
+      if (vel > 0.3 && ratio > 0.06) commitNext = true;
+      else if (vel < -0.3 && ratio < -0.06) commitPrev = true;
     }
 
-    if (commitNext && hasNext) {
-      resetDrag();
-      handleFeedNavNext();
-      endGesture();
+    if (commitNext && gestureApiRef.current.hasNext) {
+      dragOffsetRef.current = 0;
+      gestureApiRef.current.setDragOffset(0);
+      gestureApiRef.current.setPlaybackKind('next');
+      gestureApiRef.current.handleFeedNavNext();
+      gestureApiRef.current.endGesture();
       return;
     }
-    if (commitPrev && hasPrev) {
-      resetDrag();
-      handleFeedNavPrev();
-      endGesture();
+    if (commitPrev && gestureApiRef.current.hasPrev) {
+      dragOffsetRef.current = 0;
+      gestureApiRef.current.setDragOffset(0);
+      gestureApiRef.current.setPlaybackKind('prev');
+      gestureApiRef.current.handleFeedNavPrev();
+      gestureApiRef.current.endGesture();
       return;
     }
 
     snapBack();
-  }, [slideHeight, hasNext, hasPrev, handleFeedNavNext, handleFeedNavPrev, resetDrag, snapBack, endGesture]);
+  }, [snapBack]);
+
+  useLayoutEffect(() => {
+    playbackKindRef.current = playbackKind;
+  }, [playbackKind]);
+
+  useLayoutEffect(() => {
+    gestureApiRef.current = {
+      slideHeight,
+      hasPrev,
+      hasNext,
+      setDrag,
+      settleGesture,
+      endGesture,
+      setFeedScrolling,
+      snapBack,
+      handleFeedNavNext,
+      handleFeedNavPrev,
+      syncVisibleExercise,
+      setPlaybackKind,
+      setGestureActive,
+      setIsSnapping,
+      setDragOffset,
+    };
+  });
 
   useLayoutEffect(() => {
     resetDrag();
+    setPlaybackKind('current');
     endGesture();
   }, [navIndex, resetDrag, endGesture]);
 
@@ -818,62 +880,81 @@ function MobileReelsFeed({
   }, [navIndex, navList]);
 
   useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
+    const layer = gestureRef.current;
+    if (!layer) return;
 
-    const onTouchStart = (e: TouchEvent) => {
-      if (animatingRef.current) return;
-      const y = e.touches[0]?.clientY ?? 0;
-      touchStartYRef.current = y;
+    const onPointerDown = (e: globalThis.PointerEvent) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+      touchStartYRef.current = e.clientY;
       dragStartOffsetRef.current = dragOffsetRef.current;
-      touchLastRef.current = { y, t: performance.now() };
+      touchLastRef.current = { y: e.clientY, t: performance.now() };
       touchVelRef.current = 0;
+      totalMovementRef.current = 0;
       gestureActiveRef.current = true;
-      setGestureActive(true);
-      setFeedScrolling(true);
-      setIsSnapping(false);
+      gestureLeaderRef.current = playbackKindRef.current;
+
+      gestureApiRef.current.setGestureActive(true);
+      gestureApiRef.current.setFeedScrolling(true);
+      gestureApiRef.current.setIsSnapping(false);
       primeYouTubePlayerApi();
+
+      layer.setPointerCapture(e.pointerId);
     };
 
-    const onTouchMove = (e: TouchEvent) => {
+    const onPointerMove = (e: globalThis.PointerEvent) => {
       if (!gestureActiveRef.current) return;
-      const y = e.touches[0]?.clientY;
-      if (y == null) return;
 
       const now = performance.now();
       const dt = now - touchLastRef.current.t;
-      if (dt > 0) touchVelRef.current = (touchLastRef.current.y - y) / dt;
-      touchLastRef.current = { y, t: now };
+      if (dt > 0) touchVelRef.current = (touchLastRef.current.y - e.clientY) / dt;
+      touchLastRef.current = { y: e.clientY, t: now };
 
-      const dy = touchStartYRef.current - y;
-      setDrag(dragStartOffsetRef.current + dy);
+      const dy = touchStartYRef.current - e.clientY;
+      totalMovementRef.current = Math.max(totalMovementRef.current, Math.abs(dy));
+      gestureApiRef.current.setDrag(dragStartOffsetRef.current + dy);
     };
 
-    const onTouchEnd = () => {
+    const finishPointer = (e: globalThis.PointerEvent) => {
       if (!gestureActiveRef.current) return;
-      settleGesture();
+      try {
+        layer.releasePointerCapture(e.pointerId);
+      } catch {
+        /* already released */
+      }
+
+      if (totalMovementRef.current < 12) {
+        leaderPlayerRef.current?.togglePlay();
+        gestureActiveRef.current = false;
+        gestureApiRef.current.setGestureActive(false);
+        gestureApiRef.current.setFeedScrolling(false);
+        return;
+      }
+
+      gestureApiRef.current.settleGesture();
     };
 
-    el.addEventListener('touchstart', onTouchStart, { passive: true });
-    el.addEventListener('touchmove', onTouchMove, { passive: true });
-    el.addEventListener('touchend', onTouchEnd, { passive: true });
-    el.addEventListener('touchcancel', onTouchEnd, { passive: true });
+    layer.addEventListener('pointerdown', onPointerDown);
+    layer.addEventListener('pointermove', onPointerMove);
+    layer.addEventListener('pointerup', finishPointer);
+    layer.addEventListener('pointercancel', finishPointer);
 
     return () => {
-      el.removeEventListener('touchstart', onTouchStart);
-      el.removeEventListener('touchmove', onTouchMove);
-      el.removeEventListener('touchend', onTouchEnd);
-      el.removeEventListener('touchcancel', onTouchEnd);
-      endGesture();
+      layer.removeEventListener('pointerdown', onPointerDown);
+      layer.removeEventListener('pointermove', onPointerMove);
+      layer.removeEventListener('pointerup', finishPointer);
+      layer.removeEventListener('pointercancel', finishPointer);
     };
-  }, [setDrag, settleGesture, setFeedScrolling, endGesture]);
+  }, []);
 
   const translateY = slideHeight > 0 ? -(currentSlideIndex * slideHeight + dragOffset) : 0;
+
+  const toward = dragTowardKind();
 
   return (
     <div
       ref={containerRef}
-      className="mobile-reels-feed"
+      className={`mobile-reels-feed${gestureActive ? ' mobile-reels-feed--gesture' : ''}`}
       style={slideHeight > 0 ? ({ '--mobile-reels-slide-h': `${slideHeight}px` } as CSSProperties) : undefined}
       aria-label="Feed de exercícios"
     >
@@ -884,11 +965,13 @@ function MobileReelsFeed({
         {slides.map((slide) => {
           const slideYtId = getYouTubeId(slide.ex.youtubeUrl);
           const isActive = slide.kind === 'current';
-          const isPlaybackLeader = dominantKind === slide.kind;
+          const isPlaybackLeader = gestureActive
+            ? gestureLeaderRef.current === slide.kind
+            : playbackKind === slide.kind;
           const allowSoundControl =
             isPlaybackLeader && !!spotlightExerciseId && slide.ex.firestoreId === spotlightExerciseId;
           const slideScrollActive =
-            gestureActive && (slide.kind === 'current' || slide.kind === dominantKind);
+            gestureActive && (slide.kind === 'current' || slide.kind === toward);
 
           return (
             <div
@@ -921,6 +1004,11 @@ function MobileReelsFeed({
           );
         })}
       </div>
+      <div
+        ref={gestureRef}
+        className="mobile-reels-feed__gesture"
+        aria-hidden="true"
+      />
     </div>
   );
 }

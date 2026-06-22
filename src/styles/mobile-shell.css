@@ -636,10 +636,28 @@ html[data-touch-layout='true'] .cinema-container {
     height: 100%;
     overflow: hidden;
     overscroll-behavior: none;
-    touch-action: pan-y;
+    touch-action: manipulation;
     font-size: 0;
     line-height: 0;
     background: #000;
+  }
+
+  .mobile-reels-feed__gesture {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    touch-action: none;
+    background: transparent;
+    cursor: grab;
+  }
+
+  .mobile-reels-feed--gesture .mobile-reels-feed__gesture {
+    cursor: grabbing;
+  }
+
+  .mobile-reels-feed--gesture .cinema-mobile-play-catch,
+  .mobile-reels-feed--gesture .mobile-reels-unmute-hint {
+    pointer-events: none !important;
   }
 
   .mobile-reels-feed__track {
