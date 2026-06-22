@@ -1,4 +1,5 @@
 import type { Exercise } from '../types';
+import { expandEquipmentFilterKeys } from './advancedFilterTaxonomy';
 import { normalizeString } from './utils';
 
 export const EQUIPMENT_IDS = [
@@ -7,7 +8,9 @@ export const EQUIPMENT_IDS = [
   'maquina',
   'cabo',
   'halter',
+  'kettlebell',
   'peso_corporal',
+  'elastico',
 ] as const;
 
 export type EquipmentId = (typeof EQUIPMENT_IDS)[number];
@@ -18,7 +21,9 @@ export const EQUIPMENT_OPTIONS: { id: EquipmentId; label: string }[] = [
   { id: 'maquina', label: 'Máquina' },
   { id: 'cabo', label: 'Cabo / Polia' },
   { id: 'halter', label: 'Halter' },
+  { id: 'kettlebell', label: 'Kettlebell' },
   { id: 'peso_corporal', label: 'Peso corporal' },
+  { id: 'elastico', label: 'Elástico / Mini band' },
 ];
 
 const EQUIPMENT_ID_SET = new Set<string>(EQUIPMENT_IDS);
@@ -30,6 +35,7 @@ const EQUIPMENT_KEYWORDS: Record<EquipmentId, string[]> = {
   maquina: ['maquina', 'máquina', 'cadeira', 'leg press', 'hack', 'aparelho', 'extensora', 'flexora'],
   cabo: ['cabo', 'polia', 'crossover', 'pulley', 'voador'],
   halter: ['halter', 'halteres', 'dumbbell', 'manu'],
+  kettlebell: ['kettlebell', 'kettle bell', 'peso russo', 'kb swing'],
   peso_corporal: [
     'peso corporal',
     'bodyweight',
@@ -42,11 +48,23 @@ const EQUIPMENT_KEYWORDS: Record<EquipmentId, string[]> = {
     'pull up',
     'pull-up',
     'prancha',
+    'calistenia',
+  ],
+  elastico: [
+    'elastico',
+    'elástico',
+    'mini band',
+    'miniband',
+    'faixa elastica',
+    'faixa elástica',
+    'resistance band',
+    'theraband',
   ],
 };
 
 const HEURISTIC_EXCLUDES: Partial<Record<EquipmentId, EquipmentId[]>> = {
-  peso_corporal: ['maquina', 'cabo', 'smith', 'halter', 'barra'],
+  peso_corporal: ['maquina', 'cabo', 'smith', 'halter', 'barra', 'kettlebell'],
+  elastico: ['maquina', 'cabo', 'smith', 'barra'],
 };
 
 function buildEquipmentBlob(ex: Pick<Exercise, 'name' | 'keywords' | 'category'>): string {
@@ -112,8 +130,10 @@ export function exerciseMatchesEquipmentFilter(
   selected: string[]
 ): boolean {
   if (selected.length === 0) return true;
+  const expanded = expandEquipmentFilterKeys(selected);
+  if (expanded.length === 0) return true;
   const resolved = new Set(resolveExerciseEquipment(ex));
-  return selected.some((id) => resolved.has(id as EquipmentId));
+  return expanded.some((id) => resolved.has(id));
 }
 
 export function formatEquipmentLabels(ids: EquipmentId[]): string {

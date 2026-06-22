@@ -289,7 +289,7 @@ function MobileCoverPlayer({
   const playerRef = useRef<YouTubePlayerHandle | null>(null);
   const reelsRoleRef = useRef(reelsRole);
   const wasLeaderRef = useRef(isPlaybackLeader);
-  const preloadTimerRef = useRef(0);
+  const bufferPrimedRef = useRef(false);
   const { imgSrc, coverMissing, handleLoad, handleError } = useExerciseCover(ex, { priority: 'high' });
   const isVertical =
     resolveVideoOrientation(ex.youtubeUrl, {
@@ -324,14 +324,22 @@ function MobileCoverPlayer({
     const player = playerRef.current;
     if (!player || !inReelsFeed || !reelsRole) return;
 
-    window.clearTimeout(preloadTimerRef.current);
     const seekAt = seekForRole();
+    const state = player.getPlayerState();
+    const isPlaying = state === 1 || state === 3;
 
     if (shouldRunVideo) {
-      const state = player.getPlayerState();
-      if (isPlaybackLeader && (state === 1 || state === 3)) {
-        syncActiveRegistration();
+      if (isPlaying) {
+        if (isPlaybackLeader) syncActiveRegistration();
         return;
+      }
+      if (state === 2) {
+        const t = player.getCurrentTime();
+        if (t > 0.2) {
+          player.playVideo();
+          if (isPlaybackLeader) syncActiveRegistration();
+          return;
+        }
       }
       player.seekTo(seekAt);
       player.playVideo();
@@ -340,39 +348,38 @@ function MobileCoverPlayer({
     }
 
     if (shouldPreloadAdjacent) {
-      const state = player.getPlayerState();
-      if (state === 1 || state === 3) {
-        player.pauseVideo();
-        player.seekTo(seekAt);
+      if (feedScrollActive) {
+        if (!isPlaying) {
+          player.seekTo(seekAt);
+          player.playVideo();
+        }
         return;
       }
+      if (!bufferPrimedRef.current) {
+        player.seekTo(seekAt);
+        player.playVideo();
+        return;
+      }
+      if (isPlaying) player.pauseVideo();
       player.seekTo(seekAt);
-      player.playVideo();
-      preloadTimerRef.current = window.setTimeout(() => {
-        if (!playerRef.current) return;
-        const s = playerRef.current.getPlayerState();
-        if (s === 1 || s === 3) playerRef.current.pauseVideo();
-      }, 240);
       return;
     }
 
+    if (isPlaying) player.pauseVideo();
     player.seekTo(seekAt);
-    player.pauseVideo();
   }, [
     inReelsFeed,
     reelsRole,
     shouldRunVideo,
     shouldPreloadAdjacent,
+    feedScrollActive,
     isPlaybackLeader,
     seekForRole,
     syncActiveRegistration,
   ]);
 
   useEffect(() => {
-    return () => window.clearTimeout(preloadTimerRef.current);
-  }, []);
-
-  useEffect(() => {
+    bufferPrimedRef.current = false;
     setFrameReady(false);
   }, [ex.firestoreId, ytId]);
 
@@ -492,7 +499,20 @@ function MobileCoverPlayer({
             largeSurface
             mobileVertical={isVertical}
             onReady={handlePlayerReady}
-            onFrameVisible={() => setFrameReady(true)}
+            onFrameVisible={() => {
+              setFrameReady(true);
+              if (
+                inReelsFeed &&
+                shouldPreloadAdjacent &&
+                !shouldRunVideo &&
+                !bufferPrimedRef.current &&
+                playerRef.current
+              ) {
+                bufferPrimedRef.current = true;
+                const s = playerRef.current.getPlayerState();
+                if (s === 1 || s === 3) playerRef.current.pauseVideo();
+              }
+            }}
           />
           {inReelsFeed && !frameReady && (
             coverMissing ? (
@@ -600,6 +620,7 @@ function MobileReelsFeed({
   onVisibleExerciseChange?: (exercise: Exercise) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
   const gestureRef = useRef<HTMLDivElement>(null);
   const slidePlayersRef = useRef<Map<string, YouTubePlayerHandle>>(new Map());
   const leaderPlayerRef = useRef<YouTubePlayerHandle | null>(null);
@@ -609,8 +630,12 @@ function MobileReelsFeed({
   const touchLastRef = useRef({ y: 0, t: 0 });
   const touchVelRef = useRef(0);
   const totalMovementRef = useRef(0);
+  const activePointerIdRef = useRef<number | null>(null);
+  const stationarySinceRef = useRef(0);
+  const pendingNavRef = useRef<'next' | 'prev' | null>(null);
+  const snappingBackRef = useRef(false);
+  const snapTimerRef = useRef(0);
   const gestureActiveRef = useRef(false);
-  const gestureLeaderRef = useRef<ReelsSlideRole>('current');
   const playbackKindRef = useRef<ReelsSlideRole>('current');
   const gestureApiRef = useRef({
     slideHeight: 0,
@@ -620,7 +645,8 @@ function MobileReelsFeed({
     settleGesture: () => {},
     endGesture: () => {},
     setFeedScrolling: (_a: boolean) => {},
-    snapBack: () => {},
+    commitAnimated: (_d: 'next' | 'prev') => {},
+    snapBackAnimated: () => {},
     handleFeedNavNext: () => {},
     handleFeedNavPrev: () => {},
     syncVisibleExercise: (_k: ReelsSlideRole) => {},
@@ -677,13 +703,6 @@ function MobileReelsFeed({
     },
     [kindFromOffset, syncVisibleExercise]
   );
-
-  const dragTowardKind = useCallback((): ReelsSlideRole | null => {
-    if (slideHeight <= 0 || dragOffset === 0) return null;
-    if (dragOffset > slideHeight * 0.04) return 'next';
-    if (dragOffset < -slideHeight * 0.04) return 'prev';
-    return null;
-  }, [slideHeight, dragOffset]);
 
   const registerSlidePlayer = useCallback((exerciseId: string, player: YouTubePlayerHandle | null) => {
     if (player) slidePlayersRef.current.set(exerciseId, player);
@@ -790,22 +809,103 @@ function MobileReelsFeed({
     setFeedScrolling(false);
   }, [setFeedScrolling]);
 
-  const snapBack = useCallback(() => {
-    gestureApiRef.current.setIsSnapping(true);
+  const ensureSlidePlaying = useCallback(
+    (kind: ReelsSlideRole) => {
+      const ex = exerciseForKind(kind);
+      if (!ex) return;
+      const player = slidePlayersRef.current.get(ex.firestoreId);
+      if (!player) return;
+      const state = player.getPlayerState();
+      if (state === 1 || state === 3) return;
+      if (state === 2 && player.getCurrentTime() > 0.2) {
+        player.playVideo();
+        return;
+      }
+      player.playVideo();
+    },
+    [exerciseForKind]
+  );
+
+  const finishSnapAnimation = useCallback(() => {
+    window.clearTimeout(snapTimerRef.current);
+
+    const pending = pendingNavRef.current;
+    const snappingBack = snappingBackRef.current;
+    if (!pending && !snappingBack) return;
+
+    if (pending === 'next') {
+      pendingNavRef.current = null;
+      snappingBackRef.current = false;
+      dragOffsetRef.current = 0;
+      setDragOffset(0);
+      setIsSnapping(false);
+      handleFeedNavNext();
+      endGesture();
+      return;
+    }
+
+    if (pending === 'prev') {
+      pendingNavRef.current = null;
+      snappingBackRef.current = false;
+      dragOffsetRef.current = 0;
+      setDragOffset(0);
+      setIsSnapping(false);
+      handleFeedNavPrev();
+      endGesture();
+      return;
+    }
+
+    if (snappingBackRef.current) {
+      snappingBackRef.current = false;
+      setIsSnapping(false);
+      setPlaybackKind('current');
+      endGesture();
+    }
+  }, [handleFeedNavNext, handleFeedNavPrev, endGesture]);
+
+  const scheduleSnapFallback = useCallback(() => {
+    window.clearTimeout(snapTimerRef.current);
+    snapTimerRef.current = window.setTimeout(() => finishSnapAnimation(), 320);
+  }, [finishSnapAnimation]);
+
+  const commitAnimated = useCallback(
+    (direction: 'next' | 'prev') => {
+      const h = slideHeight;
+      if (h <= 0) return;
+
+      pendingNavRef.current = direction;
+      snappingBackRef.current = false;
+      setIsSnapping(true);
+      setFeedScrolling(true);
+      setPlaybackKind(direction);
+      ensureSlidePlaying(direction);
+
+      const target = direction === 'next' ? h : -h;
+      dragOffsetRef.current = target;
+      setDragOffset(target);
+      syncVisibleExercise(direction);
+      scheduleSnapFallback();
+    },
+    [slideHeight, setFeedScrolling, ensureSlidePlaying, syncVisibleExercise, scheduleSnapFallback]
+  );
+
+  const snapBackAnimated = useCallback(() => {
+    pendingNavRef.current = null;
+    snappingBackRef.current = true;
+    setIsSnapping(true);
+    setFeedScrolling(true);
     dragOffsetRef.current = 0;
-    gestureApiRef.current.setDragOffset(0);
-    gestureApiRef.current.syncVisibleExercise('current');
-    window.setTimeout(() => {
-      gestureApiRef.current.setIsSnapping(false);
-      gestureApiRef.current.setPlaybackKind('current');
-      gestureApiRef.current.endGesture();
-    }, 260);
-  }, []);
+    setDragOffset(0);
+    setPlaybackKind('current');
+    syncVisibleExercise('current');
+    ensureSlidePlaying('current');
+    scheduleSnapFallback();
+  }, [setFeedScrolling, syncVisibleExercise, ensureSlidePlaying, scheduleSnapFallback]);
 
   const settleGesture = useCallback(() => {
     const h = gestureApiRef.current.slideHeight;
     if (h <= 0) {
-      snapBack();
+      snapBackAnimated();
       return;
     }
 
@@ -817,29 +917,21 @@ function MobileReelsFeed({
     let commitPrev = ratio <= -0.5;
 
     if (!commitNext && !commitPrev) {
-      if (vel > 0.3 && ratio > 0.06) commitNext = true;
-      else if (vel < -0.3 && ratio < -0.06) commitPrev = true;
+      if (vel > 0.35 && ratio > 0.1) commitNext = true;
+      else if (vel < -0.35 && ratio < -0.1) commitPrev = true;
     }
 
     if (commitNext && gestureApiRef.current.hasNext) {
-      dragOffsetRef.current = 0;
-      gestureApiRef.current.setDragOffset(0);
-      gestureApiRef.current.setPlaybackKind('next');
-      gestureApiRef.current.handleFeedNavNext();
-      gestureApiRef.current.endGesture();
+      gestureApiRef.current.commitAnimated('next');
       return;
     }
     if (commitPrev && gestureApiRef.current.hasPrev) {
-      dragOffsetRef.current = 0;
-      gestureApiRef.current.setDragOffset(0);
-      gestureApiRef.current.setPlaybackKind('prev');
-      gestureApiRef.current.handleFeedNavPrev();
-      gestureApiRef.current.endGesture();
+      gestureApiRef.current.commitAnimated('prev');
       return;
     }
 
-    snapBack();
-  }, [snapBack]);
+    snapBackAnimated();
+  }, [snapBackAnimated]);
 
   useLayoutEffect(() => {
     playbackKindRef.current = playbackKind;
@@ -854,7 +946,8 @@ function MobileReelsFeed({
       settleGesture,
       endGesture,
       setFeedScrolling,
-      snapBack,
+      commitAnimated,
+      snapBackAnimated,
       handleFeedNavNext,
       handleFeedNavPrev,
       syncVisibleExercise,
@@ -868,8 +961,24 @@ function MobileReelsFeed({
   useLayoutEffect(() => {
     resetDrag();
     setPlaybackKind('current');
+    pendingNavRef.current = null;
+    snappingBackRef.current = false;
+    setIsSnapping(false);
     endGesture();
   }, [navIndex, resetDrag, endGesture]);
+
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+
+    const onTransitionEnd = (e: TransitionEvent) => {
+      if (e.target !== track || e.propertyName !== 'transform') return;
+      finishSnapAnimation();
+    };
+
+    track.addEventListener('transitionend', onTransitionEnd);
+    return () => track.removeEventListener('transitionend', onTransitionEnd);
+  }, [finishSnapAnimation]);
 
   useEffect(() => {
     primeYouTubePlayerApi();
@@ -885,14 +994,16 @@ function MobileReelsFeed({
 
     const onPointerDown = (e: globalThis.PointerEvent) => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (pendingNavRef.current || snappingBackRef.current) return;
 
       touchStartYRef.current = e.clientY;
       dragStartOffsetRef.current = dragOffsetRef.current;
       touchLastRef.current = { y: e.clientY, t: performance.now() };
       touchVelRef.current = 0;
       totalMovementRef.current = 0;
+      stationarySinceRef.current = 0;
+      activePointerIdRef.current = e.pointerId;
       gestureActiveRef.current = true;
-      gestureLeaderRef.current = playbackKindRef.current;
 
       gestureApiRef.current.setGestureActive(true);
       gestureApiRef.current.setFeedScrolling(true);
@@ -900,6 +1011,15 @@ function MobileReelsFeed({
       primeYouTubePlayerApi();
 
       layer.setPointerCapture(e.pointerId);
+    };
+
+    const releaseCapture = (pointerId: number) => {
+      try {
+        layer.releasePointerCapture(pointerId);
+      } catch {
+        /* already released */
+      }
+      activePointerIdRef.current = null;
     };
 
     const onPointerMove = (e: globalThis.PointerEvent) => {
@@ -913,15 +1033,31 @@ function MobileReelsFeed({
       const dy = touchStartYRef.current - e.clientY;
       totalMovementRef.current = Math.max(totalMovementRef.current, Math.abs(dy));
       gestureApiRef.current.setDrag(dragStartOffsetRef.current + dy);
+
+      const h = gestureApiRef.current.slideHeight;
+      if (h <= 0) return;
+
+      const ratio = dragOffsetRef.current / h;
+      const absRatio = Math.abs(ratio);
+      const absVel = Math.abs(touchVelRef.current);
+
+      if (absRatio >= 0.5 && absVel < 0.1) {
+        if (!stationarySinceRef.current) stationarySinceRef.current = now;
+        else if (now - stationarySinceRef.current > 120) {
+          gestureActiveRef.current = false;
+          gestureApiRef.current.setGestureActive(false);
+          if (activePointerIdRef.current != null) releaseCapture(activePointerIdRef.current);
+          gestureApiRef.current.settleGesture();
+        }
+      } else {
+        stationarySinceRef.current = 0;
+      }
     };
 
-    const finishPointer = (e: globalThis.PointerEvent) => {
+    const finishPointer = () => {
+      if (activePointerIdRef.current != null) releaseCapture(activePointerIdRef.current);
+
       if (!gestureActiveRef.current) return;
-      try {
-        layer.releasePointerCapture(e.pointerId);
-      } catch {
-        /* already released */
-      }
 
       if (totalMovementRef.current < 12) {
         leaderPlayerRef.current?.togglePlay();
@@ -931,6 +1067,8 @@ function MobileReelsFeed({
         return;
       }
 
+      gestureActiveRef.current = false;
+      gestureApiRef.current.setGestureActive(false);
       gestureApiRef.current.settleGesture();
     };
 
@@ -949,29 +1087,32 @@ function MobileReelsFeed({
 
   const translateY = slideHeight > 0 ? -(currentSlideIndex * slideHeight + dragOffset) : 0;
 
-  const toward = dragTowardKind();
+  const scrollPhaseActive = gestureActive || isSnapping;
+  const dominantKind = scrollPhaseActive ? kindFromOffset(dragOffset) : playbackKind;
 
   return (
     <div
       ref={containerRef}
-      className={`mobile-reels-feed${gestureActive ? ' mobile-reels-feed--gesture' : ''}`}
+      className={`mobile-reels-feed${scrollPhaseActive ? ' mobile-reels-feed--gesture' : ''}`}
       style={slideHeight > 0 ? ({ '--mobile-reels-slide-h': `${slideHeight}px` } as CSSProperties) : undefined}
       aria-label="Feed de exercícios"
     >
       <div
+        ref={trackRef}
         className={`mobile-reels-feed__track${isSnapping ? ' mobile-reels-feed__track--snap' : ''}`}
         style={{ transform: `translate3d(0, ${translateY}px, 0)` }}
       >
         {slides.map((slide) => {
           const slideYtId = getYouTubeId(slide.ex.youtubeUrl);
           const isActive = slide.kind === 'current';
-          const isPlaybackLeader = gestureActive
-            ? gestureLeaderRef.current === slide.kind
-            : playbackKind === slide.kind;
+          const isPlaybackLeader = slide.kind === dominantKind;
           const allowSoundControl =
             isPlaybackLeader && !!spotlightExerciseId && slide.ex.firestoreId === spotlightExerciseId;
           const slideScrollActive =
-            gestureActive && (slide.kind === 'current' || slide.kind === toward);
+            scrollPhaseActive &&
+            (slide.kind === dominantKind ||
+              (dominantKind === 'next' && slide.kind === 'next') ||
+              (dominantKind === 'prev' && slide.kind === 'prev'));
 
           return (
             <div

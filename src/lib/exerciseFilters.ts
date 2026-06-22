@@ -1,6 +1,11 @@
 import type { Exercise } from '../types';
 import { normalizeMuscleGroups, resolveMuscleGroup } from './muscleGroups';
-import { exerciseMatchesEquipmentFilter, EQUIPMENT_OPTIONS } from './equipment';
+import { exerciseMatchesEquipmentFilter } from './equipment';
+import {
+  getMuscleFilterDef,
+  normalizeEquipmentFilterIds,
+  normalizeMuscleFilterIds,
+} from './advancedFilterTaxonomy';
 import { normalizeString } from './utils';
 
 export type MuscleRoleFilter = 'any' | 'primary' | 'secondary';
@@ -19,29 +24,23 @@ export const DEFAULT_ADVANCED_FILTERS: AdvancedFilterState = {
   favoritesOnly: false,
 };
 
-/** Grupos musculares disponíveis nos filtros */
-export const FILTER_MUSCLE_OPTIONS = [
-  'Peitoral',
-  'Costas',
-  'Quadríceps',
-  'Posterior de coxa',
-  'Glúteos',
-  'Ombros',
-  'Bíceps',
-  'Tríceps',
-  'Antebraço',
-  'Panturrilha',
-  'Abdômen',
-  'Trapézio',
-  'Lombar',
-  'Adutores',
-  'Abdutores',
-] as const;
-
-export const EQUIPMENT_FILTER_OPTIONS = EQUIPMENT_OPTIONS;
-
 function normalizedMuscles(ex: Exercise): string[] {
   return normalizeMuscleGroups(ex.muscleGroups);
+}
+
+function buildMuscleMatchSet(filterIds: string[]): Set<string> {
+  const set = new Set<string>();
+  for (const id of filterIds) {
+    const def = getMuscleFilterDef(id);
+    if (def) {
+      for (const display of def.matchDisplays) {
+        set.add(normalizeString(display));
+      }
+      continue;
+    }
+    set.add(normalizeString(resolveMuscleGroup(id)));
+  }
+  return set;
 }
 
 function matchesMuscleFilter(ex: Exercise, muscles: string[], role: MuscleRoleFilter): boolean {
@@ -50,8 +49,7 @@ function matchesMuscleFilter(ex: Exercise, muscles: string[], role: MuscleRoleFi
   const groups = normalizedMuscles(ex);
   if (groups.length === 0) return false;
 
-  const selected = new Set(muscles.map((m) => normalizeString(resolveMuscleGroup(m))));
-
+  const selected = buildMuscleMatchSet(muscles);
   const matchesGroup = (group: string) => selected.has(normalizeString(group));
 
   if (role === 'primary') {
@@ -99,15 +97,18 @@ export function applyAdvancedFilters(
 export function parseAdvancedFilters(raw: unknown): AdvancedFilterState {
   if (!raw || typeof raw !== 'object') return { ...DEFAULT_ADVANCED_FILTERS };
   const data = raw as Record<string, unknown>;
+  const muscles = Array.isArray(data.muscles)
+    ? data.muscles.filter((m): m is string => typeof m === 'string')
+    : [];
+  const equipment = Array.isArray(data.equipment)
+    ? data.equipment.filter((e): e is string => typeof e === 'string')
+    : [];
+
   return {
-    muscles: Array.isArray(data.muscles)
-      ? data.muscles.filter((m): m is string => typeof m === 'string')
-      : [],
+    muscles: normalizeMuscleFilterIds(muscles),
     muscleRole:
       data.muscleRole === 'primary' || data.muscleRole === 'secondary' ? data.muscleRole : 'any',
-    equipment: Array.isArray(data.equipment)
-      ? data.equipment.filter((e): e is string => typeof e === 'string')
-      : [],
+    equipment: normalizeEquipmentFilterIds(equipment),
     favoritesOnly: data.favoritesOnly === true,
   };
 }
