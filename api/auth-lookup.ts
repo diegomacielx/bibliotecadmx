@@ -39,7 +39,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const adminAuth = getFirebaseAdminAuth();
     const userRecord = await adminAuth.getUserByEmail(email);
     const providers = userRecord.providerData.map((p) => p.providerId).filter(Boolean);
-    res.status(200).json({ exists: true, providers });
+    res.status(200).json({ exists: true, providers, uid: userRecord.uid });
   } catch (err: unknown) {
     const code =
       err && typeof err === 'object' && 'code' in err ? String((err as { code?: string }).code) : '';

@@ -1,10 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { AuthMode } from '../types';
 import { maskEmail } from '../lib/authEmail';
+import {
+  lookupAuthEmail,
+  resolveAuthMethodKind,
+  type AuthMethodKind,
+} from '../lib/authLogin';
 import { BrandLogo } from './BrandLogo';
 import { Icon } from './Icon';
 
 const RESEND_COOLDOWN_SEC = 60;
+const EMAIL_LOOKUP_DEBOUNCE_MS = 450;
 
 interface LoginScreenProps {
   authMode: AuthMode;
@@ -25,6 +31,8 @@ interface LoginScreenProps {
   onSubmit: (e: React.FormEvent) => void;
   onGoogleSignIn?: () => void;
   googleSubmitting?: boolean;
+  googleLinkPending?: { email: string } | null;
+  onCancelGoogleLink?: () => void;
   onResendPasswordReset?: () => void;
   passwordResetResending?: boolean;
 }
@@ -48,10 +56,42 @@ export function LoginScreen({
   onSubmit,
   onGoogleSignIn,
   googleSubmitting = false,
+  googleLinkPending = null,
+  onCancelGoogleLink,
   onResendPasswordReset,
   passwordResetResending = false,
 }: LoginScreenProps) {
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [authMethodKind, setAuthMethodKind] = useState<AuthMethodKind>('unknown');
+
+  useEffect(() => {
+    if (authMode !== 'login' && authMode !== 'forgot') {
+      setAuthMethodKind('unknown');
+      return;
+    }
+
+    const email = loginEmail.trim().toLowerCase();
+    if (!email.includes('@') || email.length < 5) {
+      setAuthMethodKind('unknown');
+      return;
+    }
+
+    let active = true;
+    const timer = window.setTimeout(() => {
+      void lookupAuthEmail(email).then((lookup) => {
+        if (active) setAuthMethodKind(resolveAuthMethodKind(lookup));
+      });
+    }, EMAIL_LOOKUP_DEBOUNCE_MS);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [authMode, loginEmail]);
+
+  const goToForgotPassword = useCallback(() => {
+    setAuthMode('forgot');
+  }, [setAuthMode]);
 
   useEffect(() => {
     if (authMode === 'forgot-sent') {
@@ -80,9 +120,17 @@ export function LoginScreen({
         ? 'CRIAR CONTA'
         : authMode === 'forgot-sent'
           ? 'E-MAIL ENVIADO'
-          : 'RECUPERAR SENHA';
+          : authMode === 'forgot'
+            ? 'CRIAR / RECUPERAR SENHA'
+            : 'RECUPERAR SENHA';
 
   const maskedEmail = maskEmail(loginEmail);
+  const showGoogleOnlyHint =
+    !googleLinkPending && authMethodKind === 'google_only' && (authMode === 'login' || authMode === 'forgot');
+  const showDualMethodHint =
+    !googleLinkPending && authMethodKind === 'password_and_google' && authMode === 'login';
+  const showNotRegisteredHint =
+    !googleLinkPending && authMethodKind === 'not_registered' && authMode === 'login';
 
   return (
     <div className="page-canvas min-h-screen flex items-center justify-center p-4 sm:p-6 relative font-sans">
@@ -118,6 +166,13 @@ export function LoginScreen({
                 <Icon name="shield" className="auth-reset-sent__tip-icon" />
                 <span>Se o e-mail não estiver cadastrado, nenhuma mensagem será enviada.</span>
               </li>
+              <li className="auth-reset-sent__tip">
+                <Icon name="help" className="auth-reset-sent__tip-icon" />
+                <span>
+                  Conta criada com Google? Ao definir a senha pelo link, você poderá entrar com Google ou
+                  e-mail e senha da biblioteca.
+                </span>
+              </li>
             </ul>
             <button
               type="button"
@@ -142,6 +197,59 @@ export function LoginScreen({
           </div>
         ) : (
           <>
+            {googleLinkPending && authMode === 'login' && (
+              <div className="auth-google-link relative z-10 mb-4 text-left animate-fade-in">
+                <p className="auth-google-link__title">Vincular Google à sua conta</p>
+                <p className="auth-google-link__text">
+                  O e-mail <strong>{maskEmail(googleLinkPending.email)}</strong> já possui senha. Digite sua
+                  senha abaixo para unir o Google à mesma conta — sua senha continuará válida.
+                </p>
+                {onCancelGoogleLink && (
+                  <button type="button" className="auth-google-link__cancel" onClick={onCancelGoogleLink}>
+                    Cancelar vinculação
+                  </button>
+                )}
+              </div>
+            )}
+            {showGoogleOnlyHint && (
+              <div className="auth-method-hint auth-method-hint--google relative z-10 mb-4 text-left animate-fade-in">
+                <p className="auth-method-hint__title">Conta cadastrada com Google</p>
+                <p className="auth-method-hint__text">
+                  A senha do Gmail <strong>não</strong> funciona neste login. Entre com{' '}
+                  <strong>Continuar com Google</strong> ou{' '}
+                  {authMode === 'login' ? (
+                    <button type="button" className="auth-method-hint__link" onClick={goToForgotPassword}>
+                      crie uma senha só para a biblioteca
+                    </button>
+                  ) : (
+                    <>defina abaixo uma senha só para a biblioteca (não é a do Gmail)</>
+                  )}
+                  .
+                </p>
+              </div>
+            )}
+            {showDualMethodHint && (
+              <div className="auth-method-hint auth-method-hint--info relative z-10 mb-4 text-left animate-fade-in">
+                <p className="auth-method-hint__text">
+                  Este e-mail aceita <strong>senha da biblioteca</strong> ou <strong>Google</strong> — use o
+                  método que preferir.
+                </p>
+              </div>
+            )}
+            {showNotRegisteredHint && (
+              <div className="auth-method-hint auth-method-hint--register relative z-10 mb-4 text-left animate-fade-in">
+                <p className="auth-method-hint__title">E-mail não cadastrado</p>
+                <p className="auth-method-hint__text">
+                  Este endereço ainda não tem conta na biblioteca. Toque em{' '}
+                  <strong>Cadastre-se</strong> abaixo para criar seu acesso.
+                </p>
+              </div>
+            )}
+            {authMode === 'forgot' && authMethodKind !== 'google_only' && (
+              <p className="auth-forgot-lead relative z-10 mb-4 text-left">
+                Enviaremos um link para redefinir ou criar a senha de acesso à biblioteca.
+              </p>
+            )}
             <form onSubmit={onSubmit} className="space-y-3 relative z-10" noValidate>
               {authMode === 'register' && (
                 <>
@@ -256,7 +364,9 @@ export function LoginScreen({
                 {submitting
                   ? 'AGUARDE…'
                   : authMode === 'login'
-                    ? 'ACESSAR A BIBLIOTECA'
+                    ? googleLinkPending
+                      ? 'VINCULAR E ENTRAR'
+                      : 'ACESSAR A BIBLIOTECA'
                     : authMode === 'register'
                       ? 'CADASTRAR E ACESSAR'
                       : 'ENVIAR LINK DE RECUPERAÇÃO'}
@@ -300,6 +410,10 @@ export function LoginScreen({
                   )}
                   Continuar com Google
                 </button>
+                <p className="auth-google-footnote">
+                  Cadastrou-se com Google? A senha do Gmail não vale aqui — use o botão acima ou crie uma
+                  senha da biblioteca.
+                </p>
               </div>
             )}
 
@@ -322,10 +436,12 @@ export function LoginScreen({
                   <button
                     type="button"
                     disabled={submitting}
-                    onClick={() => setAuthMode('forgot')}
+                    onClick={goToForgotPassword}
                     className="text-2xs text-zinc-500 hover:text-white font-bold uppercase tracking-widest mt-2 ease-cinematic duration-cinematic disabled:opacity-50"
                   >
-                    Esqueceu sua senha?
+                    {authMethodKind === 'google_only'
+                      ? 'Criar senha de acesso'
+                      : 'Esqueceu sua senha?'}
                   </button>
                 </>
               ) : (

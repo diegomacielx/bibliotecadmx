@@ -24,7 +24,7 @@ export function getAuthErrorMessage(code: string | undefined, fallback: string):
     case 'auth/popup-blocked':
       return 'O navegador bloqueou a janela do Google. Permita pop-ups e tente novamente.';
     case 'auth/account-exists-with-different-credential':
-      return 'Este e-mail já está cadastrado com outro método. Use e-mail e senha ou recupere a senha.';
+      return 'Este e-mail já usa senha. Entre com sua senha abaixo para vincular o Google à mesma conta.';
     case 'auth/invalid-action-code':
     case 'auth/expired-action-code':
       return 'Este link expirou ou já foi usado. Solicite um novo.';

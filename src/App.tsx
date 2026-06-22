@@ -101,10 +101,21 @@ import { sendTransactionalEmail } from './lib/email';
 import { requestPasswordReset, requestEmailVerification, type AuthEmailResult } from './lib/authEmail';
 import {
   getEmailPasswordLoginMessage,
+  getNotRegisteredMessage,
+  getRegisterBlockedMessage,
   isLoginCredentialError,
   lookupAuthEmail,
 } from './lib/authLogin';
 import { parseAuthActionParams, clearAuthActionParams } from './lib/authActionParams';
+import {
+  clearPendingGoogleLink,
+  linkGoogleCredentialToUser,
+  loadPendingGoogleLink,
+  parseGoogleLinkError,
+  persistCredentialPending,
+  savePendingGoogleLink,
+  type GoogleLinkPending,
+} from './lib/googleAccountLink';
 import { ensureUserProfile, getUserProfileIfExists } from './lib/authProfile';
 import { adminRemoveUserProfile, adminSetUserStatus } from './lib/adminUserAccess';
 import { AdvancedFiltersBar } from './components/AdvancedFiltersBar';
@@ -180,6 +191,9 @@ export default function App() {
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
   const [googleRedirectPending, setGoogleRedirectPending] = useState(true);
+  const [googleLinkPending, setGoogleLinkPending] = useState<GoogleLinkPending | null>(() =>
+    loadPendingGoogleLink()
+  );
   const [passwordResetResending, setPasswordResetResending] = useState(false);
   const [authActionParams, setAuthActionParams] = useState(() => parseAuthActionParams());
   const [user, setUser] = useState<User | null>(null);
@@ -277,6 +291,22 @@ export default function App() {
 
   const finishGoogleSignIn = useCallback(
     async (signedInUser: User) => {
+      const email = (signedInUser.email || '').trim().toLowerCase();
+      if (email) {
+        const lookup = await lookupAuthEmail(email);
+        if (lookup?.exists && lookup.uid && lookup.uid !== signedInUser.uid) {
+          await fb.signOut(auth);
+          savePendingGoogleLink({ email, mode: 'retry-popup' });
+          setGoogleLinkPending({ email, mode: 'retry-popup' });
+          setLoginEmail(email);
+          showToast(
+            'Este e-mail já usa senha. Entre com sua senha abaixo para vincular o Google — sua senha continuará funcionando.',
+            'error'
+          );
+          throw new Error('google-link-required');
+        }
+      }
+
       let profile: UserProfile;
       try {
         profile = await ensureUserProfile(signedInUser);
@@ -299,6 +329,66 @@ export default function App() {
     },
     [showToast]
   );
+
+  const beginGoogleLinkFlow = useCallback(
+    (email: string, err: unknown) => {
+      const parsed = parseGoogleLinkError(err);
+      persistCredentialPending(email, parsed?.credential ?? null);
+      const pending: GoogleLinkPending = {
+        email,
+        mode: parsed?.credential ? 'credential' : 'retry-popup',
+        idToken: parsed?.credential
+          ? (parsed.credential as { idToken?: string }).idToken
+          : undefined,
+        accessToken: parsed?.credential
+          ? (parsed.credential as { accessToken?: string }).accessToken
+          : undefined,
+      };
+      savePendingGoogleLink(pending);
+      setGoogleLinkPending(pending);
+      setLoginEmail(email);
+      setAuthMode('login');
+      showToast(
+        'Este e-mail já possui conta com senha. Entre com sua senha para vincular o Google.',
+        'error'
+      );
+    },
+    [showToast]
+  );
+
+  const cancelGoogleLinkFlow = useCallback(() => {
+    clearPendingGoogleLink();
+    setGoogleLinkPending(null);
+  }, []);
+
+  const completePendingGoogleLink = useCallback(async () => {
+    const pending = loadPendingGoogleLink();
+    const current = auth.currentUser;
+    if (!pending || !current?.email || current.email.trim().toLowerCase() !== pending.email) return;
+
+    try {
+      if (pending.mode === 'credential') {
+        await linkGoogleCredentialToUser(current, pending);
+      } else {
+        await fb.linkWithPopup(current, fb.googleProvider);
+      }
+      clearPendingGoogleLink();
+      setGoogleLinkPending(null);
+      showToast('Google vinculado! Você pode entrar com senha ou Google.');
+    } catch (linkErr) {
+      const code = getAuthErrorCode(linkErr);
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        showToast('Login realizado. Toque em "Continuar com Google" novamente para vincular.', 'success');
+      } else {
+        showToast(
+          'Entrou com senha, mas não foi possível vincular o Google. Tente "Continuar com Google" novamente.',
+          'error'
+        );
+      }
+      clearPendingGoogleLink();
+      setGoogleLinkPending(null);
+    }
+  }, [showToast]);
 
   const openAdminTab = (tab: AdminTab) => {
     setEditingId(null);
@@ -384,6 +474,7 @@ export default function App() {
         try {
           await finishGoogleSignIn(result.user);
         } catch (err) {
+          if (err instanceof Error && err.message === 'google-link-required') return;
           showToast(getAuthErrorMessage(getAuthErrorCode(err), 'Erro ao entrar com Google.'), 'error');
         } finally {
           authFlowBusyRef.current = false;
@@ -391,6 +482,11 @@ export default function App() {
       })
       .catch((err) => {
         if (!active) return;
+        const parsed = parseGoogleLinkError(err);
+        if (parsed) {
+          beginGoogleLinkFlow(parsed.email, err);
+          return;
+        }
         showToast(getAuthErrorMessage(getAuthErrorCode(err), 'Erro ao entrar com Google.'), 'error');
       })
       .finally(() => {
@@ -399,7 +495,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [finishGoogleSignIn, showToast]);
+  }, [finishGoogleSignIn, showToast, beginGoogleLinkFlow]);
 
   useEffect(() => {
     if (!fb.isValid) {
@@ -1165,7 +1261,13 @@ export default function App() {
     authFlowBusyRef.current = true;
     try {
       if (authMode === 'login') {
+        const lookup = await lookupAuthEmail(email);
+        if (lookup && !lookup.exists) {
+          showToast(getNotRegisteredMessage(), 'error');
+          return;
+        }
         await fb.signInWithEmailAndPassword(auth, email, loginPassword);
+        await completePendingGoogleLink();
       } else if (authMode === 'forgot') {
         const result = await deliverPasswordResetEmail(email);
         if (result.ok) {
@@ -1225,6 +1327,9 @@ export default function App() {
       if (authMode === 'login' && isLoginCredentialError(code)) {
         const lookup = await lookupAuthEmail(email);
         showToast(getEmailPasswordLoginMessage(lookup), 'error');
+      } else if (authMode === 'register' && code === 'auth/email-already-in-use') {
+        const lookup = await lookupAuthEmail(email);
+        showToast(getRegisterBlockedMessage(lookup) ?? 'Este e-mail já está cadastrado.', 'error');
       } else {
         showToast(
           getAuthErrorMessage(
@@ -1249,6 +1354,11 @@ export default function App() {
     setGoogleSubmitting(true);
     authFlowBusyRef.current = true;
     try {
+      const hint = loginEmail.trim().toLowerCase();
+      fb.googleProvider.setCustomParameters(
+        hint ? { prompt: 'select_account', login_hint: hint } : { prompt: 'select_account' }
+      );
+
       if (isMobileUi()) {
         await fb.signInWithRedirect(auth, fb.googleProvider);
         return;
@@ -1256,6 +1366,12 @@ export default function App() {
       const result = await fb.signInWithPopup(auth, fb.googleProvider);
       await finishGoogleSignIn(result.user);
     } catch (err) {
+      if (err instanceof Error && err.message === 'google-link-required') return;
+      const parsed = parseGoogleLinkError(err);
+      if (parsed) {
+        beginGoogleLinkFlow(parsed.email, err);
+        return;
+      }
       showToast(getAuthErrorMessage(getAuthErrorCode(err), 'Erro ao entrar com Google.'), 'error');
     } finally {
       authFlowBusyRef.current = false;
@@ -1508,7 +1624,8 @@ export default function App() {
           return rankExercises(scopedIndexes, searchTerm).map((r) => r.exercise);
         })();
 
-    return applyAdvancedFilters(searched, advancedFilters, favorites).sort((a, b) => {
+    const filtered = applyAdvancedFilters(searched, advancedFilters, favorites);
+    return [...filtered].sort((a, b) => {
       if (searchTerm.trim() || showAdminUI) return 0;
       return compareExercisesBySortOrder(a, b, catalogSortOrder);
     });
@@ -1563,7 +1680,7 @@ export default function App() {
       return filteredExercises;
     }
     return filteredExercises.filter((ex) => ex.firestoreId !== heroExId);
-  }, [filteredExercises, heroDisplay, searchTerm, activeCategory]);
+  }, [filteredExercises, heroDisplay, searchTerm, activeCategory, catalogSortOrder]);
 
   const gridExerciseIds = useMemo(
     () => gridExercises.map((ex) => ex.firestoreId),
@@ -2289,6 +2406,8 @@ export default function App() {
           onSubmit={handleAuthSubmit}
           onGoogleSignIn={handleGoogleSignIn}
           googleSubmitting={googleSubmitting}
+          googleLinkPending={googleLinkPending}
+          onCancelGoogleLink={cancelGoogleLinkFlow}
           onResendPasswordReset={handleResendPasswordReset}
           passwordResetResending={passwordResetResending}
         />
@@ -2883,6 +3002,7 @@ export default function App() {
           />
         ) : (
           <motion.div
+            key={catalogSortOrder}
             variants={staggerContainer}
             initial="hidden"
             animate="visible"
