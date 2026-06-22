@@ -228,6 +228,8 @@ export function SiteHeader({
         </span>
         <input
           ref={mobileSearchRef}
+          id="mobile-header-search"
+          name="search"
           type="search"
           enterKeyHint="search"
           placeholder="Buscar exercícios…"

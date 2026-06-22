@@ -110,6 +110,8 @@ export function MobileAccountScreen({
         <div className="mobile-account-screen__nickname-row">
           <input
             type="text"
+            id="mobile-account-nickname"
+            name="nickname"
             value={nicknameDraft}
             onChange={(e) => {
               setNicknameDraft(e.target.value);

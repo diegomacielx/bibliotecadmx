@@ -2,6 +2,7 @@ import { getAllCachedCoverEntries, isCoverRecentlyVerified } from './coverCache'
 import { isOfficialGitHubCoverUrl } from './coverSource';
 import { isSessionCoverReady, setSessionCoverUrl } from './coverImageStore';
 import { parseExerciseIdFromGitHubCoverUrl } from './utils';
+import { isMobileUi } from '../hooks/useMediaQuery';
 
 export const COVER_CACHE_NAME = 'dmx-covers-v1';
 
@@ -149,6 +150,7 @@ export async function resolveTrustedCoverUrl(
 export function registerCoverServiceWorker(): void {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
   if (import.meta.env.DEV) return;
+  if (isMobileUi()) return;
 
   const register = () => {
     navigator.serviceWorker.register('/covers-sw.js').catch(() => {

@@ -179,6 +179,7 @@ export default function App() {
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
+  const [googleRedirectPending, setGoogleRedirectPending] = useState(true);
   const [passwordResetResending, setPasswordResetResending] = useState(false);
   const [authActionParams, setAuthActionParams] = useState(() => parseAuthActionParams());
   const [user, setUser] = useState<User | null>(null);
@@ -274,6 +275,31 @@ export default function App() {
     toastTimeoutRef.current = setTimeout(() => setToast({ show: false, msg: '', type: 'success' }), 4000);
   }, []);
 
+  const finishGoogleSignIn = useCallback(
+    async (signedInUser: User) => {
+      let profile: UserProfile;
+      try {
+        profile = await ensureUserProfile(signedInUser);
+      } catch (profileErr) {
+        const existing = await getUserProfileIfExists(signedInUser);
+        if (!existing) throw profileErr;
+        profile = existing;
+      }
+      if (profile.status === 'approved') {
+        showToast('Login com Google realizado com sucesso!');
+      } else {
+        showToast('Conta conectada! Aguarde liberação manual do acesso.');
+      }
+      setUserProfile(profile);
+      profileEverLoadedRef.current = true;
+      if (profile.status !== 'approved') setProfileLoading(false);
+      if (!signedInUser.emailVerified && signedInUser.email) {
+        void requestEmailVerification(signedInUser.email, signedInUser.displayName || undefined);
+      }
+    },
+    [showToast]
+  );
+
   const openAdminTab = (tab: AdminTab) => {
     setEditingId(null);
     setAdminTab(tab);
@@ -344,6 +370,36 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showAdminPanel]);
+
+  useEffect(() => {
+    if (!fb.isValid) {
+      setGoogleRedirectPending(false);
+      return;
+    }
+    let active = true;
+    fb.getRedirectResult(auth)
+      .then(async (result) => {
+        if (!active || !result?.user) return;
+        authFlowBusyRef.current = true;
+        try {
+          await finishGoogleSignIn(result.user);
+        } catch (err) {
+          showToast(getAuthErrorMessage(getAuthErrorCode(err), 'Erro ao entrar com Google.'), 'error');
+        } finally {
+          authFlowBusyRef.current = false;
+        }
+      })
+      .catch((err) => {
+        if (!active) return;
+        showToast(getAuthErrorMessage(getAuthErrorCode(err), 'Erro ao entrar com Google.'), 'error');
+      })
+      .finally(() => {
+        if (active) setGoogleRedirectPending(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [finishGoogleSignIn, showToast]);
 
   useEffect(() => {
     if (!fb.isValid) {
@@ -621,7 +677,13 @@ export default function App() {
         const publicReady = data
           .filter((ex) => !isExerciseIncomplete(ex.youtubeUrl))
           .map((ex) => ({ firestoreId: ex.firestoreId, id: ex.id }));
-        primeCoversFromExerciseList(isAdmin ? publicReady.slice(0, 24) : publicReady);
+        primeCoversFromExerciseList(
+          isMobileUi()
+            ? publicReady.slice(0, isAdmin ? 8 : 10)
+            : isAdmin
+              ? publicReady.slice(0, 24)
+              : publicReady
+        );
         setLoading(false);
       },
       (err) => {
@@ -1187,26 +1249,12 @@ export default function App() {
     setGoogleSubmitting(true);
     authFlowBusyRef.current = true;
     try {
+      if (isMobileUi()) {
+        await fb.signInWithRedirect(auth, fb.googleProvider);
+        return;
+      }
       const result = await fb.signInWithPopup(auth, fb.googleProvider);
-      let profile: UserProfile;
-      try {
-        profile = await ensureUserProfile(result.user);
-      } catch (profileErr) {
-        const existing = await getUserProfileIfExists(result.user);
-        if (!existing) throw profileErr;
-        profile = existing;
-      }
-      if (profile.status === 'approved') {
-        showToast('Login com Google realizado com sucesso!');
-      } else {
-        showToast('Conta conectada! Aguarde liberação manual do acesso.');
-      }
-      setUserProfile(profile);
-      profileEverLoadedRef.current = true;
-      if (profile.status !== 'approved') setProfileLoading(false);
-      if (!result.user.emailVerified && result.user.email) {
-        void requestEmailVerification(result.user.email, result.user.displayName || undefined);
-      }
+      await finishGoogleSignIn(result.user);
     } catch (err) {
       showToast(getAuthErrorMessage(getAuthErrorCode(err), 'Erro ao entrar com Google.'), 'error');
     } finally {
@@ -2124,7 +2172,7 @@ export default function App() {
   useEffect(() => {
     if (loading || publicExercises.length === 0) return;
 
-    const viewportLimit = isMobileUi() ? 10 : 28;
+    const viewportLimit = isMobileUi() ? 6 : 28;
     const viewportItems = gridExercises.slice(0, viewportLimit).map((ex) => ({
       firestoreId: ex.firestoreId,
       id: ex.id,
@@ -2139,6 +2187,7 @@ export default function App() {
     gridMembershipRef.current = gridMembershipKey;
 
     const scheduleWarmup = () => {
+      if (isMobileUi()) return;
       scheduleKnownCoversWarmup({
         excludeIds: visibleIds,
         priorityOrder,
@@ -2147,10 +2196,12 @@ export default function App() {
 
     if (showAdminUI) {
       prefetchExerciseCovers(viewportItems, 'critical');
-      scheduleKnownCoversWarmup({
-        excludeIds: new Set(viewportItems.map((item) => item.firestoreId)),
-        priorityOrder,
-      });
+      if (!isMobileUi()) {
+        scheduleKnownCoversWarmup({
+          excludeIds: new Set(viewportItems.map((item) => item.firestoreId)),
+          priorityOrder,
+        });
+      }
       return;
     }
 
@@ -2174,6 +2225,12 @@ export default function App() {
       id: ex.id,
     }));
 
+    if (isMobileUi()) {
+      prefetchExerciseCovers(viewportItems, 'critical');
+      primeCoversFromExerciseList(coverSources.slice(0, 10), { heroFirestoreId: heroId });
+      return;
+    }
+
     primeCoversFromExerciseList(coverSources, { heroFirestoreId: heroId });
     prefetchExerciseCovers(viewportItems, 'critical');
     scheduleWarmup();
@@ -2187,7 +2244,7 @@ export default function App() {
     showAdminUI,
   ]);
 
-  if (authLoading || (isLoggedIn && !isAdmin && profileLoading)) {
+  if (authLoading || googleRedirectPending || (isLoggedIn && !isAdmin && profileLoading)) {
     return <LoadingScreen slowConnection={slowConnection} />;
   }
 
@@ -2446,6 +2503,7 @@ export default function App() {
           <UsageGuidePanel
             open={mobileGuideOpen}
             onClose={() => setMobileGuideOpen(false)}
+            variant="mobile"
           />
         </>
       )}

@@ -106,6 +106,8 @@ export function MobileSearchScreen({
               <Icon name="search" className="w-4 h-4" />
             </span>
             <input
+              id="mobile-search-input"
+              name="search"
               type="search"
               enterKeyHint="search"
               autoFocus

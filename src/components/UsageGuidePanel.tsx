@@ -2,12 +2,14 @@ import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { USAGE_GUIDE_SECTIONS } from '../lib/usageGuide';
+import { MOBILE_USAGE_GUIDE_SECTIONS } from '../lib/usageGuideMobile';
 import { Icon } from './Icon';
 
 interface UsageGuidePanelProps {
   open: boolean;
   onClose: () => void;
   onOpenShortcuts?: () => void;
+  variant?: 'desktop' | 'mobile';
 }
 
 function GuideSection({
@@ -42,8 +44,10 @@ function GuideSection({
   );
 }
 
-export function UsageGuidePanel({ open, onClose, onOpenShortcuts }: UsageGuidePanelProps) {
+export function UsageGuidePanel({ open, onClose, onOpenShortcuts, variant = 'desktop' }: UsageGuidePanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const isMobile = variant === 'mobile';
+  const sections = isMobile ? MOBILE_USAGE_GUIDE_SECTIONS : USAGE_GUIDE_SECTIONS;
 
   useEffect(() => {
     if (!open) return;
@@ -67,7 +71,7 @@ export function UsageGuidePanel({ open, onClose, onOpenShortcuts }: UsageGuidePa
     <AnimatePresence>
       {open && (
         <motion.div
-          className="usage-guide-overlay"
+          className={`usage-guide-overlay ${isMobile ? 'usage-guide-overlay--mobile' : ''}`}
           role="presentation"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -81,7 +85,7 @@ export function UsageGuidePanel({ open, onClose, onOpenShortcuts }: UsageGuidePa
             aria-modal="true"
             aria-labelledby="usage-guide-title"
             tabIndex={-1}
-            className="usage-guide-panel"
+            className={`usage-guide-panel ${isMobile ? 'usage-guide-panel--mobile' : ''}`}
             initial={{ opacity: 0, y: 12, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.99 }}
@@ -95,7 +99,9 @@ export function UsageGuidePanel({ open, onClose, onOpenShortcuts }: UsageGuidePa
                   Guia de uso
                 </h2>
                 <p className="usage-guide__subtitle">
-                  Tudo o que você pode fazer na biblioteca e como usar cada recurso.
+                  {isMobile
+                    ? 'Como usar a biblioteca no celular — toque, deslize e monte seu treino.'
+                    : 'Tudo o que você pode fazer na biblioteca e como usar cada recurso.'}
                 </p>
               </div>
               <button
@@ -109,7 +115,7 @@ export function UsageGuidePanel({ open, onClose, onOpenShortcuts }: UsageGuidePa
             </header>
 
             <div className="usage-guide__body">
-              {USAGE_GUIDE_SECTIONS.map((section) => (
+              {sections.map((section) => (
                 <GuideSection
                   key={section.id}
                   title={section.title}
@@ -120,7 +126,9 @@ export function UsageGuidePanel({ open, onClose, onOpenShortcuts }: UsageGuidePa
             </div>
 
             <footer className="usage-guide__footer">
-              {onOpenShortcuts ? (
+              {isMobile ? (
+                <p>Toque fora ou use o X para fechar</p>
+              ) : onOpenShortcuts ? (
                 <button
                   type="button"
                   className="usage-guide__footer-link"
