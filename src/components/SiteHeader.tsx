@@ -31,6 +31,8 @@ interface SiteHeaderProps {
   onToggleSaveRecentVideos?: (enabled: boolean) => void;
   saveSearchHistory?: boolean;
   onToggleSaveSearchHistory?: (enabled: boolean) => void;
+  liveSearchSuggestions?: boolean;
+  onToggleLiveSearchSuggestions?: (enabled: boolean) => void;
   cardHoverPreview?: boolean;
   onToggleCardHoverPreview?: (enabled: boolean) => void;
   cardCoverParallax?: boolean;
@@ -104,6 +106,8 @@ export function SiteHeader({
   onToggleSaveRecentVideos,
   saveSearchHistory,
   onToggleSaveSearchHistory,
+  liveSearchSuggestions = true,
+  onToggleLiveSearchSuggestions,
   cardHoverPreview,
   onToggleCardHoverPreview,
   cardCoverParallax,
@@ -144,7 +148,7 @@ export function SiteHeader({
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [usageGuideOpen, setUsageGuideOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const showStudentSettings = onExerciseSortOrderChange != null;
+  const showStudentSettings = onToggleLiveSearchSuggestions != null;
   const [searchFocused, setSearchFocused] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
@@ -212,7 +216,8 @@ export function SiteHeader({
     name: userProfile?.name,
     email: user?.email,
   });
-  const showSuggestions = searchFocused && searchTerm.trim().length >= 2;
+  const showSuggestions =
+    liveSearchSuggestions && searchFocused && searchTerm.trim().length >= 2;
   const showChips =
     searchFocused && !searchTerm.trim() && (searchHistory.length > 0 || searchRecents.length > 0);
 
@@ -629,6 +634,8 @@ export function SiteHeader({
           onToggleSaveRecentVideos={onToggleSaveRecentVideos!}
           saveSearchHistory={saveSearchHistory ?? true}
           onToggleSaveSearchHistory={onToggleSaveSearchHistory!}
+          liveSearchSuggestions={liveSearchSuggestions ?? true}
+          onToggleLiveSearchSuggestions={onToggleLiveSearchSuggestions!}
           cardHoverPreview={cardHoverPreview ?? true}
           onToggleCardHoverPreview={onToggleCardHoverPreview!}
           cardCoverParallax={cardCoverParallax ?? true}

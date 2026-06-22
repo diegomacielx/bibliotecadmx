@@ -2,10 +2,12 @@ import { useCallback, useState } from 'react';
 import {
   readSaveRecentVideos,
   readSaveSearchHistory,
+  readLiveSearchSuggestions,
   readCardHoverPreview,
   readCardCoverParallax,
   SAVE_RECENT_VIDEOS_KEY,
   SAVE_SEARCH_HISTORY_KEY,
+  LIVE_SEARCH_SUGGESTIONS_KEY,
   CARD_HOVER_PREVIEW_KEY,
   CARD_COVER_PARALLAX_KEY,
 } from '../lib/searchPreferences';
@@ -13,6 +15,7 @@ import {
 export function useSearchPreferences() {
   const [saveRecentVideos, setSaveRecentVideosState] = useState(readSaveRecentVideos);
   const [saveSearchHistory, setSaveSearchHistoryState] = useState(readSaveSearchHistory);
+  const [liveSearchSuggestions, setLiveSearchSuggestionsState] = useState(readLiveSearchSuggestions);
   const [cardHoverPreview, setCardHoverPreviewState] = useState(readCardHoverPreview);
   const [cardCoverParallax, setCardCoverParallaxState] = useState(readCardCoverParallax);
 
@@ -24,6 +27,11 @@ export function useSearchPreferences() {
   const setSaveSearchHistory = useCallback((enabled: boolean) => {
     setSaveSearchHistoryState(enabled);
     localStorage.setItem(SAVE_SEARCH_HISTORY_KEY, String(enabled));
+  }, []);
+
+  const setLiveSearchSuggestions = useCallback((enabled: boolean) => {
+    setLiveSearchSuggestionsState(enabled);
+    localStorage.setItem(LIVE_SEARCH_SUGGESTIONS_KEY, String(enabled));
   }, []);
 
   const setCardHoverPreview = useCallback((enabled: boolean) => {
@@ -39,10 +47,12 @@ export function useSearchPreferences() {
   return {
     saveRecentVideos,
     saveSearchHistory,
+    liveSearchSuggestions,
     cardHoverPreview,
     cardCoverParallax,
     setSaveRecentVideos,
     setSaveSearchHistory,
+    setLiveSearchSuggestions,
     setCardHoverPreview,
     setCardCoverParallax,
   };

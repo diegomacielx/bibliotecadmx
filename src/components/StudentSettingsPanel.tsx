@@ -15,6 +15,8 @@ interface StudentSettingsPanelProps {
   onToggleSaveRecentVideos: (enabled: boolean) => void;
   saveSearchHistory: boolean;
   onToggleSaveSearchHistory: (enabled: boolean) => void;
+  liveSearchSuggestions: boolean;
+  onToggleLiveSearchSuggestions: (enabled: boolean) => void;
   cardHoverPreview: boolean;
   onToggleCardHoverPreview: (enabled: boolean) => void;
   cardCoverParallax: boolean;
@@ -34,6 +36,8 @@ export function StudentSettingsPanel({
   onToggleSaveRecentVideos,
   saveSearchHistory,
   onToggleSaveSearchHistory,
+  liveSearchSuggestions,
+  onToggleLiveSearchSuggestions,
   cardHoverPreview,
   onToggleCardHoverPreview,
   cardCoverParallax,
@@ -134,6 +138,17 @@ export function StudentSettingsPanel({
                     }
                     checked={saveSearchHistory}
                     onChange={onToggleSaveSearchHistory}
+                    transitionSpeed="instant"
+                  />
+                  <GlassToggle
+                    label="Resultados ao digitar"
+                    hint={
+                      liveSearchSuggestions
+                        ? 'Enquanto você digita, aparecem sugestões com capa e nome do exercício.'
+                        : 'Desligado: use Enter para ver resultados apenas no catálogo.'
+                    }
+                    checked={liveSearchSuggestions}
+                    onChange={onToggleLiveSearchSuggestions}
                     transitionSpeed="instant"
                   />
                   {!touchLayout && (

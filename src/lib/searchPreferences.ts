@@ -1,5 +1,6 @@
 export const SAVE_RECENT_VIDEOS_KEY = 'dmx_save_recent_videos';
 export const SAVE_SEARCH_HISTORY_KEY = 'dmx_save_search_history';
+export const LIVE_SEARCH_SUGGESTIONS_KEY = 'dmx_live_search_suggestions';
 export const CARD_HOVER_PREVIEW_KEY = 'dmx_card_hover_preview';
 export const CARD_COVER_PARALLAX_KEY = 'dmx_card_cover_parallax';
 
@@ -11,6 +12,13 @@ export function readSaveRecentVideos(): boolean {
 export function readSaveSearchHistory(): boolean {
   if (typeof window === 'undefined') return true;
   const raw = localStorage.getItem(SAVE_SEARCH_HISTORY_KEY);
+  if (raw === null) return true;
+  return raw === 'true';
+}
+
+export function readLiveSearchSuggestions(): boolean {
+  if (typeof window === 'undefined') return true;
+  const raw = localStorage.getItem(LIVE_SEARCH_SUGGESTIONS_KEY);
   if (raw === null) return true;
   return raw === 'true';
 }

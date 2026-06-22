@@ -239,10 +239,12 @@ export default function App() {
   const {
     saveRecentVideos,
     saveSearchHistory,
+    liveSearchSuggestions,
     cardHoverPreview,
     cardCoverParallax,
     setSaveRecentVideos,
     setSaveSearchHistory,
+    setLiveSearchSuggestions,
     setCardHoverPreview,
     setCardCoverParallax,
   } = useSearchPreferences();
@@ -2488,16 +2490,18 @@ export default function App() {
         onToggleVideoLoop={(enabled) => void handleUpdateVideoLoop(enabled)}
         compareLoopSync={compareLoopSync}
         onToggleCompareLoopSync={(enabled) => void handleUpdateCompareLoopSync(enabled)}
-        exerciseSortOrder={!showAdminUI ? exerciseSortOrder : undefined}
-        onExerciseSortOrderChange={!showAdminUI ? handleExerciseSortOrderChange : undefined}
-        saveRecentVideos={!showAdminUI ? saveRecentVideos : undefined}
-        onToggleSaveRecentVideos={!showAdminUI ? setSaveRecentVideos : undefined}
-        saveSearchHistory={!showAdminUI ? saveSearchHistory : undefined}
-        onToggleSaveSearchHistory={!showAdminUI ? setSaveSearchHistory : undefined}
-        cardHoverPreview={!showAdminUI ? cardHoverPreview : undefined}
-        onToggleCardHoverPreview={!showAdminUI ? setCardHoverPreview : undefined}
-        cardCoverParallax={!showAdminUI ? cardCoverParallax : undefined}
-        onToggleCardCoverParallax={!showAdminUI ? setCardCoverParallax : undefined}
+        exerciseSortOrder={exerciseSortOrder}
+        onExerciseSortOrderChange={handleExerciseSortOrderChange}
+        saveRecentVideos={saveRecentVideos}
+        onToggleSaveRecentVideos={setSaveRecentVideos}
+        saveSearchHistory={saveSearchHistory}
+        onToggleSaveSearchHistory={setSaveSearchHistory}
+        liveSearchSuggestions={liveSearchSuggestions}
+        onToggleLiveSearchSuggestions={setLiveSearchSuggestions}
+        cardHoverPreview={cardHoverPreview}
+        onToggleCardHoverPreview={setCardHoverPreview}
+        cardCoverParallax={cardCoverParallax}
+        onToggleCardCoverParallax={setCardCoverParallax}
         searchTerm={searchTerm}
         onSearchChange={handleSearchChange}
         onSearchCommit={handleSearchCommit}
@@ -2599,7 +2603,7 @@ export default function App() {
         />
       )}
 
-      {useMobileShell && !showAdminUI && (
+      {(useMobileShell || useMobileAdminShell) && (
         <>
           <StudentSettingsPanel
             open={mobileSettingsOpen}
@@ -2610,6 +2614,8 @@ export default function App() {
             onToggleSaveRecentVideos={setSaveRecentVideos}
             saveSearchHistory={saveSearchHistory}
             onToggleSaveSearchHistory={setSaveSearchHistory}
+            liveSearchSuggestions={liveSearchSuggestions}
+            onToggleLiveSearchSuggestions={setLiveSearchSuggestions}
             cardHoverPreview={cardHoverPreview}
             onToggleCardHoverPreview={setCardHoverPreview}
             cardCoverParallax={cardCoverParallax}
@@ -2619,11 +2625,13 @@ export default function App() {
             compareLoopSync={compareLoopSync}
             onToggleCompareLoopSync={(enabled) => void handleUpdateCompareLoopSync(enabled)}
           />
-          <UsageGuidePanel
-            open={mobileGuideOpen}
-            onClose={() => setMobileGuideOpen(false)}
-            variant="mobile"
-          />
+          {useMobileShell && !showAdminUI && (
+            <UsageGuidePanel
+              open={mobileGuideOpen}
+              onClose={() => setMobileGuideOpen(false)}
+              variant="mobile"
+            />
+          )}
         </>
       )}
 
