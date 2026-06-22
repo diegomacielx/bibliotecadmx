@@ -3983,6 +3983,14 @@ html[data-theme="light"] .cover-placeholder__sheen {
   );
 }
 
+.category-nav-scroll--centered {
+  flex: 0 1 auto;
+  max-width: calc(100% - 4.5rem);
+  justify-content: center;
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+
 .category-nav--compact .category-nav-scroll {
   justify-content: flex-start;
   padding-inline: 0.125rem;
@@ -4026,6 +4034,10 @@ html[data-theme="light"] .cover-placeholder__sheen {
     overflow-x: visible;
     mask-image: none;
     -webkit-mask-image: none;
+  }
+
+  .category-nav-scroll--centered {
+    overflow-x: visible;
   }
 
   .category-nav-pill {

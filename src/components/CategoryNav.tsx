@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Icon } from './Icon';
 
@@ -19,6 +19,31 @@ export function CategoryNav({
   compact = false,
 }: CategoryNavProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [isOverflowing, setIsOverflowing] = useState(false);
+
+  useEffect(() => {
+    if (compact) {
+      setIsOverflowing(false);
+      return;
+    }
+
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const update = () => {
+      setIsOverflowing(el.scrollWidth > el.clientWidth + 2);
+    };
+
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    window.addEventListener('resize', update);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [compact, categories]);
 
   const scroll = (dir: 'left' | 'right') => {
     scrollRef.current?.scrollBy({ left: dir === 'left' ? -200 : 200, behavior: 'smooth' });
@@ -41,7 +66,12 @@ export function CategoryNav({
         </button>
         )}
 
-        <div className="category-nav-scroll no-scrollbar" ref={scrollRef}>
+        <div
+          className={`category-nav-scroll no-scrollbar ${
+            !compact && !isOverflowing ? 'category-nav-scroll--centered' : ''
+          }`}
+          ref={scrollRef}
+        >
           {categories.map((cat) => {
             const isActive = activeCategory === cat;
             const isFav = cat === 'Favoritos';
