@@ -22,6 +22,12 @@ export function CategoryNav({
   const [isOverflowing, setIsOverflowing] = useState(false);
 
   useEffect(() => {
+    if (!compact || !scrollRef.current) return;
+    const activeBtn = scrollRef.current.querySelector<HTMLElement>('[aria-current="true"]');
+    activeBtn?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
+  }, [activeCategory, compact]);
+
+  useEffect(() => {
     if (compact) {
       setIsOverflowing(false);
       return;

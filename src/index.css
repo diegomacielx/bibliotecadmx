@@ -6758,3 +6758,43 @@ html[data-theme="light"] .cinema-backdrop::before {
   margin: 0;
   border-radius: 1rem;
 }
+
+.student-settings__nickname-label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--dmx-fg-subtle);
+  margin-bottom: 0.375rem;
+}
+
+.student-settings__nickname-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.student-settings__nickname-input {
+  flex: 1;
+  min-width: 0;
+  border-radius: 0.75rem;
+  border: 1px solid var(--dmx-border, rgba(255, 255, 255, 0.12));
+  background: var(--dmx-canvas-elevated, rgba(255, 255, 255, 0.04));
+  color: var(--dmx-fg);
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.student-settings__nickname-save {
+  flex-shrink: 0;
+  border-radius: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--dmx-accent, #dc2626);
+  color: #fff;
+}
+
+.student-settings__nickname-error {
+  margin: 0.375rem 0 0;
+  font-size: 0.75rem;
+  color: #f87171;
+}

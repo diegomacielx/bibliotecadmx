@@ -1,10 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { GlassToggle } from './GlassToggle';
 import { Icon } from './Icon';
 import type { ExerciseSortOrder } from '../lib/utils';
 import { useTouchLayout } from '../hooks/useMediaQuery';
+import { normalizeNickname, validateNickname } from '../lib/nickname';
 
 interface StudentSettingsPanelProps {
   open: boolean;
@@ -23,8 +24,13 @@ interface StudentSettingsPanelProps {
   onToggleCardCoverParallax: (enabled: boolean) => void;
   videoLoop: boolean;
   onToggleVideoLoop: (enabled: boolean) => void;
+  videoAutoplay: boolean;
+  onToggleVideoAutoplay: (enabled: boolean) => void;
   compareLoopSync: boolean;
   onToggleCompareLoopSync: (enabled: boolean) => void;
+  nickname?: string;
+  displayNickname?: string;
+  onUpdateNickname?: (nickname: string) => Promise<void>;
 }
 
 export function StudentSettingsPanel({
@@ -44,11 +50,26 @@ export function StudentSettingsPanel({
   onToggleCardCoverParallax,
   videoLoop,
   onToggleVideoLoop,
+  videoAutoplay,
+  onToggleVideoAutoplay,
   compareLoopSync,
   onToggleCompareLoopSync,
+  nickname = '',
+  displayNickname = '',
+  onUpdateNickname,
 }: StudentSettingsPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const touchLayout = useTouchLayout();
+  const [nicknameDraft, setNicknameDraft] = useState(nickname || displayNickname);
+  const [nicknameSaving, setNicknameSaving] = useState(false);
+  const [nicknameError, setNicknameError] = useState<string | null>(null);
+  const [nicknameSaved, setNicknameSaved] = useState(false);
+  const nicknameDirtyRef = useRef(false);
+
+  useEffect(() => {
+    if (nicknameDirtyRef.current) return;
+    setNicknameDraft(nickname || displayNickname);
+  }, [nickname, displayNickname, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -100,8 +121,8 @@ export function StudentSettingsPanel({
                   Configurações
                 </h2>
                 <p className="usage-guide__subtitle">
-                  Ordenação, busca, catálogo, recentes e reprodução. Suas escolhas ficam salvas neste
-                  navegador.
+                  Ordenação, busca, catálogo, recentes e reprodução. Preferências de vídeo ficam
+                  salvas na sua conta.
                 </p>
               </div>
               <button
@@ -115,6 +136,67 @@ export function StudentSettingsPanel({
             </header>
 
             <div className="usage-guide__body student-settings__body">
+              {touchLayout && onUpdateNickname && (
+                <section className="student-settings__section">
+                  <h3 className="student-settings__section-title">Perfil</h3>
+                  <label className="student-settings__nickname-label" htmlFor="settings-nickname">
+                    Apelido
+                  </label>
+                  <div className="student-settings__nickname-row">
+                    <input
+                      id="settings-nickname"
+                      type="text"
+                      className="student-settings__nickname-input"
+                      value={nicknameDraft}
+                      maxLength={24}
+                      onChange={(e) => {
+                        nicknameDirtyRef.current = true;
+                        setNicknameDraft(e.target.value);
+                        setNicknameSaved(false);
+                        setNicknameError(null);
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="student-settings__nickname-save"
+                      disabled={nicknameSaving}
+                      onClick={() => {
+                        void (async () => {
+                          const validationError = validateNickname(nicknameDraft);
+                          if (validationError) {
+                            setNicknameError(validationError);
+                            setNicknameSaved(false);
+                            return;
+                          }
+                          const normalized = normalizeNickname(nicknameDraft);
+                          if (normalized === nickname) {
+                            setNicknameError(null);
+                            setNicknameSaved(true);
+                            nicknameDirtyRef.current = false;
+                            return;
+                          }
+                          setNicknameSaving(true);
+                          setNicknameError(null);
+                          setNicknameSaved(false);
+                          try {
+                            await onUpdateNickname(normalized);
+                            setNicknameSaved(true);
+                            nicknameDirtyRef.current = false;
+                          } catch {
+                            setNicknameError('Não foi possível salvar o apelido.');
+                          } finally {
+                            setNicknameSaving(false);
+                          }
+                        })();
+                      }}
+                    >
+                      {nicknameSaving ? '…' : nicknameSaved ? '✓' : 'Salvar'}
+                    </button>
+                  </div>
+                  {nicknameError && <p className="student-settings__nickname-error">{nicknameError}</p>}
+                </section>
+              )}
+
               <section className="student-settings__section">
                 <h3 className="student-settings__section-title">Busca e catálogo</h3>
                 <div className="student-settings__toggles">
@@ -196,6 +278,16 @@ export function StudentSettingsPanel({
               <section className="student-settings__section">
                 <h3 className="student-settings__section-title">Reprodução</h3>
                 <div className="student-settings__toggles">
+                  <GlassToggle
+                    label="Reproduzir automaticamente"
+                    hint={
+                      videoAutoplay
+                        ? 'Vídeos iniciam ao abrir e ao trocar no feed.'
+                        : 'Desligado: toque na tela para iniciar a reprodução.'
+                    }
+                    checked={videoAutoplay}
+                    onChange={onToggleVideoAutoplay}
+                  />
                   <GlassToggle
                     label="Repetir vídeo em loop"
                     hint={

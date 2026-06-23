@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import type { User } from '../../lib/firebase';
 import type { UserProfile } from '../../types';
 import { Icon } from '../Icon';
@@ -34,6 +34,7 @@ export function MobileAccountScreen({
   });
 
   const [nicknameDraft, setNicknameDraft] = useState(userProfile?.nickname || displayNickname);
+  const nicknameDirtyRef = useRef(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -43,6 +44,7 @@ export function MobileAccountScreen({
   const initial = (displayNickname.trim()[0] || 'D').toUpperCase();
 
   useEffect(() => {
+    if (nicknameDirtyRef.current) return;
     setNicknameDraft(userProfile?.nickname || displayNickname);
   }, [userProfile?.nickname, displayNickname]);
 
@@ -66,6 +68,7 @@ export function MobileAccountScreen({
     setSaved(false);
     try {
       await onUpdateNickname(normalized);
+      nicknameDirtyRef.current = false;
       setSaved(true);
     } catch {
       setError('Não foi possível salvar o apelido. Tente novamente.');
@@ -114,12 +117,13 @@ export function MobileAccountScreen({
             name="nickname"
             value={nicknameDraft}
             onChange={(e) => {
+              nicknameDirtyRef.current = true;
               setNicknameDraft(e.target.value);
               setSaved(false);
               setError(null);
             }}
             className="mobile-account-screen__input"
-            maxLength={32}
+            maxLength={24}
             aria-label="Apelido"
           />
           <button

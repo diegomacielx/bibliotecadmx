@@ -15,7 +15,7 @@ export function getCoverPlaceholderUrl(ex: {
 
   const ytId = getYouTubeId(ex.youtubeUrl);
   if (ytId) {
-    return `https://i.ytimg.com/vi/${ytId}/maxresdefault.webp`;
+    return `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
   }
 
   if (ex.firestoreId) {

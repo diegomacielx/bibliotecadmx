@@ -65,6 +65,8 @@ interface YouTubePlayerProps {
   largeSurface?: boolean;
   onEnded?: () => void;
   onPlayStateChange?: (playing: boolean) => void;
+  /** Estado bruto YT.PlayerState — útil para auto-resume no feed */
+  onPlayerState?: (state: number) => void;
   /** Primeiro frame visível (PLAYING ou BUFFERING) — esconde splash do YouTube */
   onFrameVisible?: () => void;
   onReady?: () => void;
@@ -85,6 +87,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
     largeSurface = false,
     onEnded,
     onPlayStateChange,
+    onPlayerState,
     onFrameVisible,
     onReady,
     deferAutoplay = false,
@@ -99,6 +102,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
   const onReadyRef = useRef(onReady);
   const onEndedRef = useRef(onEnded);
   const onPlayStateChangeRef = useRef(onPlayStateChange);
+  const onPlayerStateRef = useRef(onPlayerState);
   const onFrameVisibleRef = useRef(onFrameVisible);
   const domId = useId().replace(/:/g, '');
 
@@ -106,8 +110,9 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
     onReadyRef.current = onReady;
     onEndedRef.current = onEnded;
     onPlayStateChangeRef.current = onPlayStateChange;
+    onPlayerStateRef.current = onPlayerState;
     onFrameVisibleRef.current = onFrameVisible;
-  }, [onReady, onEnded, onPlayStateChange, onFrameVisible]);
+  }, [onReady, onEnded, onPlayStateChange, onPlayerState, onFrameVisible]);
 
   useImperativeHandle(ref, () => ({
     playVideo: () => {
@@ -254,10 +259,23 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
         },
         events: {
           onReady: (event) => {
+            try {
+              const iframe = event.target.getIframe?.() as HTMLIFrameElement | undefined;
+              if (iframe && !showControls) {
+                iframe.setAttribute(
+                  'sandbox',
+                  'allow-scripts allow-same-origin allow-presentation'
+                );
+                iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+              }
+            } catch {
+              /* ignore */
+            }
             if (autoplay && !deferAutoplay) event.target.playVideo();
             onReadyRef.current?.();
           },
           onStateChange: (event) => {
+            onPlayerStateRef.current?.(event.data);
             if (event.data === 0) onEndedRef.current?.();
             if (event.data === 1 || event.data === 3) {
               onFrameVisibleRef.current?.();

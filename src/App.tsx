@@ -98,7 +98,7 @@ import { isFeatureEnabled } from './lib/mobileCapabilities';
 import { primeCoversFromExerciseList, prefetchExerciseCovers, resolveExerciseCoverUrl } from './lib/coverResolver';
 import { scheduleKnownCoversWarmup } from './lib/coverImageCache';
 import { getGridPrefetchPeers } from './lib/exercisePrefetch';
-import { normalizeNickname, validateNickname } from './lib/nickname';
+import { normalizeNickname, validateNickname, resolveDisplayNickname } from './lib/nickname';
 import { sendTransactionalEmail } from './lib/email';
 import { requestPasswordReset, requestEmailVerification, type AuthEmailResult } from './lib/authEmail';
 import {
@@ -149,6 +149,9 @@ import {
   isAuthorizedEmailActive,
   syncUserAccess,
 } from './lib/accessControl';
+import { lockAppUrl } from './lib/mobileSessionGuard';
+
+const GOOGLE_REDIRECT_PENDING_KEY = 'dmx-google-redirect-pending';
 
 const AdminPanel = lazy(() =>
   import('./components/AdminPanel').then((m) => ({ default: m.AdminPanel }))
@@ -192,7 +195,11 @@ export default function App() {
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
-  const [googleRedirectPending, setGoogleRedirectPending] = useState(true);
+  const [googleRedirectPending, setGoogleRedirectPending] = useState(
+    () =>
+      typeof sessionStorage !== 'undefined' &&
+      sessionStorage.getItem(GOOGLE_REDIRECT_PENDING_KEY) === '1'
+  );
   const [googleLinkPending, setGoogleLinkPending] = useState<GoogleLinkPending | null>(() =>
     loadPendingGoogleLink()
   );
@@ -263,6 +270,7 @@ export default function App() {
   const [lastReadAt, setLastReadAt] = useState<string | null>(null);
   const [clearedAt, setClearedAt] = useState<string | null>(null);
   const [videoLoop, setVideoLoop] = useState(false);
+  const [videoAutoplay, setVideoAutoplay] = useState(true);
   const [compareLoopSync, setCompareLoopSync] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [sendNotification, setSendNotification] = useState(true);
@@ -496,7 +504,10 @@ export default function App() {
         showToast(getAuthErrorMessage(getAuthErrorCode(err), 'Erro ao entrar com Google.'), 'error');
       })
       .finally(() => {
-        if (active) setGoogleRedirectPending(false);
+        if (active) {
+          sessionStorage.removeItem(GOOGLE_REDIRECT_PENDING_KEY);
+          setGoogleRedirectPending(false);
+        }
       });
     return () => {
       active = false;
@@ -837,17 +848,13 @@ export default function App() {
     const unsubPlayback = onSnapshot(playbackDocRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        const loopEnabled = data.videoLoop === true;
-        setVideoLoop(loopEnabled);
-        setCompareLoopSync(loopEnabled && data.compareLoopSync === true);
+        setVideoLoop(data.videoLoop === true);
+        setVideoAutoplay(data.videoAutoplay !== false);
+        setCompareLoopSync(data.videoLoop === true && data.compareLoopSync === true);
       } else {
         setVideoLoop(false);
+        setVideoAutoplay(true);
         setCompareLoopSync(false);
-        void setDoc(
-          playbackDocRef,
-          { videoLoop: false, compareLoopSync: false },
-          { merge: true }
-        );
       }
     });
 
@@ -1366,6 +1373,7 @@ export default function App() {
       );
 
       if (isMobileUi()) {
+        sessionStorage.setItem(GOOGLE_REDIRECT_PENDING_KEY, '1');
         await fb.signInWithRedirect(auth, fb.googleProvider);
         return;
       }
@@ -1394,11 +1402,29 @@ export default function App() {
         const playbackDocRef = fbDoc(db, ...getUserPlaybackSettingsPath(user.uid));
         await setDoc(
           playbackDocRef,
-          enabled ? { videoLoop: true } : { videoLoop: false, compareLoopSync: false },
+          enabled
+            ? { videoLoop: true }
+            : { videoLoop: false, compareLoopSync: false },
           { merge: true }
         );
       } catch {
         setVideoLoop(!enabled);
+        if (enabled) setCompareLoopSync(false);
+        showToast('Não foi possível salvar a preferência de reprodução.', 'error');
+      }
+    },
+    [user, showToast]
+  );
+
+  const handleUpdateVideoAutoplay = useCallback(
+    async (enabled: boolean) => {
+      if (!user) return;
+      setVideoAutoplay(enabled);
+      try {
+        const playbackDocRef = fbDoc(db, ...getUserPlaybackSettingsPath(user.uid));
+        await setDoc(playbackDocRef, { videoAutoplay: enabled }, { merge: true });
+      } catch {
+        setVideoAutoplay(!enabled);
         showToast('Não foi possível salvar a preferência de reprodução.', 'error');
       }
     },
@@ -1439,6 +1465,7 @@ export default function App() {
   const handleUpdateNickname = useCallback(
     async (nickname: string) => {
       if (!user) throw new Error('Usuário não autenticado');
+      setUserProfile((prev) => (prev ? { ...prev, nickname } : prev));
       const userProfileRef = fbDoc(db, ...getUserProfilePath(user.uid));
       await updateDoc(userProfileRef, { nickname });
     },
@@ -1542,6 +1569,21 @@ export default function App() {
       document.documentElement.removeAttribute('data-mobile-playback-active');
     }
   }, [useMobileShell, activeVideo]);
+
+  useEffect(() => {
+    if (!activeVideo) return;
+    lockAppUrl();
+  }, [activeVideo]);
+
+  useEffect(() => {
+    const onRestore = () => {
+      lockAppUrl();
+      const current = auth.currentUser;
+      if (current) void current.getIdToken(true).catch(() => {});
+    };
+    window.addEventListener('dmx:bfcache-restore', onRestore);
+    return () => window.removeEventListener('dmx:bfcache-restore', onRestore);
+  }, []);
 
   useEffect(() => {
     if (!useMobileShell && !useMobileAdminShell) return;
@@ -1755,7 +1797,6 @@ export default function App() {
         }
       } else if (tab === 'workout') {
         setSearchTerm('');
-        setSelectionMode(false);
         if (activeCategory === 'Favoritos') {
           setActiveCategory(categoryBeforeFavoritesTabRef.current || 'Todos');
         }
@@ -2324,7 +2365,7 @@ export default function App() {
   useEffect(() => {
     if (loading || publicExercises.length === 0) return;
 
-    const viewportLimit = isMobileUi() ? 6 : 28;
+    const viewportLimit = isMobileUi() ? 12 : 28;
     const viewportItems = gridExercises.slice(0, viewportLimit).map((ex) => ({
       firestoreId: ex.firestoreId,
       id: ex.id,
@@ -2379,7 +2420,7 @@ export default function App() {
 
     if (isMobileUi()) {
       prefetchExerciseCovers(viewportItems, 'critical');
-      primeCoversFromExerciseList(coverSources.slice(0, 10), { heroFirestoreId: heroId });
+      primeCoversFromExerciseList(coverSources.slice(0, 28), { heroFirestoreId: heroId });
       return;
     }
 
@@ -2500,6 +2541,7 @@ export default function App() {
             isAdmin={showAdminUI}
             videoLoop={videoLoop}
             compareLoopSync={compareLoopSync}
+            videoAutoplay={videoAutoplay}
             spotlightExerciseId={spotlightExerciseId}
           />
           </Suspense>
@@ -2524,6 +2566,8 @@ export default function App() {
         onResendVerification={handleResendVerification}
         videoLoop={videoLoop}
         onToggleVideoLoop={(enabled) => void handleUpdateVideoLoop(enabled)}
+        videoAutoplay={videoAutoplay}
+        onToggleVideoAutoplay={(enabled) => void handleUpdateVideoAutoplay(enabled)}
         compareLoopSync={compareLoopSync}
         onToggleCompareLoopSync={(enabled) => void handleUpdateCompareLoopSync(enabled)}
         exerciseSortOrder={exerciseSortOrder}
@@ -2658,8 +2702,17 @@ export default function App() {
             onToggleCardCoverParallax={setCardCoverParallax}
             videoLoop={videoLoop}
             onToggleVideoLoop={(enabled) => void handleUpdateVideoLoop(enabled)}
+            videoAutoplay={videoAutoplay}
+            onToggleVideoAutoplay={(enabled) => void handleUpdateVideoAutoplay(enabled)}
             compareLoopSync={compareLoopSync}
             onToggleCompareLoopSync={(enabled) => void handleUpdateCompareLoopSync(enabled)}
+            nickname={userProfile?.nickname ?? ''}
+            displayNickname={resolveDisplayNickname({
+              nickname: userProfile?.nickname,
+              name: userProfile?.name,
+              email: user?.email,
+            })}
+            onUpdateNickname={handleUpdateNickname}
           />
           {useMobileShell && !showAdminUI && (
             <UsageGuidePanel
@@ -2785,6 +2838,7 @@ export default function App() {
             onBrandPress={handleMobileBrandPress}
             favoritesCount={favorites.size}
             workoutCount={playlist.length}
+            homeSelectionCount={selectionMode ? playlist.length : 0}
             playbackElevated={!!activeVideo}
           >
             {mobileTab === 'account' ? (
@@ -2808,7 +2862,7 @@ export default function App() {
                 onRemoveFromPlaylist={togglePlaylistItem}
               />
             ) : (
-              <div key={pageKey}>
+              <>
                 {mobileTab === 'home' && !searchTerm.trim() && (
                   <CategoryNav
                     categories={MOBILE_CATEGORY_NAV}
@@ -2818,6 +2872,7 @@ export default function App() {
                     compact
                   />
                 )}
+                <div key={pageKey}>
                 {mobileTab === 'favorites' && (
                   <header className="mobile-tab-heading cinema-container mb-fluid-md">
                     <h2 className="mobile-tab-heading__title">Favoritos</h2>
@@ -2904,6 +2959,7 @@ export default function App() {
                   />
                 )}
               </div>
+              </>
             )}
           </MobileShell>
         ) : isMobileLayout ? (
@@ -3092,15 +3148,22 @@ export default function App() {
         )}
       </main>
 
-      {!useMobileShell && (
       <PlaylistBar
         playlist={playlist}
         selectionMode={selectionMode}
         onToggleSelectionMode={() => setSelectionMode((v) => !v)}
         onPlay={playPlaylist}
         onClear={() => setPlaylistOrder([])}
+        mobileShellMode={useMobileShell}
+        onFinishSelection={
+          useMobileShell
+            ? () => {
+                setSelectionMode(false);
+                setMobileTab('workout');
+              }
+            : undefined
+        }
       />
-      )}
 
       {showAdminPanel && showAdminUI && (
         <Suspense fallback={null}>

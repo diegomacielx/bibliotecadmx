@@ -13,6 +13,7 @@ import { useTouchLayout } from '../hooks/useMediaQuery';
 import { useTheme } from '../hooks/useTheme';
 import { useExerciseCover } from '../hooks/useExerciseCover';
 import { primeVideoPlaybackIntent, primeYouTubePlayerApi } from '../lib/videoPlaybackPrime';
+import { lockAppUrl } from '../lib/mobileSessionGuard';
 import {
   isMobileAudioUnlocked,
   shouldAutoplayWithSound,
@@ -59,6 +60,7 @@ interface CinemaLightboxProps {
   onToggleFavorite?: () => void;
   isAdmin?: boolean;
   videoLoop?: boolean;
+  videoAutoplay?: boolean;
   compareLoopSync?: boolean;
   /** Exercício aberto pelo destaque do dia — único caso com opção de som */
   spotlightExerciseId?: string | null;
@@ -283,6 +285,9 @@ function MobileCoverPlayer({
   isHandoffTarget = false,
   entrySeekAt = 0,
   allowSoundControl = false,
+  videoLoop = false,
+  videoAutoplay = true,
+  onVideoEnded,
   registerActivePlayer,
   registerSlidePlayer,
 }: {
@@ -297,6 +302,9 @@ function MobileCoverPlayer({
   isHandoffTarget?: boolean;
   entrySeekAt?: number;
   allowSoundControl?: boolean;
+  videoLoop?: boolean;
+  videoAutoplay?: boolean;
+  onVideoEnded?: () => void;
   registerActivePlayer?: (player: YouTubePlayerHandle | null) => void;
   registerSlidePlayer?: (player: YouTubePlayerHandle | null) => void;
 }) {
@@ -315,6 +323,9 @@ function MobileCoverPlayer({
   const isPlaybackLeaderRef = useRef(isPlaybackLeader);
   const isHandoffTargetRef = useRef(isHandoffTarget);
   const entrySeekAppliedRef = useRef(false);
+  const videoLoopRef = useRef(videoLoop);
+  const videoAutoplayRef = useRef(videoAutoplay);
+  const onVideoEndedRef = useRef(onVideoEnded);
   const { imgSrc, coverMissing, handleLoad, handleError } = useExerciseCover(ex, { priority: 'high' });
   const isVertical =
     resolveVideoOrientation(ex.youtubeUrl, {
@@ -358,7 +369,7 @@ function MobileCoverPlayer({
     // previewing 'next'/'prev' slide becomes 'current', it just keeps playing
     // from wherever it already was instead of resetting to the first frame.
     if (reelsRole === 'current') {
-      if (!isPlaying) player.playVideo();
+      if (videoAutoplayRef.current && !isPlaying) player.playVideo();
       if (isPlaybackLeader) syncActiveRegistration();
       return;
     }
@@ -374,7 +385,10 @@ function MobileCoverPlayer({
     // resources. Avoid needless re-seeks that cause flicker.
     const seekAt = seekForRole();
     if (bufferPrimedRef.current) {
-      if (isPlaying) player.pauseVideo();
+      const snapping =
+        document.documentElement.hasAttribute('data-reels-feed-snapping') ||
+        document.documentElement.hasAttribute('data-reels-feed-scrolling');
+      if (isPlaying && !snapping) player.pauseVideo();
       const t = player.getCurrentTime();
       if (Math.abs(t - seekAt) > 0.3) player.seekTo(seekAt);
       return;
@@ -400,7 +414,10 @@ function MobileCoverPlayer({
     feedScrollActiveRef.current = feedScrollActive;
     isPlaybackLeaderRef.current = isPlaybackLeader;
     isHandoffTargetRef.current = isHandoffTarget;
-  }, [feedScrollActive, isPlaybackLeader, isHandoffTarget]);
+    videoLoopRef.current = videoLoop;
+    videoAutoplayRef.current = videoAutoplay;
+    onVideoEndedRef.current = onVideoEnded;
+  }, [feedScrollActive, isPlaybackLeader, isHandoffTarget, videoLoop, videoAutoplay, onVideoEnded]);
 
   useEffect(() => {
     if (!inReelsFeed) {
@@ -471,6 +488,42 @@ function MobileCoverPlayer({
     setIsPlaying(true);
   };
 
+  const handlePlayerState = useCallback(
+    (state: number) => {
+      if (!inReelsFeed) return;
+      if (state === 0 && reelsRoleRef.current === 'current') {
+        if (videoLoopRef.current) {
+          queueMicrotask(() => {
+            playerRef.current?.seekTo(0);
+            playerRef.current?.playVideo();
+          });
+          return;
+        }
+        onVideoEndedRef.current?.();
+        return;
+      }
+      if (state !== 2) return;
+      const scrolling =
+        feedScrollActiveRef.current ||
+        document.documentElement.hasAttribute('data-reels-feed-scrolling') ||
+        document.documentElement.hasAttribute('data-reels-feed-snapping');
+      const isCurrent = reelsRoleRef.current === 'current';
+      if (isCurrent && (scrolling || isHandoffTargetRef.current)) {
+        queueMicrotask(() => playerRef.current?.playVideo());
+      }
+    },
+    [inReelsFeed]
+  );
+
+  const handleVideoEnded = useCallback(() => {
+    if (videoLoopRef.current) {
+      playerRef.current?.seekTo(0);
+      playerRef.current?.playVideo();
+      return;
+    }
+    onVideoEndedRef.current?.();
+  }, []);
+
   const handlePlayerReady = () => {
     const player = playerRef.current;
     if (inReelsFeed) {
@@ -483,7 +536,9 @@ function MobileCoverPlayer({
       return;
     }
 
-    player?.playVideo();
+    if (videoAutoplayRef.current) {
+      player?.playVideo();
+    }
     if (allowSoundControl && isMobileAudioUnlocked()) {
       player?.unMute();
       setAudioUnlocked(true);
@@ -539,6 +594,8 @@ function MobileCoverPlayer({
             largeSurface
             mobileVertical={isVertical}
             onReady={handlePlayerReady}
+            onPlayerState={inReelsFeed ? handlePlayerState : undefined}
+            onEnded={inReelsFeed ? undefined : handleVideoEnded}
             onFrameVisible={() => {
               setFrameReady(true);
               const isAdjacent = reelsRoleRef.current != null && reelsRoleRef.current !== 'current';
@@ -649,6 +706,9 @@ function MobileReelsFeed({
   registerActivePlayer,
   spotlightExerciseId,
   onVisibleExerciseChange,
+  videoLoop = false,
+  videoAutoplay = true,
+  onVideoEnded,
 }: {
   navList: Exercise[];
   navIndex: number;
@@ -659,7 +719,14 @@ function MobileReelsFeed({
   registerActivePlayer?: (player: YouTubePlayerHandle | null) => void;
   spotlightExerciseId?: string | null;
   onVisibleExerciseChange?: (exercise: Exercise) => void;
+  videoLoop?: boolean;
+  videoAutoplay?: boolean;
+  onVideoEnded?: () => void;
 }) {
+  const videoAutoplayRef = useRef(videoAutoplay);
+  useEffect(() => {
+    videoAutoplayRef.current = videoAutoplay;
+  }, [videoAutoplay]);
   const containerRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const gestureRef = useRef<HTMLDivElement>(null);
@@ -676,8 +743,8 @@ function MobileReelsFeed({
   const snappingBackRef = useRef(false);
   const snapTimerRef = useRef(0);
   const navSettleTimerRef = useRef(0);
+  const scrollGestureRef = useRef(false);
   const gestureActiveRef = useRef(false);
-  const playbackKindRef = useRef<ReelsSlideRole>('current');
   const gestureApiRef = useRef({
     slideHeight: 0,
     hasPrev: false,
@@ -1023,8 +1090,12 @@ function MobileReelsFeed({
   }, [snapBackAnimated]);
 
   useLayoutEffect(() => {
-    playbackKindRef.current = playbackKind;
-  }, [playbackKind]);
+    if (isSnapping) {
+      document.documentElement.setAttribute('data-reels-feed-snapping', 'true');
+    } else {
+      document.documentElement.removeAttribute('data-reels-feed-snapping');
+    }
+  }, [isSnapping]);
 
   useLayoutEffect(() => {
     gestureApiRef.current = {
@@ -1098,6 +1169,24 @@ function MobileReelsFeed({
     if (next) primeVideoPlaybackIntent(next, { force: true });
   }, [navIndex, navList]);
 
+  useEffect(() => {
+    lockAppUrl();
+    const onRestore = () => {
+      lockAppUrl();
+      const currentEx = navList[navIndex];
+      const player = currentEx ? slidePlayersRef.current.get(currentEx.firestoreId) : null;
+      if (!player) return;
+      try {
+        const state = player.getPlayerState();
+        if (state !== 1 && state !== 3) player.playVideo();
+      } catch {
+        /* ignore */
+      }
+    };
+    window.addEventListener('dmx:bfcache-restore', onRestore);
+    return () => window.removeEventListener('dmx:bfcache-restore', onRestore);
+  }, [navIndex, navList]);
+
   // Pausa todos os players quando a aba sai de foco (economia de memória/CPU,
   // evita crashes no Safari/Brave) e retoma o vídeo atual ao voltar — sem exigir
   // que o usuário toque na tela.
@@ -1140,6 +1229,7 @@ function MobileReelsFeed({
       touchLastRef.current = { y: e.clientY, t: performance.now() };
       touchVelRef.current = 0;
       totalMovementRef.current = 0;
+      scrollGestureRef.current = false;
       activePointerIdRef.current = e.pointerId;
       gestureActiveRef.current = true;
 
@@ -1152,11 +1242,13 @@ function MobileReelsFeed({
 
       // Start all slide players within the gesture (iOS requires user-gesture
       // context for programmatic playVideo even when muted).
-      for (const player of slidePlayersRef.current.values()) {
-        try {
-          const state = player.getPlayerState();
-          if (state !== 1 && state !== 3) player.playVideo();
-        } catch { /* ignore */ }
+      if (videoAutoplayRef.current) {
+        for (const player of slidePlayersRef.current.values()) {
+          try {
+            const state = player.getPlayerState();
+            if (state !== 1 && state !== 3) player.playVideo();
+          } catch { /* ignore */ }
+        }
       }
 
       layer.setPointerCapture(e.pointerId);
@@ -1181,6 +1273,7 @@ function MobileReelsFeed({
 
       const dy = touchStartYRef.current - e.clientY;
       totalMovementRef.current = Math.max(totalMovementRef.current, Math.abs(dy));
+      if (totalMovementRef.current >= 12) scrollGestureRef.current = true;
       gestureApiRef.current.setDrag(dragStartOffsetRef.current + dy);
     };
 
@@ -1190,7 +1283,6 @@ function MobileReelsFeed({
       if (!gestureActiveRef.current) return;
 
       if (totalMovementRef.current < 12) {
-        leaderPlayerRef.current?.togglePlay();
         gestureActiveRef.current = false;
         gestureApiRef.current.setGestureActive(false);
         gestureApiRef.current.setFeedScrolling(false);
@@ -1264,6 +1356,9 @@ function MobileReelsFeed({
                   isHandoffTarget={isHandoffTarget}
                   entrySeekAt={isActive ? entrySeekAt : 0}
                   allowSoundControl={allowSoundControl}
+                  videoLoop={videoLoop}
+                  videoAutoplay={videoAutoplay}
+                  onVideoEnded={onVideoEnded}
                   registerActivePlayer={isPlaybackLeader ? registerCurrentPlayer : undefined}
                   registerSlidePlayer={(player) => registerSlidePlayer(slide.ex.firestoreId, player)}
                 />
@@ -1306,6 +1401,9 @@ function MobileExerciseSheet({
   navPrevDisabled,
   navNextDisabled,
   spotlightExerciseId,
+  videoLoop = false,
+  videoAutoplay = true,
+  onVideoEnded,
 }: {
   ex: Exercise;
   ytId: string | null;
@@ -1327,6 +1425,9 @@ function MobileExerciseSheet({
   navPrevDisabled: boolean;
   navNextDisabled: boolean;
   spotlightExerciseId?: string | null;
+  videoLoop?: boolean;
+  videoAutoplay?: boolean;
+  onVideoEnded?: () => void;
 }) {
   const [musclesOpen, setMusclesOpen] = useState(false);
   const [speedActive, setSpeedActive] = useState(false);
@@ -1412,6 +1513,9 @@ function MobileExerciseSheet({
             navNextDisabled={navNextDisabled}
             registerActivePlayer={registerActivePlayer}
             spotlightExerciseId={spotlightExerciseId}
+            videoLoop={videoLoop}
+            videoAutoplay={videoAutoplay}
+            onVideoEnded={onVideoEnded}
             onVisibleExerciseChange={setDisplayEx}
           />
         ) : ytId ? (
@@ -1420,6 +1524,9 @@ function MobileExerciseSheet({
             ytId={ytId}
             hero
             allowSoundControl={allowSoundControl}
+            videoLoop={videoLoop}
+            videoAutoplay={videoAutoplay}
+            onVideoEnded={onVideoEnded}
             registerActivePlayer={registerActivePlayer}
           />
         ) : (
@@ -1539,6 +1646,7 @@ function ComparePanel({
   onPlayerReady,
   onEnded,
   mobileLayout = false,
+  videoLoop = false,
 }: {
   ex: Exercise;
   label: string;
@@ -1547,6 +1655,7 @@ function ComparePanel({
   onPlayerReady: () => void;
   onEnded?: () => void;
   mobileLayout?: boolean;
+  videoLoop?: boolean;
 }) {
   const [readyToken, setReadyToken] = useState(0);
   const ytId = getYouTubeId(ex.youtubeUrl);
@@ -1584,7 +1693,19 @@ function ComparePanel({
       >
         {ytId ? (
           mobileLayout ? (
-            <MobileCoverPlayer ex={ex} ytId={ytId} />
+            <MobileCoverPlayer
+              ex={ex}
+              ytId={ytId}
+              videoLoop={videoLoop}
+              onVideoEnded={onEnded}
+              registerActivePlayer={(player) => {
+                (playerRef as React.MutableRefObject<YouTubePlayerHandle | null>).current = player;
+                if (player) {
+                  setReadyToken((t) => t + 1);
+                  onPlayerReady();
+                }
+              }}
+            />
           ) : (
             <div
               className={`absolute inset-0 ${
@@ -1652,6 +1773,7 @@ export function CinemaLightbox({
   onToggleFavorite,
   isAdmin = false,
   videoLoop = false,
+  videoAutoplay = true,
   compareLoopSync = false,
   spotlightExerciseId = null,
 }: CinemaLightboxProps) {
@@ -1671,11 +1793,16 @@ export function CinemaLightbox({
   const [showReplay, setShowReplay] = useState(false);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoLoopRef = useRef(videoLoop);
+  const videoAutoplayRef = useRef(videoAutoplay);
   const compareLoopSyncRef = useRef(compareLoopSync);
 
   useEffect(() => {
     videoLoopRef.current = videoLoop;
   }, [videoLoop]);
+
+  useEffect(() => {
+    videoAutoplayRef.current = videoAutoplay;
+  }, [videoAutoplay]);
 
   useEffect(() => {
     compareLoopSyncRef.current = compareLoopSync;
@@ -2035,6 +2162,9 @@ export function CinemaLightbox({
             navPrevDisabled={effectiveNavIndex <= 0}
             navNextDisabled={effectiveNavIndex >= effectiveNavList.length - 1}
             spotlightExerciseId={spotlightExerciseId}
+            videoLoop={videoLoop}
+            videoAutoplay={videoAutoplay}
+            onVideoEnded={handlePlayerEnded}
           />
         ) : isCompare && compareEx ? (
           <div
@@ -2052,6 +2182,7 @@ export function CinemaLightbox({
               onPlayerReady={handleComparePrimaryReady}
               onEnded={() => handleComparePlayerEnded('primary')}
               mobileLayout={isMobileLayout}
+              videoLoop={videoLoop}
             />
             <ComparePanel
               ex={compareEx}
@@ -2061,6 +2192,7 @@ export function CinemaLightbox({
               onPlayerReady={handleCompareSecondaryReady}
               onEnded={() => handleComparePlayerEnded('secondary')}
               mobileLayout={isMobileLayout}
+              videoLoop={videoLoop}
             />
           </div>
         ) : (

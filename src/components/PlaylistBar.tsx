@@ -9,6 +9,8 @@ interface PlaylistBarProps {
   onPlay: () => void;
   onClear: () => void;
   mobileShellMode?: boolean;
+  /** Mobile: sair do modo seleção e ir para o treino */
+  onFinishSelection?: () => void;
 }
 
 export function PlaylistBar({
@@ -18,6 +20,7 @@ export function PlaylistBar({
   onPlay,
   onClear,
   mobileShellMode = false,
+  onFinishSelection,
 }: PlaylistBarProps) {
   const count = playlist.length;
   const barVisible = selectionMode || count > 0;
@@ -54,12 +57,23 @@ export function PlaylistBar({
                   </p>
                   <p className="text-[10px] text-zinc-500 truncate">
                     {count === 0
-                      ? 'Clique nos cards na ordem da playlist'
+                      ? mobileShellMode
+                        ? 'Toque nos exercícios para adicionar ao treino'
+                        : 'Clique nos cards na ordem da playlist'
                       : `Ordem de reprodução: ${count} exercício${count !== 1 ? 's' : ''}`}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                {selectionMode && count > 0 && onFinishSelection && (
+                  <button
+                    type="button"
+                    className="playlist-bar-btn playlist-bar-btn--primary"
+                    onClick={onFinishSelection}
+                  >
+                    Concluir
+                  </button>
+                )}
                 {count > 0 && (
                   <>
                     <button type="button" className="playlist-bar-btn playlist-bar-btn--ghost" onClick={onClear}>

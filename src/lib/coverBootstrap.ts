@@ -3,8 +3,10 @@ import { isOfficialGitHubCoverUrl } from './coverSource';
 import { setSessionCoverUrl } from './coverImageStore';
 import { ensureCoverCached } from './coverImageCache';
 import { parseExerciseIdFromGitHubCoverUrl } from './utils';
+import { isMobileUi } from '../hooks/useMediaQuery';
 
 const BOOTSTRAP_IMMEDIATE = 72;
+const BOOTSTRAP_MOBILE = 16;
 
 function sortCoverEntriesByExerciseIdAsc<T extends { url: string }>(entries: T[]): T[] {
   return [...entries].sort((a, b) => {
@@ -21,7 +23,8 @@ function sortCoverEntriesByExerciseIdAsc<T extends { url: string }>(entries: T[]
 export function bootstrapCoverCache(limit = BOOTSTRAP_IMMEDIATE): void {
   if (typeof window === 'undefined') return;
 
-  const entries = sortCoverEntriesByExerciseIdAsc(getAllCachedCoverEntries()).slice(0, limit);
+  const effectiveLimit = isMobileUi() ? BOOTSTRAP_MOBILE : limit;
+  const entries = sortCoverEntriesByExerciseIdAsc(getAllCachedCoverEntries()).slice(0, effectiveLimit);
 
   for (const { firestoreId, url } of entries) {
     if (!isOfficialGitHubCoverUrl(url)) continue;

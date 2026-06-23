@@ -13,6 +13,8 @@ interface MobileShellProps {
   onBrandPress: () => void;
   favoritesCount: number;
   workoutCount?: number;
+  /** Exercícios selecionados no modo montar treino (badge no Início) */
+  homeSelectionCount?: number;
   /** Lightbox de reprodução aberto — nav deve ficar acima de tudo */
   playbackElevated?: boolean;
   children: React.ReactNode;
@@ -81,6 +83,7 @@ export function MobileShell({
   onBrandPress,
   favoritesCount,
   workoutCount = 0,
+  homeSelectionCount = 0,
   playbackElevated = false,
   children,
 }: MobileShellProps) {
@@ -114,8 +117,16 @@ export function MobileShell({
           key={tab.id}
           {...tab}
           active={activeTab === tab.id}
-          showBadge={tab.id === 'favorites' || tab.id === 'workout'}
-          badgeCount={tab.id === 'favorites' ? favoritesCount : tab.id === 'workout' ? workoutCount : undefined}
+          showBadge={tab.id === 'favorites' || tab.id === 'workout' || (tab.id === 'home' && homeSelectionCount > 0)}
+          badgeCount={
+            tab.id === 'favorites'
+              ? favoritesCount
+              : tab.id === 'workout'
+                ? workoutCount
+                : tab.id === 'home'
+                  ? homeSelectionCount
+                  : undefined
+          }
           onTabChange={onTabChange}
         />
       ))}

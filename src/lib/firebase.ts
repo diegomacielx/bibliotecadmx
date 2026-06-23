@@ -13,6 +13,8 @@ import {
   updateProfile,
   GoogleAuthProvider,
   sendPasswordResetEmail,
+  setPersistence,
+  browserLocalPersistence,
   type User,
 } from 'firebase/auth';
 import {
@@ -75,6 +77,9 @@ if (isFirebaseValid) {
 
 export const auth = getAuth(app);
 auth.languageCode = 'pt-BR';
+void setPersistence(auth, browserLocalPersistence).catch((err) => {
+  logWarn('Firebase', 'Persistência local de auth indisponível.', err);
+});
 export const db = getFirestore(app);
 
 export const googleProvider = new GoogleAuthProvider();

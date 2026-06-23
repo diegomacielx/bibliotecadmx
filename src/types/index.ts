@@ -170,6 +170,8 @@ export type AuthMode = 'login' | 'register' | 'forgot' | 'forgot-sent';
 
 export interface UserPlaybackSettings {
   videoLoop: boolean;
+  /** Reproduzir automaticamente ao abrir ou ao trocar de vídeo (padrão: ligado). */
+  videoAutoplay?: boolean;
   /** No comparador: reiniciar os dois vídeos juntos ao terminar um deles (padrão: desligado). */
   compareLoopSync?: boolean;
 }

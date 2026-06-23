@@ -23,6 +23,8 @@ interface SiteHeaderProps {
   onResendVerification?: () => Promise<void>;
   videoLoop?: boolean;
   onToggleVideoLoop?: (enabled: boolean) => void;
+  videoAutoplay?: boolean;
+  onToggleVideoAutoplay?: (enabled: boolean) => void;
   compareLoopSync?: boolean;
   onToggleCompareLoopSync?: (enabled: boolean) => void;
   exerciseSortOrder?: ExerciseSortOrder;
@@ -98,6 +100,8 @@ export function SiteHeader({
   onResendVerification,
   videoLoop = false,
   onToggleVideoLoop,
+  videoAutoplay = true,
+  onToggleVideoAutoplay,
   compareLoopSync = false,
   onToggleCompareLoopSync,
   exerciseSortOrder,
@@ -642,6 +646,8 @@ export function SiteHeader({
           onToggleCardCoverParallax={onToggleCardCoverParallax!}
           videoLoop={videoLoop ?? false}
           onToggleVideoLoop={onToggleVideoLoop!}
+          videoAutoplay={videoAutoplay ?? true}
+          onToggleVideoAutoplay={onToggleVideoAutoplay!}
           compareLoopSync={compareLoopSync ?? false}
           onToggleCompareLoopSync={onToggleCompareLoopSync!}
         />
