@@ -1156,14 +1156,41 @@ button.header-brand:focus-visible {
     left: 50%;
     right: auto;
     transform: translateX(-50%);
-    max-width: min(calc(100vw - 1.5rem), 24rem);
-    align-items: stretch;
+    max-width: calc(100vw - 1.5rem);
+    align-items: center;
     z-index: 10200;
   }
 
   .toast-card {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5625rem 0.875rem;
+    border-radius: 9999px;
+    max-width: calc(100vw - 1.5rem);
+  }
+
+  .toast-card-body {
+    padding-top: 0;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .toast-card-title {
+    display: none;
+  }
+
+  .toast-card-msg {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+    font-size: 0.8125rem;
+  }
+
+  .toast-card-close {
+    display: none;
   }
 }
 
@@ -4998,6 +5025,9 @@ html[data-theme="light"] .cinema-backdrop::before {
 .dmx-yt-root--chromeless .dmx-yt-host iframe {
   height: calc(100% + 72px) !important;
   margin-bottom: -72px;
+  /* Bloqueia toques no iframe do YouTube — impede navegação de topo para
+     youtube.com (links de fim de vídeo/logo). O play/pause usa camadas próprias. */
+  pointer-events: none;
 }
 
 /* Garante clip no modo vertical-theater */

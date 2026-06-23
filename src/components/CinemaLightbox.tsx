@@ -280,6 +280,7 @@ function MobileCoverPlayer({
   reelsRole,
   feedScrollActive = false,
   isPlaybackLeader = false,
+  isHandoffTarget = false,
   entrySeekAt = 0,
   allowSoundControl = false,
   registerActivePlayer,
@@ -292,6 +293,8 @@ function MobileCoverPlayer({
   reelsRole?: ReelsSlideRole;
   feedScrollActive?: boolean;
   isPlaybackLeader?: boolean;
+  /** Slide being promoted to current after snap — never pause/seek during handoff */
+  isHandoffTarget?: boolean;
   entrySeekAt?: number;
   allowSoundControl?: boolean;
   registerActivePlayer?: (player: YouTubePlayerHandle | null) => void;
@@ -299,8 +302,6 @@ function MobileCoverPlayer({
 }) {
   const touchLayout = useTouchLayout();
   const inReelsFeed = reelsRole != null;
-  const shouldRunVideo = isPlaybackLeader || (inReelsFeed && feedScrollActive);
-  const shouldPreloadAdjacent = inReelsFeed && reelsRole !== 'current';
   const [isPlaying, setIsPlaying] = useState(inReelsFeed ? true : hero && !preview);
   const [frameReady, setFrameReady] = useState(false);
   const [audioUnlocked, setAudioUnlocked] = useState(
@@ -312,6 +313,8 @@ function MobileCoverPlayer({
   const bufferPrimedRef = useRef(false);
   const feedScrollActiveRef = useRef(feedScrollActive);
   const isPlaybackLeaderRef = useRef(isPlaybackLeader);
+  const isHandoffTargetRef = useRef(isHandoffTarget);
+  const entrySeekAppliedRef = useRef(false);
   const { imgSrc, coverMissing, handleLoad, handleError } = useExerciseCover(ex, { priority: 'high' });
   const isVertical =
     resolveVideoOrientation(ex.youtubeUrl, {
@@ -346,55 +349,43 @@ function MobileCoverPlayer({
     const player = playerRef.current;
     if (!player || !inReelsFeed || !reelsRole) return;
 
-    const seekAt = seekForRole();
     const state = player.getPlayerState();
     const isPlaying = state === 1 || state === 3;
 
-    if (shouldRunVideo) {
-      if (isPlaying) {
-        if (isPlaybackLeader) syncActiveRegistration();
-        return;
-      }
-      if (state === 2) {
-        const t = player.getCurrentTime();
-        if (t > 0.2) {
-          player.playVideo();
-          if (isPlaybackLeader) syncActiveRegistration();
-          return;
-        }
-      }
-      player.seekTo(seekAt);
-      player.playVideo();
+    // The current slide must play continuously. We NEVER pause it nor rewind it
+    // here — the one-time entry seek (backward resume) is done in the
+    // role-transition effect. This is what makes the handoff seamless: when a
+    // previewing 'next'/'prev' slide becomes 'current', it just keeps playing
+    // from wherever it already was instead of resetting to the first frame.
+    if (reelsRole === 'current') {
+      if (!isPlaying) player.playVideo();
       if (isPlaybackLeader) syncActiveRegistration();
       return;
     }
 
-    if (shouldPreloadAdjacent) {
-      if (feedScrollActive) {
-        // Scroll in progress — keep the player running so the iframe shows live frames.
-        if (!isPlaying) player.playVideo();
-        return;
-      }
-      // Scroll ended. If already primed (first frame rendered), pause at seek position.
-      if (bufferPrimedRef.current) {
-        if (isPlaying) player.pauseVideo();
-        player.seekTo(seekAt);
-        return;
-      }
-      // Not primed yet — start playing briefly to buffer and get a frame.
-      player.seekTo(seekAt);
-      player.playVideo();
+    // Adjacent slides: keep the preview running while the finger scrolls or
+    // during the snap handoff.
+    if (feedScrollActive || isHandoffTarget) {
+      if (!isPlaying) player.playVideo();
       return;
     }
 
-    if (isPlaying) player.pauseVideo();
+    // Idle adjacent slide: render the first frame once, then pause to save
+    // resources. Avoid needless re-seeks that cause flicker.
+    const seekAt = seekForRole();
+    if (bufferPrimedRef.current) {
+      if (isPlaying) player.pauseVideo();
+      const t = player.getCurrentTime();
+      if (Math.abs(t - seekAt) > 0.3) player.seekTo(seekAt);
+      return;
+    }
     player.seekTo(seekAt);
+    player.playVideo();
   }, [
     inReelsFeed,
     reelsRole,
-    shouldRunVideo,
-    shouldPreloadAdjacent,
     feedScrollActive,
+    isHandoffTarget,
     isPlaybackLeader,
     seekForRole,
     syncActiveRegistration,
@@ -408,7 +399,8 @@ function MobileCoverPlayer({
   useLayoutEffect(() => {
     feedScrollActiveRef.current = feedScrollActive;
     isPlaybackLeaderRef.current = isPlaybackLeader;
-  }, [feedScrollActive, isPlaybackLeader]);
+    isHandoffTargetRef.current = isHandoffTarget;
+  }, [feedScrollActive, isPlaybackLeader, isHandoffTarget]);
 
   useEffect(() => {
     if (!inReelsFeed) {
@@ -433,8 +425,27 @@ function MobileCoverPlayer({
     if (inReelsFeed && prevRole === 'current' && reelsRole !== 'current' && playerRef.current) {
       reelsSavePosition(ex.firestoreId, playerRef.current.getCurrentTime());
     }
+    if (
+      inReelsFeed &&
+      prevRole != null &&
+      prevRole !== 'current' &&
+      reelsRole === 'current' &&
+      playerRef.current
+    ) {
+      const player = playerRef.current;
+      // Backward resume only: seek once to the saved spot. On forward nav
+      // entrySeekAt is 0, so we leave the video where the preview left it and it
+      // simply continues — no rewind to the first frame.
+      if (!entrySeekAppliedRef.current && entrySeekAt > 0.2) {
+        entrySeekAppliedRef.current = true;
+        player.seekTo(entrySeekAt);
+      }
+      const state = player.getPlayerState();
+      if (state !== 1 && state !== 3) player.playVideo();
+    }
+    if (reelsRole !== 'current') entrySeekAppliedRef.current = false;
     reelsRoleRef.current = reelsRole;
-  }, [reelsRole, inReelsFeed, ex.firestoreId]);
+  }, [reelsRole, inReelsFeed, ex.firestoreId, entrySeekAt]);
 
   useEffect(() => {
     if (!touchLayout || !inReelsFeed || !playerRef.current) return;
@@ -501,12 +512,14 @@ function MobileCoverPlayer({
   };
 
   const showPlayerLayer = inReelsFeed || isPlaying;
+  const reelsVideoAspect = isVertical ? '9 / 16' : '16 / 9';
 
   return (
     <div
       className={`cinema-mobile-cover-frame ${hero ? 'cinema-mobile-cover-frame--hero' : ''} ${
         showPlayerLayer ? 'cinema-mobile-cover-frame--playing' : ''
       }`}
+      style={inReelsFeed ? ({ '--reels-video-aspect': reelsVideoAspect } as CSSProperties) : undefined}
     >
       {showPlayerLayer ? (
         <div
@@ -533,7 +546,8 @@ function MobileCoverPlayer({
                 inReelsFeed &&
                 isAdjacent &&
                 !isPlaybackLeaderRef.current &&
-                !feedScrollActiveRef.current
+                !feedScrollActiveRef.current &&
+                !isHandoffTargetRef.current
               ) {
                 bufferPrimedRef.current = true;
                 const s = playerRef.current?.getPlayerState() ?? -1;
@@ -661,6 +675,7 @@ function MobileReelsFeed({
   const pendingNavRef = useRef<'next' | 'prev' | null>(null);
   const snappingBackRef = useRef(false);
   const snapTimerRef = useRef(0);
+  const navSettleTimerRef = useRef(0);
   const gestureActiveRef = useRef(false);
   const playbackKindRef = useRef<ReelsSlideRole>('current');
   const gestureApiRef = useRef({
@@ -681,6 +696,7 @@ function MobileReelsFeed({
     setIsSnapping: (_a: boolean) => {},
     ensureSlidePlaying: (_k: ReelsSlideRole) => {},
     primeAdjacentSlides: () => {},
+    forceCompleteSnap: () => {},
     setDragOffset: (_n: number) => {},
   });
   const [slideHeight, setSlideHeight] = useState(0);
@@ -689,6 +705,7 @@ function MobileReelsFeed({
   const [gestureActive, setGestureActive] = useState(false);
   const [isSnapping, setIsSnapping] = useState(false);
   const [playbackKind, setPlaybackKind] = useState<ReelsSlideRole>('current');
+  const [handoffExerciseId, setHandoffExerciseId] = useState<string | null>(null);
 
   const slides = useMemo(() => buildReelsSlides(navList, navIndex), [navList, navIndex]);
 
@@ -884,6 +901,9 @@ function MobileReelsFeed({
       dragOffsetRef.current = 0;
       setDragOffset(0);
       setIsSnapping(false);
+      // Promote the leader immediately so the new current is never treated as a
+      // paused adjacent slide between the nav update and the layout effect.
+      setPlaybackKind('current');
       handleFeedNavNext();
       endGesture();
       return;
@@ -896,6 +916,7 @@ function MobileReelsFeed({
       dragOffsetRef.current = 0;
       setDragOffset(0);
       setIsSnapping(false);
+      setPlaybackKind('current');
       handleFeedNavPrev();
       endGesture();
       return;
@@ -912,7 +933,19 @@ function MobileReelsFeed({
 
   const scheduleSnapFallback = useCallback(() => {
     window.clearTimeout(snapTimerRef.current);
-    snapTimerRef.current = window.setTimeout(() => finishSnapAnimation(), 320);
+    snapTimerRef.current = window.setTimeout(() => finishSnapAnimation(), 260);
+  }, [finishSnapAnimation]);
+
+  const forceCompleteSnap = useCallback(() => {
+    window.clearTimeout(snapTimerRef.current);
+    snapTimerRef.current = 0;
+    if (pendingNavRef.current || snappingBackRef.current) {
+      finishSnapAnimation();
+      return;
+    }
+    setIsSnapping(false);
+    dragOffsetRef.current = 0;
+    setDragOffset(0);
   }, [finishSnapAnimation]);
 
   const commitAnimated = useCallback(
@@ -922,6 +955,8 @@ function MobileReelsFeed({
 
       pendingNavRef.current = direction;
       snappingBackRef.current = false;
+      const handoffEx = exerciseForKind(direction);
+      if (handoffEx) setHandoffExerciseId(handoffEx.firestoreId);
       setIsSnapping(true);
       setFeedScrolling(true);
       setPlaybackKind(direction);
@@ -933,7 +968,7 @@ function MobileReelsFeed({
       syncVisibleExercise(direction);
       scheduleSnapFallback();
     },
-    [slideHeight, setFeedScrolling, ensureSlidePlaying, syncVisibleExercise, scheduleSnapFallback]
+    [slideHeight, setFeedScrolling, ensureSlidePlaying, syncVisibleExercise, scheduleSnapFallback, exerciseForKind]
   );
 
   const snapBackAnimated = useCallback(() => {
@@ -964,8 +999,13 @@ function MobileReelsFeed({
     let commitPrev = ratio <= -0.5;
 
     if (!commitNext && !commitPrev) {
-      if (vel > 0.35 && ratio > 0.1) commitNext = true;
-      else if (vel < -0.35 && ratio < -0.1) commitPrev = true;
+      if (vel > 0.28 && ratio > 0.08) commitNext = true;
+      else if (vel < -0.28 && ratio < -0.08) commitPrev = true;
+    }
+
+    if (!commitNext && !commitPrev) {
+      if (vel > 0.55 && ratio > 0.03) commitNext = true;
+      else if (vel < -0.55 && ratio < -0.03) commitPrev = true;
     }
 
     if (commitNext && gestureApiRef.current.hasNext) {
@@ -1006,32 +1046,35 @@ function MobileReelsFeed({
       setDragOffset,
       ensureSlidePlaying,
       primeAdjacentSlides,
+      forceCompleteSnap,
     };
   });
 
   useLayoutEffect(() => {
-    resetDrag();
+    if (!gestureActiveRef.current) {
+      resetDrag();
+      endGesture();
+    }
     setPlaybackKind('current');
     pendingNavRef.current = null;
     snappingBackRef.current = false;
     setIsSnapping(false);
-    endGesture();
-    primeAdjacentSlides();
-    const currentEx = navList[navIndex];
-    if (currentEx) {
-      requestAnimationFrame(() => {
+
+    window.clearTimeout(navSettleTimerRef.current);
+    navSettleTimerRef.current = window.setTimeout(() => {
+      primeAdjacentSlides();
+      const currentEx = navList[navIndex];
+      if (currentEx) {
         const player = slidePlayersRef.current.get(currentEx.firestoreId);
-        if (!player) return;
-        const state = player.getPlayerState();
-        if (state !== 1 && state !== 3) player.playVideo();
-      });
-    }
-    const t1 = window.setTimeout(primeAdjacentSlides, 500);
-    const t2 = window.setTimeout(primeAdjacentSlides, 1500);
-    return () => {
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
-    };
+        if (player) {
+          const state = player.getPlayerState();
+          if (state !== 1 && state !== 3) player.playVideo();
+        }
+      }
+      setHandoffExerciseId(null);
+    }, 48);
+
+    return () => window.clearTimeout(navSettleTimerRef.current);
   }, [navIndex, resetDrag, endGesture, primeAdjacentSlides, navList]);
 
   useEffect(() => {
@@ -1055,13 +1098,42 @@ function MobileReelsFeed({
     if (next) primeVideoPlaybackIntent(next, { force: true });
   }, [navIndex, navList]);
 
+  // Pausa todos os players quando a aba sai de foco (economia de memória/CPU,
+  // evita crashes no Safari/Brave) e retoma o vídeo atual ao voltar — sem exigir
+  // que o usuário toque na tela.
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.hidden) {
+        for (const player of slidePlayersRef.current.values()) {
+          try {
+            const state = player.getPlayerState();
+            if (state === 1 || state === 3) player.pauseVideo();
+          } catch { /* ignore */ }
+        }
+        return;
+      }
+      const currentEx = navList[navIndex];
+      const player = currentEx ? slidePlayersRef.current.get(currentEx.firestoreId) : null;
+      if (player) {
+        try {
+          const state = player.getPlayerState();
+          if (state !== 1 && state !== 3) player.playVideo();
+        } catch { /* ignore */ }
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [navIndex, navList]);
+
   useEffect(() => {
     const layer = gestureRef.current;
     if (!layer) return;
 
     const onPointerDown = (e: globalThis.PointerEvent) => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
-      if (pendingNavRef.current || snappingBackRef.current) return;
+      if (pendingNavRef.current || snappingBackRef.current) {
+        gestureApiRef.current.forceCompleteSnap();
+      }
 
       touchStartYRef.current = e.clientY;
       dragStartOffsetRef.current = dragOffsetRef.current;
@@ -1173,6 +1245,8 @@ function MobileReelsFeed({
           // playing (and showing a frame) when they cross into view.
           const slideScrollActive = scrollPhaseActive;
 
+          const isHandoffTarget = handoffExerciseId === slide.ex.firestoreId;
+
           return (
             <div
               key={slide.ex.firestoreId}
@@ -1187,6 +1261,7 @@ function MobileReelsFeed({
                   reelsRole={slide.kind}
                   feedScrollActive={slideScrollActive}
                   isPlaybackLeader={isPlaybackLeader}
+                  isHandoffTarget={isHandoffTarget}
                   entrySeekAt={isActive ? entrySeekAt : 0}
                   allowSoundControl={allowSoundControl}
                   registerActivePlayer={isPlaybackLeader ? registerCurrentPlayer : undefined}
@@ -1261,6 +1336,20 @@ function MobileExerciseSheet({
   const speedTimerRef = useRef(0);
   const useVerticalFeed = hasNav && navList.length > 1;
   const allowSoundControl = spotlightExerciseId === displayEx.firestoreId;
+  const videoOrientation = useMemo(
+    () =>
+      resolveVideoOrientation(displayEx.youtubeUrl, {
+        videoOrientation: displayEx.videoOrientation,
+        aspectRatio: displayEx.aspectRatio,
+      }),
+    [displayEx.youtubeUrl, displayEx.videoOrientation, displayEx.aspectRatio]
+  );
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.setAttribute('data-reels-video-orientation', videoOrientation);
+    return () => document.documentElement.removeAttribute('data-reels-video-orientation');
+  }, [videoOrientation]);
 
   useEffect(() => {
     setDisplayEx(ex);
@@ -1366,6 +1455,10 @@ function MobileExerciseSheet({
         <div className="cinema-mobile-reels-top">
           <h1 className="cinema-mobile-reels-title">{displayEx.name}</h1>
         </div>
+
+        {videoOrientation === 'horizontal' && (
+          <p className="mobile-reels-rotate-hint">Gire o aparelho para tela cheia</p>
+        )}
 
         <MobileReelsFooterBlur exerciseId={displayEx.id} category={displayEx.category} />
 

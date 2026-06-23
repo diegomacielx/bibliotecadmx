@@ -2120,7 +2120,7 @@ export default function App() {
     try {
       navigator.clipboard.writeText(url).then(() => {
         setCopiedId(firestoreId);
-        showToast('URL copiada com sucesso!');
+        showToast('Link copiado!');
         setTimeout(() => setCopiedId(null), 2000);
       });
     } catch {
@@ -2131,7 +2131,7 @@ export default function App() {
       document.execCommand('copy');
       document.body.removeChild(el);
       setCopiedId(firestoreId);
-      showToast('URL copiada com sucesso!');
+      showToast('Link copiado!');
       setTimeout(() => setCopiedId(null), 2000);
     }
   };
@@ -2139,7 +2139,7 @@ export default function App() {
   const copyExerciseName = (name: string, firestoreId: string) => {
     const write = () => {
       setCopiedNameId(firestoreId);
-      showToast('Nome do exercício copiado!');
+      showToast('Nome copiado!');
       setTimeout(() => setCopiedNameId(null), 2000);
     };
 
