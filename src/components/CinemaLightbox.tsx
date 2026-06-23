@@ -310,6 +310,8 @@ function MobileCoverPlayer({
   const reelsRoleRef = useRef(reelsRole);
   const wasLeaderRef = useRef(isPlaybackLeader);
   const bufferPrimedRef = useRef(false);
+  const feedScrollActiveRef = useRef(feedScrollActive);
+  const isPlaybackLeaderRef = useRef(isPlaybackLeader);
   const { imgSrc, coverMissing, handleLoad, handleError } = useExerciseCover(ex, { priority: 'high' });
   const isVertical =
     resolveVideoOrientation(ex.youtubeUrl, {
@@ -402,6 +404,11 @@ function MobileCoverPlayer({
     bufferPrimedRef.current = false;
     setFrameReady(false);
   }, [ex.firestoreId, ytId]);
+
+  useLayoutEffect(() => {
+    feedScrollActiveRef.current = feedScrollActive;
+    isPlaybackLeaderRef.current = isPlaybackLeader;
+  }, [feedScrollActive, isPlaybackLeader]);
 
   useEffect(() => {
     if (!inReelsFeed) {
@@ -507,7 +514,7 @@ function MobileCoverPlayer({
             hero ? 'cinema-mobile-cover-player--reels-cover' : ''
           } ${
             hero && isVertical ? 'cinema-mobile-cover-player--vertical-theater cinema-player-layer--vertical-theater' : ''
-          }${inReelsFeed && !frameReady ? ' cinema-mobile-cover-player--awaiting-frame' : ''}`}
+          }${inReelsFeed && !frameReady && !feedScrollActive ? ' cinema-mobile-cover-player--awaiting-frame' : ''}`}
         >
           <YouTubePlayer
             ref={playerRef}
@@ -521,11 +528,12 @@ function MobileCoverPlayer({
             onReady={handlePlayerReady}
             onFrameVisible={() => {
               setFrameReady(true);
+              const isAdjacent = reelsRoleRef.current != null && reelsRoleRef.current !== 'current';
               if (
                 inReelsFeed &&
-                shouldPreloadAdjacent &&
-                !shouldRunVideo &&
-                !feedScrollActive
+                isAdjacent &&
+                !isPlaybackLeaderRef.current &&
+                !feedScrollActiveRef.current
               ) {
                 bufferPrimedRef.current = true;
                 const s = playerRef.current?.getPlayerState() ?? -1;
@@ -533,7 +541,7 @@ function MobileCoverPlayer({
               }
             }}
           />
-          {inReelsFeed && !frameReady && (
+          {inReelsFeed && !frameReady && !feedScrollActive && (
             coverMissing ? (
               <ExerciseCoverPlaceholder className="cinema-mobile-cover-poster cinema-mobile-cover-poster--reels-mask" />
             ) : (
@@ -671,6 +679,8 @@ function MobileReelsFeed({
     setPlaybackKind: (_k: ReelsSlideRole) => {},
     setGestureActive: (_a: boolean) => {},
     setIsSnapping: (_a: boolean) => {},
+    ensureSlidePlaying: (_k: ReelsSlideRole) => {},
+    primeAdjacentSlides: () => {},
     setDragOffset: (_n: number) => {},
   });
   const [slideHeight, setSlideHeight] = useState(0);
@@ -703,29 +713,45 @@ function MobileReelsFeed({
     [exerciseForKind, onVisibleExerciseChange]
   );
 
-  const kindFromOffset = useCallback(
-    (offset: number) => {
-      if (slideHeight <= 0) return 'current' as ReelsSlideRole;
-      const ratio = offset / slideHeight;
-      if (ratio >= 0.5) return 'next';
-      if (ratio <= -0.5) return 'prev';
-      return 'current';
+  const registerSlidePlayer = useCallback(
+    (exerciseId: string, player: YouTubePlayerHandle | null) => {
+      if (player) {
+        slidePlayersRef.current.set(exerciseId, player);
+        const slide = slides.find((s) => s.ex.firestoreId === exerciseId);
+        if (slide && slide.kind !== 'current') {
+          const seekAt =
+            slide.kind === 'next' ? 0 : reelsAdjacentSeekSeconds(exerciseId, 'prev');
+          try {
+            player.seekTo(seekAt);
+            player.playVideo();
+          } catch {
+            /* player not ready */
+          }
+        }
+      } else {
+        slidePlayersRef.current.delete(exerciseId);
+      }
     },
-    [slideHeight]
+    [slides]
   );
 
-  const syncTitleFromOffset = useCallback(
-    (offset: number) => {
-      const kind = kindFromOffset(offset);
-      syncVisibleExercise(kind);
-    },
-    [kindFromOffset, syncVisibleExercise]
-  );
-
-  const registerSlidePlayer = useCallback((exerciseId: string, player: YouTubePlayerHandle | null) => {
-    if (player) slidePlayersRef.current.set(exerciseId, player);
-    else slidePlayersRef.current.delete(exerciseId);
-  }, []);
+  const primeAdjacentSlides = useCallback(() => {
+    for (const slide of slides) {
+      if (slide.kind === 'current') continue;
+      const player = slidePlayersRef.current.get(slide.ex.firestoreId);
+      if (!player) continue;
+      const state = player.getPlayerState();
+      if (state === 1 || state === 3) continue;
+      const seekAt =
+        slide.kind === 'next' ? 0 : reelsAdjacentSeekSeconds(slide.ex.firestoreId, 'prev');
+      try {
+        player.seekTo(seekAt);
+        player.playVideo();
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [slides]);
 
   const registerCurrentPlayer = useCallback(
     (player: YouTubePlayerHandle | null) => {
@@ -784,9 +810,8 @@ function MobileReelsFeed({
       const clamped = clampDragOffset(next);
       dragOffsetRef.current = clamped;
       setDragOffset(clamped);
-      syncTitleFromOffset(clamped);
     },
-    [clampDragOffset, syncTitleFromOffset]
+    [clampDragOffset]
   );
 
   const resetDrag = useCallback(() => {
@@ -944,10 +969,12 @@ function MobileReelsFeed({
     }
 
     if (commitNext && gestureApiRef.current.hasNext) {
+      gestureApiRef.current.ensureSlidePlaying('next');
       gestureApiRef.current.commitAnimated('next');
       return;
     }
     if (commitPrev && gestureApiRef.current.hasPrev) {
+      gestureApiRef.current.ensureSlidePlaying('prev');
       gestureApiRef.current.commitAnimated('prev');
       return;
     }
@@ -977,6 +1004,8 @@ function MobileReelsFeed({
       setGestureActive,
       setIsSnapping,
       setDragOffset,
+      ensureSlidePlaying,
+      primeAdjacentSlides,
     };
   });
 
@@ -987,7 +1016,23 @@ function MobileReelsFeed({
     snappingBackRef.current = false;
     setIsSnapping(false);
     endGesture();
-  }, [navIndex, resetDrag, endGesture]);
+    primeAdjacentSlides();
+    const currentEx = navList[navIndex];
+    if (currentEx) {
+      requestAnimationFrame(() => {
+        const player = slidePlayersRef.current.get(currentEx.firestoreId);
+        if (!player) return;
+        const state = player.getPlayerState();
+        if (state !== 1 && state !== 3) player.playVideo();
+      });
+    }
+    const t1 = window.setTimeout(primeAdjacentSlides, 500);
+    const t2 = window.setTimeout(primeAdjacentSlides, 1500);
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, [navIndex, resetDrag, endGesture, primeAdjacentSlides, navList]);
 
   useEffect(() => {
     const track = trackRef.current;
@@ -1031,8 +1076,9 @@ function MobileReelsFeed({
       gestureApiRef.current.setIsSnapping(false);
       primeYouTubePlayerApi();
       signalMobilePlaybackGesture();
+      gestureApiRef.current.primeAdjacentSlides();
 
-      // Start all adjacent slide players within the gesture (iOS requires user-gesture
+      // Start all slide players within the gesture (iOS requires user-gesture
       // context for programmatic playVideo even when muted).
       for (const player of slidePlayersRef.current.values()) {
         try {
@@ -1079,6 +1125,7 @@ function MobileReelsFeed({
         return;
       }
 
+      signalMobilePlaybackGesture();
       gestureActiveRef.current = false;
       gestureApiRef.current.setGestureActive(false);
       gestureApiRef.current.settleGesture();
@@ -1100,7 +1147,9 @@ function MobileReelsFeed({
   const translateY = slideHeight > 0 ? -(currentSlideIndex * slideHeight + dragOffset) : 0;
 
   const scrollPhaseActive = gestureActive || isSnapping;
-  const dominantKind = scrollPhaseActive ? kindFromOffset(dragOffset) : playbackKind;
+  // During finger drag keep the current slide as playback leader; only switch on snap/release.
+  const playbackLeaderKind: ReelsSlideRole =
+    gestureActive && !isSnapping ? 'current' : playbackKind;
 
   return (
     <div
@@ -1117,7 +1166,7 @@ function MobileReelsFeed({
         {slides.map((slide) => {
           const slideYtId = getYouTubeId(slide.ex.youtubeUrl);
           const isActive = slide.kind === 'current';
-          const isPlaybackLeader = slide.kind === dominantKind;
+          const isPlaybackLeader = slide.kind === playbackLeaderKind;
           const allowSoundControl =
             isPlaybackLeader && !!spotlightExerciseId && slide.ex.firestoreId === spotlightExerciseId;
           // During any scroll phase, all slides stay active so their players are already
