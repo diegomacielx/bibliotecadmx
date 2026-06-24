@@ -1,5 +1,8 @@
+import { memo } from 'react';
 import type { Exercise, ExerciseForm, AdminTab } from '../../types';
 import type { MobileCatalogView } from '../../lib/mobilePreferences';
+import type { PlaylistSelectionLookup } from '../../lib/playlistSelection';
+import { getPlaylistSequence } from '../../lib/playlistSelection';
 import { ExerciseCard } from '../ExerciseCard';
 import { MobileExerciseListRow } from './MobileExerciseListRow';
 import { getGridPrefetchPeers } from '../../lib/exercisePrefetch';
@@ -18,17 +21,17 @@ interface MobileCatalogProps {
   copiedId: string | null;
   onWatch: (ex: Exercise) => void;
   selectionMode: boolean;
-  playlistOrder: string[];
+  playlistSelection: PlaylistSelectionLookup;
   onTogglePlaylist: (ex: Exercise) => void;
   isFavorite: (id: string) => boolean;
-  onToggleFavorite: (id: string) => void;
+  onToggleFavoriteExercise: (ex: Exercise) => void;
   onCompare?: (ex: Exercise) => void;
   comparePickId?: string;
   cardHoverPreview: boolean;
   cardCoverParallax: boolean;
 }
 
-export function MobileCatalog({
+export const MobileCatalog = memo(function MobileCatalog({
   exercises,
   catalogView,
   isAdmin,
@@ -42,10 +45,10 @@ export function MobileCatalog({
   copiedId,
   onWatch,
   selectionMode,
-  playlistOrder,
+  playlistSelection,
   onTogglePlaylist,
   isFavorite,
-  onToggleFavorite,
+  onToggleFavoriteExercise,
   onCompare,
   comparePickId,
   cardHoverPreview,
@@ -65,14 +68,8 @@ export function MobileCatalog({
             copied={copiedId === ex.firestoreId}
             selectionMode={selectionMode}
             onTogglePlaylist={onTogglePlaylist}
-            isInPlaylist={playlistOrder.includes(ex.firestoreId)}
-            playlistSequence={
-              selectionMode
-                ? playlistOrder.indexOf(ex.firestoreId) >= 0
-                  ? playlistOrder.indexOf(ex.firestoreId) + 1
-                  : undefined
-                : undefined
-            }
+            isInPlaylist={playlistSelection.ids.has(ex.firestoreId)}
+            playlistSequence={getPlaylistSequence(playlistSelection, ex.firestoreId, selectionMode)}
           />
         ))}
       </div>
@@ -97,17 +94,11 @@ export function MobileCatalog({
           copiedId={copiedId}
           onWatch={onWatch}
           selectionMode={selectionMode}
-          isInPlaylist={playlistOrder.includes(ex.firestoreId)}
-          playlistSequence={
-            selectionMode
-              ? playlistOrder.indexOf(ex.firestoreId) >= 0
-                ? playlistOrder.indexOf(ex.firestoreId) + 1
-                : undefined
-              : undefined
-          }
+          isInPlaylist={playlistSelection.ids.has(ex.firestoreId)}
+          playlistSequence={getPlaylistSequence(playlistSelection, ex.firestoreId, selectionMode)}
           onTogglePlaylist={onTogglePlaylist}
           isFavorite={isFavorite(ex.firestoreId)}
-          onToggleFavorite={() => onToggleFavorite(ex.firestoreId)}
+          onToggleFavorite={onToggleFavoriteExercise}
           onCompare={onCompare}
           isComparePick={comparePickId === ex.firestoreId}
           prefetchPeers={getGridPrefetchPeers(exercises, index)}
@@ -117,4 +108,4 @@ export function MobileCatalog({
       ))}
     </div>
   );
-}
+});

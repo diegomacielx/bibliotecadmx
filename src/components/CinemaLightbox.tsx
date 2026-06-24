@@ -274,6 +274,17 @@ function ExerciseDetails({
 
 type ReelsSlideRole = 'prev' | 'current' | 'next';
 
+/** Pausar via mute+seek — nunca pauseVideo() no reels (ícone central do YouTube). */
+function settleReelsSlideFrame(player: YouTubePlayerHandle, seekAt: number): void {
+  try {
+    player.mute();
+    const t = player.getCurrentTime();
+    if (Math.abs(t - seekAt) > 0.3) player.seekTo(seekAt);
+  } catch {
+    /* ignore */
+  }
+}
+
 function MobileCoverPlayer({
   ex,
   ytId,
@@ -381,16 +392,13 @@ function MobileCoverPlayer({
       return;
     }
 
-    // Idle adjacent slide: render the first frame once, then pause to save
-    // resources. Avoid needless re-seeks that cause flicker.
+    // Idle adjacent slide: manter frame via mute+seek — sem pauseVideo (overlay do YouTube).
     const seekAt = seekForRole();
     if (bufferPrimedRef.current) {
       const snapping =
         document.documentElement.hasAttribute('data-reels-feed-snapping') ||
         document.documentElement.hasAttribute('data-reels-feed-scrolling');
-      if (isPlaying && !snapping) player.pauseVideo();
-      const t = player.getCurrentTime();
-      if (Math.abs(t - seekAt) > 0.3) player.seekTo(seekAt);
+      if (!snapping) settleReelsSlideFrame(player, seekAt);
       return;
     }
     player.seekTo(seekAt);
@@ -503,12 +511,16 @@ function MobileCoverPlayer({
         return;
       }
       if (state !== 2) return;
+      const role = reelsRoleRef.current;
+      if (role === 'current') {
+        queueMicrotask(() => playerRef.current?.playVideo());
+        return;
+      }
       const scrolling =
         feedScrollActiveRef.current ||
         document.documentElement.hasAttribute('data-reels-feed-scrolling') ||
         document.documentElement.hasAttribute('data-reels-feed-snapping');
-      const isCurrent = reelsRoleRef.current === 'current';
-      if (isCurrent && (scrolling || isHandoffTargetRef.current)) {
+      if (role != null && (scrolling || isHandoffTargetRef.current)) {
         queueMicrotask(() => playerRef.current?.playVideo());
       }
     },
@@ -607,8 +619,8 @@ function MobileCoverPlayer({
                 !isHandoffTargetRef.current
               ) {
                 bufferPrimedRef.current = true;
-                const s = playerRef.current?.getPlayerState() ?? -1;
-                if (s === 1 || s === 3) playerRef.current?.pauseVideo();
+                const seekAt = seekForRole();
+                if (playerRef.current) settleReelsSlideFrame(playerRef.current, seekAt);
               }
             }}
           />
@@ -619,9 +631,11 @@ function MobileCoverPlayer({
               <img
                 src={imgSrc}
                 alt=""
+                role="presentation"
                 loading="eager"
                 decoding="async"
                 draggable={false}
+                onContextMenu={(e) => e.preventDefault()}
                 className="cinema-mobile-cover-poster cinema-mobile-cover-poster--reels-mask"
                 style={{
                   objectPosition: getCoverFrameStyle(ex).objectPosition,
@@ -1187,16 +1201,13 @@ function MobileReelsFeed({
     return () => window.removeEventListener('dmx:bfcache-restore', onRestore);
   }, [navIndex, navList]);
 
-  // Pausa todos os players quando a aba sai de foco (economia de memória/CPU,
-  // evita crashes no Safari/Brave) e retoma o vídeo atual ao voltar — sem exigir
-  // que o usuário toque na tela.
+  // Silencia players quando a aba sai de foco — sem pauseVideo (evita overlay do YouTube).
   useEffect(() => {
     const onVisibility = () => {
       if (document.hidden) {
         for (const player of slidePlayersRef.current.values()) {
           try {
-            const state = player.getPlayerState();
-            if (state === 1 || state === 3) player.pauseVideo();
+            player.mute();
           } catch { /* ignore */ }
         }
         return;
@@ -1469,6 +1480,11 @@ function MobileExerciseSheet({
     }
   }, []);
 
+  const blockNativeTouchMenu = useCallback((e: { preventDefault: () => void; stopPropagation: () => void }) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
   const handleSpeedZoneDown = useCallback(
     (e: PointerEvent<HTMLDivElement>) => {
       if (document.documentElement.hasAttribute('data-reels-feed-scrolling')) return;
@@ -1480,7 +1496,7 @@ function MobileExerciseSheet({
         activePlayerRef.current?.setPlaybackRate(2);
         speedHoldRef.current = true;
         setSpeedActive(true);
-      }, 380);
+      }, 260);
     },
     []
   );
@@ -1498,11 +1514,27 @@ function MobileExerciseSheet({
     endSpeedHold();
   }, [displayEx.firestoreId, endSpeedHold]);
 
+  useEffect(() => {
+    const stage = document.querySelector('.cinema-mobile-reels-stage');
+    if (!stage) return;
+    const blockMenu = (e: Event) => e.preventDefault();
+    stage.addEventListener('contextmenu', blockMenu);
+    return () => stage.removeEventListener('contextmenu', blockMenu);
+  }, []);
+
   const stagePlaceholderStyle = getCoverPlaceholderStyle(displayEx.id, displayEx.category);
 
   return (
-    <div className="cinema-mobile-sheet cinema-mobile-sheet--reels" style={stagePlaceholderStyle}>
-      <div className="cinema-mobile-reels-stage" style={stagePlaceholderStyle}>
+    <div
+      className="cinema-mobile-sheet cinema-mobile-sheet--reels"
+      style={stagePlaceholderStyle}
+      onContextMenu={blockNativeTouchMenu}
+    >
+      <div
+        className="cinema-mobile-reels-stage"
+        style={stagePlaceholderStyle}
+        onContextMenu={blockNativeTouchMenu}
+      >
         {useVerticalFeed ? (
           <MobileReelsFeed
             navList={navList}
@@ -1544,12 +1576,16 @@ function MobileExerciseSheet({
             onPointerDown={handleSpeedZoneDown}
             onPointerUp={handleSpeedZoneUp}
             onPointerCancel={handleSpeedZoneUp}
+            onContextMenu={blockNativeTouchMenu}
+            onTouchStart={blockNativeTouchMenu}
           />
           <div
             className="mobile-reels-speed-zone mobile-reels-speed-zone--right"
             onPointerDown={handleSpeedZoneDown}
             onPointerUp={handleSpeedZoneUp}
             onPointerCancel={handleSpeedZoneUp}
+            onContextMenu={blockNativeTouchMenu}
+            onTouchStart={blockNativeTouchMenu}
           />
         </div>
 

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { motion } from 'framer-motion';
 import type { Exercise, ExerciseForm, AdminTab } from '../types';
 import {
@@ -60,7 +60,7 @@ interface ExerciseCardProps {
   coverParallaxEnabled?: boolean;
 }
 
-export function ExerciseCard({
+export function ExerciseCardComponent({
   ex,
   index,
   isAdmin,
@@ -568,3 +568,20 @@ export function ExerciseCard({
     </motion.div>
   );
 }
+
+function exerciseCardPropsAreEqual(prev: ExerciseCardProps, next: ExerciseCardProps): boolean {
+  if (prev.ex.firestoreId !== next.ex.firestoreId) return false;
+  if (prev.index !== next.index) return false;
+  if (prev.isAdmin !== next.isAdmin) return false;
+  if (prev.selectionMode !== next.selectionMode) return false;
+  if (prev.isInPlaylist !== next.isInPlaylist) return false;
+  if (prev.playlistSequence !== next.playlistSequence) return false;
+  if (prev.isFavorite !== next.isFavorite) return false;
+  if (prev.copiedId !== next.copiedId) return false;
+  if (prev.isComparePick !== next.isComparePick) return false;
+  if (prev.hoverPreviewEnabled !== next.hoverPreviewEnabled) return false;
+  if (prev.coverParallaxEnabled !== next.coverParallaxEnabled) return false;
+  return true;
+}
+
+export const ExerciseCard = memo(ExerciseCardComponent, exerciseCardPropsAreEqual);

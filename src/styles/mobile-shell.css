@@ -1492,6 +1492,9 @@ html[data-mobile-playback-active='true'] .mobile-reels-feed .mobile-reels-feed__
   padding: 0 !important;
   border: 0 !important;
   pointer-events: none !important;
+  /* Recorta o ícone central de pause/play do YouTube fora da área visível */
+  transform: scale(1.2) !important;
+  transform-origin: center center !important;
 }
 
 /* Vertical (Shorts): altura = largura × 16/9, ancorado na base; iframe 16:9
@@ -1513,7 +1516,8 @@ html[data-mobile-playback-active='true'] .mobile-reels-feed .mobile-reels-feed__
   height: calc(100% + 120px) !important;
   min-height: calc(100% + 120px) !important;
   margin-bottom: -120px !important;
-  transform: none;
+  transform: scale(1.15) !important;
+  transform-origin: center center !important;
 }
 
 html[data-mobile-playback-active='true'] .mobile-reels-feed .mobile-reels-feed__slide .cinema-mobile-cover-poster--feed-buffer {
@@ -1821,12 +1825,15 @@ html[data-theme='light'] .mobile-reels-footer-blur__sheen {
   }
 }
 
-/* Zonas laterais — segurar para 2× */
+/* Zonas laterais — segurar para 2× (bloqueia Visual Look Up / callout do iOS) */
 .mobile-reels-speed-zones {
   position: absolute;
   inset: 0;
   z-index: 12;
   pointer-events: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .mobile-reels-speed-zone {
@@ -1835,7 +1842,18 @@ html[data-theme='light'] .mobile-reels-footer-blur__sheen {
   bottom: calc(var(--mobile-reels-footer-h, 3.625rem) + 1.5rem);
   width: 22%;
   pointer-events: auto;
-  touch-action: manipulation;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.cinema-mobile-reels-stage,
+.cinema-mobile-sheet--reels {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .mobile-reels-speed-zone--left {
@@ -2035,6 +2053,55 @@ html[data-theme='light'] .mobile-bottom-nav--floating .mobile-bottom-nav__item--
   border: 1px solid rgba(26, 24, 22, 0.08);
   color: rgba(28, 25, 23, 0.72);
   box-shadow: 0 6px 22px rgba(26, 24, 22, 0.08);
+}
+
+/* Montar treino: logo → X vermelho (mesmo visual do item ativo) */
+.mobile-bottom-nav--floating .mobile-bottom-nav__item--brand.mobile-bottom-nav__item--brand-cancel {
+  background: var(--dmx-ui-accent-surface-strong);
+  border-color: var(--dmx-ui-accent-border-strong);
+  color: var(--dmx-ui-accent);
+  box-shadow:
+    0 0 0 1px var(--dmx-ui-accent-glow),
+    0 8px 24px var(--dmx-ui-accent-glow);
+}
+
+html[data-theme='light'] .mobile-bottom-nav--floating .mobile-bottom-nav__item--brand.mobile-bottom-nav__item--brand-cancel {
+  background: var(--dmx-ui-accent-surface-strong);
+  border-color: var(--dmx-ui-accent-border-strong);
+  color: var(--dmx-ui-accent);
+  box-shadow:
+    0 0 0 1px var(--dmx-ui-accent-glow),
+    0 8px 24px var(--dmx-ui-accent-glow);
+}
+
+.mobile-bottom-nav__brand-wrap--cancel {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.mobile-bottom-nav__cancel-icon {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+/* Montar treino — feedback visual instantâneo (evita delay global de 250ms em botões) */
+html[data-mobile-shell='true'] .exercise-card.card-selection-mode {
+  transition: none !important;
+}
+
+html[data-mobile-shell='true'] .exercise-card.card-selection-mode .card-action-btn {
+  transition: none !important;
+}
+
+html[data-mobile-shell='true'] .mobile-exercise-row--selection .mobile-exercise-row__card {
+  transition: none !important;
+}
+
+html[data-mobile-shell='true'] .mobile-bottom-nav--floating .mobile-bottom-nav__item--brand,
+html[data-mobile-shell='true'] .mobile-bottom-nav--floating .mobile-bottom-nav__item--brand-cancel,
+html[data-mobile-shell='true'] .mobile-bottom-nav--floating .mobile-bottom-nav__item--active {
+  transition: none !important;
 }
 
 html[data-mobile-playback-active='true'] .mobile-bottom-nav--floating .mobile-bottom-nav__item--brand,

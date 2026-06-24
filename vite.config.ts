@@ -5,6 +5,8 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: {
+    target: ['es2020', 'chrome87', 'safari14', 'ios14', 'edge88'],
+    cssTarget: 'chrome87',
     rollupOptions: {
       output: {
         manualChunks(id) {

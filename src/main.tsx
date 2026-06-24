@@ -14,6 +14,21 @@ initMobileSessionGuard()
 
 if (typeof document !== 'undefined') {
   document.addEventListener('gesturestart', (event) => event.preventDefault(), { passive: false })
+  document.addEventListener(
+    'contextmenu',
+    (event) => {
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest(
+          '.cinema-mobile-reels-stage, .mobile-reels-speed-zone, .cinema-mobile-cover-poster'
+        )
+      ) {
+        event.preventDefault();
+      }
+    },
+    { capture: true }
+  );
 }
 
 createRoot(document.getElementById('root')!).render(

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { Exercise } from '../../types';
 import { useExerciseCover } from '../../hooks/useExerciseCover';
 import { ExerciseCoverImage } from '../ExerciseCoverImage';
@@ -18,7 +19,7 @@ interface MobileExerciseListRowProps {
   isInPlaylist?: boolean;
 }
 
-export function MobileExerciseListRow({
+export const MobileExerciseListRow = memo(function MobileExerciseListRow({
   ex,
   index,
   onWatch,
@@ -105,4 +106,4 @@ export function MobileExerciseListRow({
       </div>
     </article>
   );
-}
+});

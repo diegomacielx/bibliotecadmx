@@ -13,8 +13,8 @@ interface MobileShellProps {
   onBrandPress: () => void;
   favoritesCount: number;
   workoutCount?: number;
-  /** Exercícios selecionados no modo montar treino (badge no Início) */
-  homeSelectionCount?: number;
+  /** Montar treino ativo — com ≥1 exercício o logo vira X para cancelar/limpar */
+  selectionMode?: boolean;
   /** Lightbox de reprodução aberto — nav deve ficar acima de tudo */
   playbackElevated?: boolean;
   children: React.ReactNode;
@@ -44,6 +44,8 @@ function NavItem({
   badgeCount?: number;
   onTabChange: (tab: MobileTab) => void;
 }) {
+  const badgeVisible = showBadge && badgeCount != null && badgeCount > 0;
+
   return (
     <button
       type="button"
@@ -55,7 +57,7 @@ function NavItem({
     >
       <span className="mobile-bottom-nav__icon-wrap">
         <Icon name={icon} className="mobile-bottom-nav__icon" strokeWidth={active ? 2.25 : 1.75} />
-        {showBadge && badgeCount != null && badgeCount > 0 && (
+        {badgeVisible && (
           <span className="mobile-bottom-nav__badge" aria-hidden="true">
             {badgeCount > 9 ? '9+' : badgeCount}
           </span>
@@ -83,12 +85,13 @@ export function MobileShell({
   onBrandPress,
   favoritesCount,
   workoutCount = 0,
-  homeSelectionCount = 0,
+  selectionMode = false,
   playbackElevated = false,
   children,
 }: MobileShellProps) {
   const leftTabs = SIDE_TABS.slice(0, 2);
   const rightTabs = SIDE_TABS.slice(2);
+  const selectionCancelActive = selectionMode && workoutCount > 0;
   const [navHost, setNavHost] = useState<HTMLElement | null>(() => ensureNavLayerHost());
 
   useLayoutEffect(() => {
@@ -117,16 +120,8 @@ export function MobileShell({
           key={tab.id}
           {...tab}
           active={activeTab === tab.id}
-          showBadge={tab.id === 'favorites' || tab.id === 'workout' || (tab.id === 'home' && homeSelectionCount > 0)}
-          badgeCount={
-            tab.id === 'favorites'
-              ? favoritesCount
-              : tab.id === 'workout'
-                ? workoutCount
-                : tab.id === 'home'
-                  ? homeSelectionCount
-                  : undefined
-          }
+          showBadge={tab.id === 'favorites'}
+          badgeCount={tab.id === 'favorites' ? favoritesCount : undefined}
           onTabChange={onTabChange}
         />
       ))}
@@ -134,16 +129,30 @@ export function MobileShell({
       <button
         type="button"
         className={`mobile-bottom-nav__item mobile-bottom-nav__item--brand ${
-          activeTab === 'home' ? 'mobile-bottom-nav__item--active' : ''
+          selectionCancelActive
+            ? 'mobile-bottom-nav__item--brand-cancel mobile-bottom-nav__item--active'
+            : activeTab === 'home'
+              ? 'mobile-bottom-nav__item--active'
+              : ''
         }`}
         onClick={onBrandPress}
-        aria-label="Início — limpar filtros e voltar ao catálogo"
-        title="Início"
-        aria-current={activeTab === 'home' ? 'page' : undefined}
+        aria-label={
+          selectionCancelActive
+            ? 'Cancelar montagem do treino e limpar seleção'
+            : 'Início — limpar filtros e voltar ao catálogo'
+        }
+        title={selectionCancelActive ? 'Cancelar seleção' : 'Início'}
+        aria-current={!selectionCancelActive && activeTab === 'home' ? 'page' : undefined}
       >
-        <span className="mobile-bottom-nav__brand-wrap">
-          <BrandLogo variant="header" className="mobile-bottom-nav__brand-logo" />
-        </span>
+        {selectionCancelActive ? (
+          <span className="mobile-bottom-nav__brand-wrap mobile-bottom-nav__brand-wrap--cancel">
+            <Icon name="x" className="mobile-bottom-nav__cancel-icon" strokeWidth={2.5} />
+          </span>
+        ) : (
+          <span className="mobile-bottom-nav__brand-wrap">
+            <BrandLogo variant="header" className="mobile-bottom-nav__brand-logo" />
+          </span>
+        )}
       </button>
 
       {rightTabs.map((tab) => (
@@ -151,6 +160,8 @@ export function MobileShell({
           key={tab.id}
           {...tab}
           active={activeTab === tab.id}
+          showBadge={tab.id === 'workout' && workoutCount > 0}
+          badgeCount={tab.id === 'workout' ? workoutCount : undefined}
           onTabChange={onTabChange}
         />
       ))}

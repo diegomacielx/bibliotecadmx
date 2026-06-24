@@ -52,6 +52,7 @@ import {
   getSearchPool,
 } from './lib/search';
 import { DEFAULT_HERO_SPOTLIGHT, resolveHeroDisplay } from './lib/heroSpotlight';
+import { buildPlaylistSelectionLookup, getPlaylistSequence, playlistSelectionEmpty } from './lib/playlistSelection';
 import { normalizeHeroSpotlight } from './lib/heroCampaign';
 import { trackHeroCampaignClick, trackHeroCampaignImpression } from './lib/heroCampaignMetrics';
 import {
@@ -1545,7 +1546,7 @@ export default function App() {
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
-    if (!useMobileShell) {
+    if (useMobileShell) {
       document.documentElement.removeAttribute('data-mobile-playlist-active');
       return;
     }
@@ -1606,8 +1607,20 @@ export default function App() {
     return playlistOrder.map((id) => byId.get(id)).filter((ex): ex is Exercise => !!ex);
   }, [playlistOrder, exercises]);
 
+  const playlistSelection = useMemo(
+    () => buildPlaylistSelectionLookup(playlistOrder),
+    [playlistOrder]
+  );
+
   useEffect(() => {
-    localStorage.setItem('dmx_playlist_order', JSON.stringify(playlistOrder));
+    const timer = window.setTimeout(() => {
+      try {
+        localStorage.setItem('dmx_playlist_order', JSON.stringify(playlistOrder));
+      } catch {
+        /* quota / private mode */
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [playlistOrder]);
 
   const searchIndexes = useMemo(
@@ -1772,12 +1785,20 @@ export default function App() {
       setActiveVideo(null);
       setCompareEx(null);
     }
+    if (selectionMode) {
+      setSelectionMode(false);
+      if (playlistOrder.length > 0) {
+        setPlaylistOrder([]);
+      }
+      window.scrollTo({ top: 0, behavior: 'auto' });
+      return;
+    }
     setSearchTerm('');
     setActiveCategory('Todos');
     resetAdvancedFilters();
     setMobileTab('home');
     window.scrollTo({ top: 0, behavior: 'auto' });
-  }, [activeVideo, resetAdvancedFilters]);
+  }, [activeVideo, selectionMode, playlistOrder.length, resetAdvancedFilters]);
 
   const handleMobileTabChange = useCallback(
     (tab: MobileTab) => {
@@ -2268,6 +2289,11 @@ export default function App() {
       return [...prev, ex.firestoreId];
     });
   }, []);
+
+  const toggleFavoriteExercise = useCallback(
+    (ex: Exercise) => toggleFavorite(ex.firestoreId),
+    [toggleFavorite]
+  );
 
   const playPlaylist = useCallback(() => {
     if (playlist.length === 0) return;
@@ -2818,10 +2844,10 @@ export default function App() {
                         copiedId={copiedId}
                         onWatch={watchExercise}
                         selectionMode={false}
-                        playlistOrder={[]}
+                        playlistSelection={playlistSelectionEmpty}
                         onTogglePlaylist={togglePlaylistItem}
                         isFavorite={isFavorite}
-                        onToggleFavorite={toggleFavorite}
+                        onToggleFavoriteExercise={toggleFavoriteExercise}
                         cardHoverPreview={false}
                         cardCoverParallax={false}
                       />
@@ -2837,8 +2863,8 @@ export default function App() {
             onTabChange={handleMobileTabChange}
             onBrandPress={handleMobileBrandPress}
             favoritesCount={favorites.size}
-            workoutCount={playlist.length}
-            homeSelectionCount={selectionMode ? playlist.length : 0}
+            workoutCount={playlistSelection.count}
+            selectionMode={selectionMode}
             playbackElevated={!!activeVideo}
           >
             {mobileTab === 'account' ? (
@@ -2950,10 +2976,10 @@ export default function App() {
                     copiedId={copiedId}
                     onWatch={watchExercise}
                     selectionMode={selectionMode}
-                    playlistOrder={playlistOrder}
+                    playlistSelection={playlistSelection}
                     onTogglePlaylist={togglePlaylistItem}
                     isFavorite={isFavorite}
-                    onToggleFavorite={toggleFavorite}
+                    onToggleFavoriteExercise={toggleFavoriteExercise}
                     cardHoverPreview={cardHoverPreview}
                     cardCoverParallax={cardCoverParallax}
                   />
@@ -3027,17 +3053,11 @@ export default function App() {
                 copiedId={copiedId}
                 onWatch={watchExercise}
                 selectionMode={selectionMode}
-                isInPlaylist={playlistOrder.includes(ex.firestoreId)}
-                playlistSequence={
-                  selectionMode
-                    ? playlistOrder.indexOf(ex.firestoreId) >= 0
-                      ? playlistOrder.indexOf(ex.firestoreId) + 1
-                      : undefined
-                    : undefined
-                }
+                isInPlaylist={playlistSelection.ids.has(ex.firestoreId)}
+                playlistSequence={getPlaylistSequence(playlistSelection, ex.firestoreId, selectionMode)}
                 onTogglePlaylist={togglePlaylistItem}
                 isFavorite={isFavorite(ex.firestoreId)}
-                onToggleFavorite={() => toggleFavorite(ex.firestoreId)}
+                onToggleFavorite={toggleFavoriteExercise}
                 onCompare={isFeatureEnabled('compare') ? handleCompare : undefined}
                 isComparePick={comparePick?.firestoreId === ex.firestoreId}
                 prefetchPeers={getGridPrefetchPeers(gridExercises, index)}
@@ -3124,17 +3144,11 @@ export default function App() {
                 copiedId={copiedId}
                 onWatch={watchExercise}
                 selectionMode={selectionMode}
-                isInPlaylist={playlistOrder.includes(ex.firestoreId)}
-                playlistSequence={
-                  selectionMode
-                    ? playlistOrder.indexOf(ex.firestoreId) >= 0
-                      ? playlistOrder.indexOf(ex.firestoreId) + 1
-                      : undefined
-                    : undefined
-                }
+                isInPlaylist={playlistSelection.ids.has(ex.firestoreId)}
+                playlistSequence={getPlaylistSequence(playlistSelection, ex.firestoreId, selectionMode)}
                 onTogglePlaylist={togglePlaylistItem}
                 isFavorite={isFavorite(ex.firestoreId)}
-                onToggleFavorite={() => toggleFavorite(ex.firestoreId)}
+                onToggleFavorite={toggleFavoriteExercise}
                 onCompare={isFeatureEnabled('compare') ? handleCompare : undefined}
                 isComparePick={comparePick?.firestoreId === ex.firestoreId}
                 prefetchPeers={getGridPrefetchPeers(gridExercises, index)}
@@ -3148,22 +3162,15 @@ export default function App() {
         )}
       </main>
 
+      {!useMobileShell && (
       <PlaylistBar
         playlist={playlist}
         selectionMode={selectionMode}
         onToggleSelectionMode={() => setSelectionMode((v) => !v)}
         onPlay={playPlaylist}
         onClear={() => setPlaylistOrder([])}
-        mobileShellMode={useMobileShell}
-        onFinishSelection={
-          useMobileShell
-            ? () => {
-                setSelectionMode(false);
-                setMobileTab('workout');
-              }
-            : undefined
-        }
       />
+      )}
 
       {showAdminPanel && showAdminUI && (
         <Suspense fallback={null}>

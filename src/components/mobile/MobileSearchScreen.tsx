@@ -1,6 +1,7 @@
 import type { Exercise, ExerciseForm, AdminTab } from '../../types';
 import type { RecentExercise } from '../../hooks/useSearchHistory';
 import type { MobileCatalogView } from '../../lib/mobilePreferences';
+import type { PlaylistSelectionLookup } from '../../lib/playlistSelection';
 import { Icon } from '../Icon';
 import { GridSkeleton } from '../Skeleton';
 import { EmptyState } from '../EmptyState';
@@ -42,10 +43,10 @@ interface MobileSearchScreenProps {
   copiedId: string | null;
   onWatch: (ex: Exercise) => void;
   selectionMode: boolean;
-  playlistOrder: string[];
+  playlistSelection: PlaylistSelectionLookup;
   onTogglePlaylist: (ex: Exercise) => void;
   isFavorite: (id: string) => boolean;
-  onToggleFavorite: (id: string) => void;
+  onToggleFavoriteExercise: (ex: Exercise) => void;
   onCompare?: (ex: Exercise) => void;
   comparePickId?: string;
   cardHoverPreview: boolean;
@@ -88,10 +89,10 @@ export function MobileSearchScreen({
   copiedId,
   onWatch,
   selectionMode,
-  playlistOrder,
+  playlistSelection,
   onTogglePlaylist,
   isFavorite,
-  onToggleFavorite,
+  onToggleFavoriteExercise,
   onCompare,
   comparePickId,
   cardHoverPreview,
@@ -187,10 +188,10 @@ export function MobileSearchScreen({
             copiedId={copiedId}
             onWatch={onWatch}
             selectionMode={selectionMode}
-            playlistOrder={playlistOrder}
+            playlistSelection={playlistSelection}
             onTogglePlaylist={onTogglePlaylist}
             isFavorite={isFavorite}
-            onToggleFavorite={onToggleFavorite}
+            onToggleFavoriteExercise={onToggleFavoriteExercise}
             onCompare={onCompare}
             comparePickId={comparePickId}
             cardHoverPreview={cardHoverPreview}
