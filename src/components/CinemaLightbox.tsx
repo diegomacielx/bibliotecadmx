@@ -285,6 +285,40 @@ function settleReelsSlideFrame(player: YouTubePlayerHandle, seekAt: number): voi
   }
 }
 
+function isPlayerActive(state: number): boolean {
+  return state === 1 || state === 3;
+}
+
+function tryPlayVideo(
+  player: YouTubePlayerHandle | null | undefined,
+  options?: { forceMute?: boolean }
+): void {
+  if (!player) return;
+  try {
+    if (options?.forceMute) player.mute();
+    const state = player.getPlayerState();
+    if (state === 1) return;
+    player.playVideo();
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Retries help on mobile where the first playVideo() after mount often needs a fresh gesture window. */
+function schedulePlayRetries(
+  player: YouTubePlayerHandle | null | undefined,
+  signalGesture = true,
+  forceMute = false
+): void {
+  if (!player) return;
+  if (signalGesture) signalMobilePlaybackGesture();
+  const opts = forceMute ? { forceMute: true } : undefined;
+  tryPlayVideo(player, opts);
+  requestAnimationFrame(() => tryPlayVideo(player, opts));
+  window.setTimeout(() => tryPlayVideo(player, opts), 120);
+  window.setTimeout(() => tryPlayVideo(player, opts), 480);
+}
+
 function MobileCoverPlayer({
   ex,
   ytId,
@@ -321,8 +355,13 @@ function MobileCoverPlayer({
 }) {
   const touchLayout = useTouchLayout();
   const inReelsFeed = reelsRole != null;
-  const [isPlaying, setIsPlaying] = useState(inReelsFeed ? true : hero && !preview);
+  const [isPlaying, setIsPlaying] = useState(
+    inReelsFeed ? true : hero && !preview && videoAutoplay
+  );
   const [frameReady, setFrameReady] = useState(false);
+  // Pausa real do player (estado 2). Mantém a capa por cima para esconder o
+  // overlay nativo do YouTube (logo central + barra) quando o vídeo é pausado.
+  const [coverPaused, setCoverPaused] = useState(false);
   const [audioUnlocked, setAudioUnlocked] = useState(
     () => allowSoundControl && isMobileAudioUnlocked()
   );
@@ -337,6 +376,10 @@ function MobileCoverPlayer({
   const videoLoopRef = useRef(videoLoop);
   const videoAutoplayRef = useRef(videoAutoplay);
   const onVideoEndedRef = useRef(onVideoEnded);
+  const userRequestedPlayRef = useRef(false);
+  // A capa só some quando o vídeo está REALMENTE tocando (estado 1). Em buffering
+  // ou pausa, a capa permanece — assim o usuário nunca vê o splash/logo do YouTube.
+  const hideCoverMask = frameReady && !coverPaused;
   const { imgSrc, coverMissing, handleLoad, handleError } = useExerciseCover(ex, { priority: 'high' });
   const isVertical =
     resolveVideoOrientation(ex.youtubeUrl, {
@@ -380,15 +423,18 @@ function MobileCoverPlayer({
     // previewing 'next'/'prev' slide becomes 'current', it just keeps playing
     // from wherever it already was instead of resetting to the first frame.
     if (reelsRole === 'current') {
-      if (videoAutoplayRef.current && !isPlaying) player.playVideo();
+      if (videoAutoplayRef.current && !isPlaying) {
+        schedulePlayRetries(player, false, true);
+      }
       if (isPlaybackLeader) syncActiveRegistration();
       return;
     }
 
-    // Adjacent slides: keep the preview running while the finger scrolls or
-    // during the snap handoff.
+    // Adjacent slides: preview animado só com autoplay ligado.
     if (feedScrollActive || isHandoffTarget) {
-      if (!isPlaying) player.playVideo();
+      if (videoAutoplayRef.current && !isPlaying) {
+        tryPlayVideo(player, { forceMute: true });
+      }
       return;
     }
 
@@ -402,7 +448,12 @@ function MobileCoverPlayer({
       return;
     }
     player.seekTo(seekAt);
-    player.playVideo();
+    if (videoAutoplayRef.current) {
+      player.playVideo();
+    } else {
+      settleReelsSlideFrame(player, seekAt);
+      bufferPrimedRef.current = true;
+    }
   }, [
     inReelsFeed,
     reelsRole,
@@ -416,6 +467,8 @@ function MobileCoverPlayer({
   useEffect(() => {
     bufferPrimedRef.current = false;
     setFrameReady(false);
+    setCoverPaused(false);
+    userRequestedPlayRef.current = false;
   }, [ex.firestoreId, ytId]);
 
   useLayoutEffect(() => {
@@ -429,10 +482,10 @@ function MobileCoverPlayer({
 
   useEffect(() => {
     if (!inReelsFeed) {
-      setIsPlaying(hero && !preview);
+      setIsPlaying(hero && !preview && videoAutoplayRef.current);
     }
     setAudioUnlocked(allowSoundControl && isMobileAudioUnlocked());
-  }, [ex.firestoreId, hero, preview, allowSoundControl, inReelsFeed]);
+  }, [ex.firestoreId, hero, preview, allowSoundControl, inReelsFeed, videoAutoplay]);
 
   useEffect(() => {
     applyReelsPlayback();
@@ -466,7 +519,9 @@ function MobileCoverPlayer({
         player.seekTo(entrySeekAt);
       }
       const state = player.getPlayerState();
-      if (state !== 1 && state !== 3) player.playVideo();
+      if (state !== 1 && state !== 3 && videoAutoplayRef.current) {
+        schedulePlayRetries(player, false, true);
+      }
     }
     if (reelsRole !== 'current') entrySeekAppliedRef.current = false;
     reelsRoleRef.current = reelsRole;
@@ -491,13 +546,24 @@ function MobileCoverPlayer({
   }, [ex, preview, touchLayout, inReelsFeed]);
 
   const handlePlay = () => {
+    userRequestedPlayRef.current = true;
+    setCoverPaused(false);
     signalMobilePlaybackGesture();
     primeVideoPlaybackIntent(ex, { force: true });
     setIsPlaying(true);
+    schedulePlayRetries(playerRef.current);
   };
 
   const handlePlayerState = useCallback(
     (state: number) => {
+      // Tocando: revela o quadro e tira o estado de pausa.
+      if (state === 1) {
+        setFrameReady(true);
+        setCoverPaused(false);
+      }
+      // Pausado: mostra a capa por cima para esconder o overlay nativo do YouTube.
+      if (state === 2) setCoverPaused(true);
+
       if (!inReelsFeed) return;
       if (state === 0 && reelsRoleRef.current === 'current') {
         if (videoLoopRef.current) {
@@ -512,15 +578,14 @@ function MobileCoverPlayer({
       }
       if (state !== 2) return;
       const role = reelsRoleRef.current;
-      if (role === 'current') {
-        queueMicrotask(() => playerRef.current?.playVideo());
-        return;
-      }
+      // Slide atual: NÃO auto-retoma — respeita a pausa manual (toque no centro).
+      if (role === 'current') return;
+      // Slides adjacentes continuam tocando o preview durante o scroll.
       const scrolling =
         feedScrollActiveRef.current ||
         document.documentElement.hasAttribute('data-reels-feed-scrolling') ||
         document.documentElement.hasAttribute('data-reels-feed-snapping');
-      if (role != null && (scrolling || isHandoffTargetRef.current)) {
+      if (role != null && videoAutoplayRef.current && (scrolling || isHandoffTargetRef.current)) {
         queueMicrotask(() => playerRef.current?.playVideo());
       }
     },
@@ -541,6 +606,9 @@ function MobileCoverPlayer({
     if (inReelsFeed) {
       registerSlidePlayer?.(player);
       applyReelsPlayback();
+      if (reelsRoleRef.current === 'current' && videoAutoplayRef.current) {
+        schedulePlayRetries(player, false, true);
+      }
       if (allowSoundControl && isMobileAudioUnlocked()) {
         player?.unMute();
         setAudioUnlocked(true);
@@ -548,8 +616,8 @@ function MobileCoverPlayer({
       return;
     }
 
-    if (videoAutoplayRef.current) {
-      player?.playVideo();
+    if (videoAutoplayRef.current || userRequestedPlayRef.current) {
+      schedulePlayRetries(player, true, touchLayout);
     }
     if (allowSoundControl && isMobileAudioUnlocked()) {
       player?.unMute();
@@ -567,15 +635,21 @@ function MobileCoverPlayer({
     const player = playerRef.current;
     if (!player) return;
 
+    userRequestedPlayRef.current = true;
+    setCoverPaused(false);
+    signalMobilePlaybackGesture();
+
     if (allowSoundControl && !audioUnlocked) {
       unlockMobileAudio();
       setAudioUnlocked(true);
       player.unMute();
-      player.playVideo();
+      schedulePlayRetries(player, false, true);
       return;
     }
 
-    player.togglePlay();
+    const state = player.getPlayerState();
+    if (isPlayerActive(state)) player.togglePlay();
+    else schedulePlayRetries(player, false, true);
   };
 
   const showPlayerLayer = inReelsFeed || isPlaying;
@@ -594,22 +668,21 @@ function MobileCoverPlayer({
             hero ? 'cinema-mobile-cover-player--reels-cover' : ''
           } ${
             hero && isVertical ? 'cinema-mobile-cover-player--vertical-theater cinema-player-layer--vertical-theater' : ''
-          }${inReelsFeed && !frameReady && !feedScrollActive ? ' cinema-mobile-cover-player--awaiting-frame' : ''}`}
+          }${(inReelsFeed || hero) && !hideCoverMask ? ' cinema-mobile-cover-player--awaiting-frame' : ''}`}
         >
           <YouTubePlayer
             ref={playerRef}
             videoId={ytId}
             title={ex.name}
-            autoplay
+            autoplay={videoAutoplay}
             mute={shouldMute}
             controls={false}
             largeSurface
             mobileVertical={isVertical}
             onReady={handlePlayerReady}
-            onPlayerState={inReelsFeed ? handlePlayerState : undefined}
+            onPlayerState={handlePlayerState}
             onEnded={inReelsFeed ? undefined : handleVideoEnded}
             onFrameVisible={() => {
-              setFrameReady(true);
               const isAdjacent = reelsRoleRef.current != null && reelsRoleRef.current !== 'current';
               if (
                 inReelsFeed &&
@@ -624,7 +697,7 @@ function MobileCoverPlayer({
               }
             }}
           />
-          {inReelsFeed && !frameReady && !feedScrollActive && (
+          {(inReelsFeed || hero) && !hideCoverMask && (
             coverMissing ? (
               <ExerciseCoverPlaceholder className="cinema-mobile-cover-poster cinema-mobile-cover-poster--reels-mask" />
             ) : (
@@ -643,6 +716,11 @@ function MobileCoverPlayer({
                 }}
               />
             )
+          )}
+          {inReelsFeed && reelsRole === 'current' && !hideCoverMask && (
+            <div className="cinema-reels-play-hint" aria-hidden="true">
+              <Icon name="play" className="w-6 h-6 ml-0.5" strokeWidth={2} fill="currentColor" />
+            </div>
           )}
           {allowSoundControl && !audioUnlocked && (
             <div className="mobile-reels-unmute-hint" aria-hidden="true">
@@ -741,6 +819,12 @@ function MobileReelsFeed({
   useEffect(() => {
     videoAutoplayRef.current = videoAutoplay;
   }, [videoAutoplay]);
+  const navListRef = useRef(navList);
+  const navIndexRef = useRef(navIndex);
+  useEffect(() => {
+    navListRef.current = navList;
+    navIndexRef.current = navIndex;
+  }, [navList, navIndex]);
   const containerRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const gestureRef = useRef<HTMLDivElement>(null);
@@ -821,7 +905,12 @@ function MobileReelsFeed({
             slide.kind === 'next' ? 0 : reelsAdjacentSeekSeconds(exerciseId, 'prev');
           try {
             player.seekTo(seekAt);
-            player.playVideo();
+            if (videoAutoplayRef.current) {
+              player.mute();
+              player.playVideo();
+            } else {
+              settleReelsSlideFrame(player, seekAt);
+            }
           } catch {
             /* player not ready */
           }
@@ -834,6 +923,7 @@ function MobileReelsFeed({
   );
 
   const primeAdjacentSlides = useCallback(() => {
+    if (!videoAutoplayRef.current) return;
     for (const slide of slides) {
       if (slide.kind === 'current') continue;
       const player = slidePlayersRef.current.get(slide.ex.firestoreId);
@@ -850,6 +940,46 @@ function MobileReelsFeed({
       }
     }
   }, [slides]);
+
+  // Toque (sem arrastar): alterna play/pause do slide atual. Pausar mostra a capa
+  // por cima do player (esconde o overlay nativo do YouTube). Usa refs vivos
+  // (navListRef/navIndexRef) porque é chamado de um listener com deps fixas.
+  const toggleCurrentSlide = useCallback(() => {
+    const currentEx = navListRef.current[navIndexRef.current];
+    const player = currentEx ? slidePlayersRef.current.get(currentEx.firestoreId) : null;
+    if (!player) return;
+    signalMobilePlaybackGesture();
+    const state = player.getPlayerState();
+    if (state === 1) {
+      player.pauseVideo();
+    } else {
+      schedulePlayRetries(player, false, true);
+    }
+  }, []);
+
+  const freezeSlideAtFrame = useCallback((exerciseId: string, seekAt = 0) => {
+    const player = slidePlayersRef.current.get(exerciseId);
+    if (!player) return;
+    try {
+      settleReelsSlideFrame(player, seekAt);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const freezeNonCurrentSlides = useCallback(() => {
+    const currentEx = navListRef.current[navIndexRef.current];
+    if (!currentEx) return;
+    for (const [exerciseId, player] of slidePlayersRef.current.entries()) {
+      if (exerciseId === currentEx.firestoreId) continue;
+      try {
+        const t = player.getCurrentTime();
+        settleReelsSlideFrame(player, t > 0.1 ? t : 0);
+      } catch {
+        /* ignore */
+      }
+    }
+  }, []);
 
   const registerCurrentPlayer = useCallback(
     (player: YouTubePlayerHandle | null) => {
@@ -952,17 +1082,12 @@ function MobileReelsFeed({
 
   const ensureSlidePlaying = useCallback(
     (kind: ReelsSlideRole) => {
+      if (!videoAutoplayRef.current) return;
       const ex = exerciseForKind(kind);
       if (!ex) return;
       const player = slidePlayersRef.current.get(ex.firestoreId);
       if (!player) return;
-      const state = player.getPlayerState();
-      if (state === 1 || state === 3) return;
-      if (state === 2 && player.getCurrentTime() > 0.2) {
-        player.playVideo();
-        return;
-      }
-      player.playVideo();
+      schedulePlayRetries(player, false, true);
     },
     [exerciseForKind]
   );
@@ -977,8 +1102,11 @@ function MobileReelsFeed({
     if (pending === 'next') {
       pendingNavRef.current = null;
       snappingBackRef.current = false;
-      // Ensure the winning slide is still playing before the React nav update.
-      ensureSlidePlaying('next');
+      if (videoAutoplayRef.current) {
+        ensureSlidePlaying('next');
+      } else {
+        freezeNonCurrentSlides();
+      }
       dragOffsetRef.current = 0;
       setDragOffset(0);
       setIsSnapping(false);
@@ -993,7 +1121,11 @@ function MobileReelsFeed({
     if (pending === 'prev') {
       pendingNavRef.current = null;
       snappingBackRef.current = false;
-      ensureSlidePlaying('prev');
+      if (videoAutoplayRef.current) {
+        ensureSlidePlaying('prev');
+      } else {
+        freezeNonCurrentSlides();
+      }
       dragOffsetRef.current = 0;
       setDragOffset(0);
       setIsSnapping(false);
@@ -1005,12 +1137,14 @@ function MobileReelsFeed({
 
     if (snappingBackRef.current) {
       snappingBackRef.current = false;
-      ensureSlidePlaying('current');
+      if (videoAutoplayRef.current) {
+        ensureSlidePlaying('current');
+      }
       setIsSnapping(false);
       setPlaybackKind('current');
       endGesture();
     }
-  }, [handleFeedNavNext, handleFeedNavPrev, ensureSlidePlaying, endGesture]);
+  }, [handleFeedNavNext, handleFeedNavPrev, ensureSlidePlaying, endGesture, freezeNonCurrentSlides]);
 
   const scheduleSnapFallback = useCallback(() => {
     window.clearTimeout(snapTimerRef.current);
@@ -1041,7 +1175,9 @@ function MobileReelsFeed({
       setIsSnapping(true);
       setFeedScrolling(true);
       setPlaybackKind(direction);
-      ensureSlidePlaying(direction);
+      if (videoAutoplayRef.current) {
+        ensureSlidePlaying(direction);
+      }
 
       const target = direction === 'next' ? h : -h;
       dragOffsetRef.current = target;
@@ -1061,7 +1197,9 @@ function MobileReelsFeed({
     setDragOffset(0);
     setPlaybackKind('current');
     syncVisibleExercise('current');
-    ensureSlidePlaying('current');
+    if (videoAutoplayRef.current) {
+      ensureSlidePlaying('current');
+    }
     scheduleSnapFallback();
   }, [setFeedScrolling, syncVisibleExercise, ensureSlidePlaying, scheduleSnapFallback]);
 
@@ -1147,20 +1285,22 @@ function MobileReelsFeed({
 
     window.clearTimeout(navSettleTimerRef.current);
     navSettleTimerRef.current = window.setTimeout(() => {
-      primeAdjacentSlides();
       const currentEx = navList[navIndex];
-      if (currentEx) {
-        const player = slidePlayersRef.current.get(currentEx.firestoreId);
-        if (player) {
-          const state = player.getPlayerState();
-          if (state !== 1 && state !== 3) player.playVideo();
+      if (videoAutoplayRef.current) {
+        primeAdjacentSlides();
+        if (currentEx) {
+          const player = slidePlayersRef.current.get(currentEx.firestoreId);
+          if (player) schedulePlayRetries(player, false, true);
         }
+      } else if (currentEx) {
+        freezeSlideAtFrame(currentEx.firestoreId, 0);
+        freezeNonCurrentSlides();
       }
       setHandoffExerciseId(null);
     }, 48);
 
     return () => window.clearTimeout(navSettleTimerRef.current);
-  }, [navIndex, resetDrag, endGesture, primeAdjacentSlides, navList]);
+  }, [navIndex, resetDrag, endGesture, primeAdjacentSlides, navList, freezeSlideAtFrame, freezeNonCurrentSlides]);
 
   useEffect(() => {
     const track = trackRef.current;
@@ -1184,18 +1324,30 @@ function MobileReelsFeed({
   }, [navIndex, navList]);
 
   useEffect(() => {
+    if (!videoAutoplayRef.current) return;
+    const kickstartCurrent = () => {
+      const currentEx = navList[navIndex];
+      const player = currentEx ? slidePlayersRef.current.get(currentEx.firestoreId) : null;
+      schedulePlayRetries(player, true, true);
+    };
+    const t0 = window.setTimeout(kickstartCurrent, 80);
+    const t1 = window.setTimeout(kickstartCurrent, 650);
+    const t2 = window.setTimeout(kickstartCurrent, 1400);
+    return () => {
+      window.clearTimeout(t0);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, [navIndex, navList, videoAutoplay]);
+
+  useEffect(() => {
     lockAppUrl();
     const onRestore = () => {
       lockAppUrl();
+      if (!videoAutoplayRef.current) return;
       const currentEx = navList[navIndex];
       const player = currentEx ? slidePlayersRef.current.get(currentEx.firestoreId) : null;
-      if (!player) return;
-      try {
-        const state = player.getPlayerState();
-        if (state !== 1 && state !== 3) player.playVideo();
-      } catch {
-        /* ignore */
-      }
+      schedulePlayRetries(player, false, true);
     };
     window.addEventListener('dmx:bfcache-restore', onRestore);
     return () => window.removeEventListener('dmx:bfcache-restore', onRestore);
@@ -1214,11 +1366,8 @@ function MobileReelsFeed({
       }
       const currentEx = navList[navIndex];
       const player = currentEx ? slidePlayersRef.current.get(currentEx.firestoreId) : null;
-      if (player) {
-        try {
-          const state = player.getPlayerState();
-          if (state !== 1 && state !== 3) player.playVideo();
-        } catch { /* ignore */ }
+      if (player && videoAutoplayRef.current) {
+        schedulePlayRetries(player, false, true);
       }
     };
     document.addEventListener('visibilitychange', onVisibility);
@@ -1249,17 +1398,13 @@ function MobileReelsFeed({
       gestureApiRef.current.setIsSnapping(false);
       primeYouTubePlayerApi();
       signalMobilePlaybackGesture();
-      gestureApiRef.current.primeAdjacentSlides();
 
-      // Start all slide players within the gesture (iOS requires user-gesture
-      // context for programmatic playVideo even when muted).
-      if (videoAutoplayRef.current) {
-        for (const player of slidePlayersRef.current.values()) {
-          try {
-            const state = player.getPlayerState();
-            if (state !== 1 && state !== 3) player.playVideo();
-          } catch { /* ignore */ }
-        }
+      // Não dispara playback no pointerdown: um toque seco é resolvido em
+      // finishPointer (toggle) e o scroll liga os previews via feedScrollActive.
+      // Disparar play aqui causava retries que desfaziam a pausa por toque.
+      // Autoplay OFF: mantém os slides não-atuais congelados (sem autoplay).
+      if (!videoAutoplayRef.current) {
+        freezeNonCurrentSlides();
       }
 
       layer.setPointerCapture(e.pointerId);
@@ -1294,6 +1439,7 @@ function MobileReelsFeed({
       if (!gestureActiveRef.current) return;
 
       if (totalMovementRef.current < 12) {
+        toggleCurrentSlide();
         gestureActiveRef.current = false;
         gestureApiRef.current.setGestureActive(false);
         gestureApiRef.current.setFeedScrolling(false);
@@ -1442,6 +1588,7 @@ function MobileExerciseSheet({
 }) {
   const [musclesOpen, setMusclesOpen] = useState(false);
   const [speedActive, setSpeedActive] = useState(false);
+  const [speedRate, setSpeedRate] = useState(2);
   const [displayEx, setDisplayEx] = useState(ex);
   const activePlayerRef = useRef<YouTubePlayerHandle | null>(null);
   const speedHoldRef = useRef(false);
@@ -1485,16 +1632,28 @@ function MobileExerciseSheet({
     e.stopPropagation();
   }, []);
 
+  // Toque rápido na lateral (sem segurar) alterna play/pause do vídeo atual.
+  const togglePlayback = useCallback(() => {
+    const player = activePlayerRef.current;
+    if (!player) return;
+    signalMobilePlaybackGesture();
+    const state = player.getPlayerState();
+    if (state === 1) player.pauseVideo();
+    else schedulePlayRetries(player, false, true);
+  }, []);
+
   const handleSpeedZoneDown = useCallback(
-    (e: PointerEvent<HTMLDivElement>) => {
+    (rate: number) => (e: PointerEvent<HTMLDivElement>) => {
       if (document.documentElement.hasAttribute('data-reels-feed-scrolling')) return;
       e.preventDefault();
       e.stopPropagation();
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
       window.clearTimeout(speedTimerRef.current);
+      // Segurar: direita = 2×, esquerda = 0,5×.
       speedTimerRef.current = window.setTimeout(() => {
-        activePlayerRef.current?.setPlaybackRate(2);
+        activePlayerRef.current?.setPlaybackRate(rate);
         speedHoldRef.current = true;
+        setSpeedRate(rate);
         setSpeedActive(true);
       }, 260);
     },
@@ -1504,9 +1663,17 @@ function MobileExerciseSheet({
   const handleSpeedZoneUp = useCallback(
     (e: PointerEvent<HTMLDivElement>) => {
       e.stopPropagation();
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {
+        /* already released */
+      }
+      // Se a velocidade não chegou a ativar, foi um toque seco → play/pause.
+      const wasHold = speedHoldRef.current;
       endSpeedHold();
+      if (!wasHold) togglePlayback();
     },
-    [endSpeedHold]
+    [endSpeedHold, togglePlayback]
   );
 
   useEffect(() => {
@@ -1573,7 +1740,7 @@ function MobileExerciseSheet({
         <div className="mobile-reels-speed-zones" aria-hidden="true">
           <div
             className="mobile-reels-speed-zone mobile-reels-speed-zone--left"
-            onPointerDown={handleSpeedZoneDown}
+            onPointerDown={handleSpeedZoneDown(0.5)}
             onPointerUp={handleSpeedZoneUp}
             onPointerCancel={handleSpeedZoneUp}
             onContextMenu={blockNativeTouchMenu}
@@ -1581,7 +1748,7 @@ function MobileExerciseSheet({
           />
           <div
             className="mobile-reels-speed-zone mobile-reels-speed-zone--right"
-            onPointerDown={handleSpeedZoneDown}
+            onPointerDown={handleSpeedZoneDown(2)}
             onPointerUp={handleSpeedZoneUp}
             onPointerCancel={handleSpeedZoneUp}
             onContextMenu={blockNativeTouchMenu}
@@ -1591,7 +1758,7 @@ function MobileExerciseSheet({
 
         {speedActive && (
           <div className="mobile-reels-speed-badge" aria-live="polite">
-            2×
+            {speedRate === 0.5 ? '0,5×' : `${speedRate}×`}
           </div>
         )}
 
@@ -1824,13 +1991,16 @@ export function CinemaLightbox({
   const compareSyncStartedRef = useRef(false);
   const videoAreaRef = useRef<HTMLDivElement>(null);
   const [controlsVisible, setControlsVisible] = useState(true);
-  const [sidebarVisible, setSidebarVisible] = useState(true);
   const [playerReadyToken, setPlayerReadyToken] = useState(0);
   const [showReplay, setShowReplay] = useState(false);
+  const [desktopFrameReady, setDesktopFrameReady] = useState(false);
+  const [desktopAwaitingPlay, setDesktopAwaitingPlay] = useState(false);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoLoopRef = useRef(videoLoop);
   const videoAutoplayRef = useRef(videoAutoplay);
   const compareLoopSyncRef = useRef(compareLoopSync);
+  const desktopCover = useExerciseCover(ex, { priority: 'critical' });
+  const shouldMountDesktopPlayer = videoAutoplay || desktopAwaitingPlay;
 
   useEffect(() => {
     videoLoopRef.current = videoLoop;
@@ -1884,19 +2054,37 @@ export function CinemaLightbox({
 
   const resetHideTimer = useCallback(() => {
     setControlsVisible(true);
-    setSidebarVisible(true);
     if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
     hideTimerRef.current = setTimeout(() => {
       setControlsVisible(false);
-      if (!isMobileLayout) setSidebarVisible(false);
     }, CONTROLS_HIDE_MS);
-  }, [isMobileLayout]);
+  }, []);
 
   const handlePrimaryPlayerReady = useCallback(() => {
     resetHideTimer();
     setPlayerReadyToken((n) => n + 1);
+    if (videoAutoplayRef.current || desktopAwaitingPlay) {
+      playerRef.current?.playVideo();
+    }
+  }, [resetHideTimer, desktopAwaitingPlay]);
+
+  const handleDesktopStartPlayback = useCallback(
+    (e: MouseEvent<HTMLButtonElement>) => {
+      e.stopPropagation();
+      if (!shouldMountDesktopPlayer) {
+        setDesktopAwaitingPlay(true);
+        return;
+      }
+      playerRef.current?.togglePlay();
+      resetHideTimer();
+    },
+    [resetHideTimer, shouldMountDesktopPlayer]
+  );
+
+  useEffect(() => {
+    if (!desktopAwaitingPlay || !shouldMountDesktopPlayer) return;
     playerRef.current?.playVideo();
-  }, [resetHideTimer]);
+  }, [desktopAwaitingPlay, shouldMountDesktopPlayer]);
 
   useEffect(() => {
     if (!isMobileLayout) return;
@@ -1921,15 +2109,17 @@ export function CinemaLightbox({
   }, [isMobileLayout]);
 
   useEffect(() => {
-    if (isMobileLayout) setSidebarVisible(true);
-  }, [isMobileLayout, ex.firestoreId]);
-
-  useEffect(() => {
     compareReadyRef.current = { primary: false, secondary: false };
     compareSyncStartedRef.current = false;
     setPlayerReadyToken(0);
     setShowReplay(false);
+    setDesktopFrameReady(false);
+    setDesktopAwaitingPlay(false);
   }, [ex.firestoreId, compareEx?.firestoreId]);
+
+  useEffect(() => {
+    if (videoAutoplay) setDesktopAwaitingPlay(false);
+  }, [videoAutoplay, ex.firestoreId]);
 
   useEffect(() => {
     setShowReplay(false);
@@ -2122,7 +2312,9 @@ export function CinemaLightbox({
     : getDesktopVideoSizeStyle(isVertical, 'single');
 
   const showMobileSheet = isMobileLayout && !isCompare;
-  const showSidebar = showMobileSheet ? false : isMobileLayout || sidebarVisible;
+  // Sidebar fica sempre visível no desktop — esconder/reaparecer mudava a
+  // largura do painel (centrado) e fazia o vídeo (e o botão de play) "pular".
+  const showSidebar = !showMobileSheet;
 
   const backdropFxStyle = useMemo((): CSSProperties => {
     const filter = CINEMA_BACKDROP_BLUR[theme === 'light' ? 'light' : 'dark'];
@@ -2256,59 +2448,91 @@ export function CinemaLightbox({
             )}
 
             {ytId ? (
-              isMobileLayout ? (
-                <MobileCoverPlayer ex={ex} ytId={ytId} />
-              ) : (
-                <>
+              <>
+                {shouldMountDesktopPlayer ? (
                   <div
                     className={`cinema-player-layer absolute inset-0 z-[1] ${
                       isVertical ? 'cinema-player-layer--vertical-theater' : ''
-                    }`}
+                    }${!desktopFrameReady ? ' cinema-player-layer--awaiting-frame' : ''}`}
                   >
                     <YouTubePlayer
                       ref={playerRef}
                       videoId={ytId}
                       title={ex.name}
-                      autoplay
+                      autoplay={videoAutoplay || desktopAwaitingPlay}
                       mute={false}
                       controls={false}
                       largeSurface
                       onReady={handlePrimaryPlayerReady}
                       onEnded={handlePlayerEnded}
-                      onPlayStateChange={(playing) => {
-                        if (playing) setShowReplay(false);
+                      onPlayerState={(state) => {
+                        // Revela só quando está REALMENTE tocando (1). Em buffering (3)
+                        // o YouTube ainda mostra o splash/logo + barra inferior.
+                        if (state === 1) {
+                          setDesktopFrameReady(true);
+                          setShowReplay(false);
+                        }
                       }}
                     />
                   </div>
-                  {!showReplay && (
-                    <button
-                      type="button"
-                      className="cinema-play-catch absolute inset-0 z-[2]"
-                      aria-label="Reproduzir ou pausar"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        playerRef.current?.togglePlay();
-                        resetHideTimer();
-                      }}
-                    />
-                  )}
-                  {showReplay && (
-                    <div className="cinema-replay-overlay absolute inset-0 z-[3] flex items-center justify-center">
+                ) : null}
+                {(!shouldMountDesktopPlayer || !desktopFrameReady) && !showReplay && (
+                  <div className="cinema-desktop-cover-poster absolute inset-0 z-[2]">
+                    {desktopCover.coverMissing ? (
+                      <ExerciseCoverPlaceholder className="cinema-desktop-cover-poster__img" />
+                    ) : (
+                      <img
+                        src={desktopCover.imgSrc}
+                        alt=""
+                        role="presentation"
+                        loading="eager"
+                        decoding="async"
+                        draggable={false}
+                        onLoad={desktopCover.handleLoad}
+                        onError={desktopCover.handleError}
+                        className="cinema-desktop-cover-poster__img"
+                        style={{
+                          objectPosition: getCoverFrameStyle(ex).objectPosition,
+                          ...(getCoverFrameStyle(ex).cssVars as CSSProperties),
+                        }}
+                      />
+                    )}
+                    {!shouldMountDesktopPlayer && (
                       <button
                         type="button"
-                        className="cinema-replay-btn"
-                        aria-label="Reproduzir novamente"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleReplay();
-                        }}
+                        className="cinema-replay-btn cinema-desktop-cover-poster__play"
+                        aria-label="Reproduzir vídeo"
+                        onClick={handleDesktopStartPlayback}
                       >
-                        <Icon name="replay" className="w-7 h-7" strokeWidth={2} />
+                        <Icon name="play" className="w-7 h-7 ml-0.5" strokeWidth={2} fill="currentColor" />
                       </button>
-                    </div>
-                  )}
-                </>
-              )
+                    )}
+                  </div>
+                )}
+                {shouldMountDesktopPlayer && !showReplay && (
+                  <button
+                    type="button"
+                    className="cinema-play-catch absolute inset-0 z-[3]"
+                    aria-label="Reproduzir ou pausar"
+                    onClick={handleDesktopStartPlayback}
+                  />
+                )}
+                {showReplay && (
+                  <div className="cinema-replay-overlay absolute inset-0 z-[4] flex items-center justify-center">
+                    <button
+                      type="button"
+                      className="cinema-replay-btn"
+                      aria-label="Reproduzir novamente"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleReplay();
+                      }}
+                    >
+                      <Icon name="replay" className="w-7 h-7" strokeWidth={2} />
+                    </button>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 glass-panel">
                 <Icon name="youtube" className="w-10 h-10 text-zinc-500" strokeWidth={1} />

@@ -805,6 +805,11 @@ html[data-touch-layout='true'] .cinema-container {
     visibility: hidden;
   }
 
+  .cinema-mobile-cover-player--awaiting-frame .dmx-yt-root {
+    opacity: 0;
+    visibility: hidden;
+  }
+
   .mobile-reels-feed .cinema-mobile-cover-player--vertical-theater .dmx-yt-root--chromeless .dmx-yt-host iframe {
     pointer-events: none !important;
   }
@@ -1192,6 +1197,28 @@ html[data-theme='light'] .mobile-muscles-dropup__handle {
   .cinema-mobile-yt-play-btn:active {
     transform: translate(-50%, -50%) scale(0.96);
     background: #b91c1c;
+  }
+
+  /* Indicador de play no feed (apenas visual — o toque é tratado pela camada de
+     gesto por cima). Aparece quando a capa está visível no slide atual. */
+  .cinema-reels-play-hint {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 5;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.25rem;
+    height: 3.25rem;
+    border-radius: 9999px;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.42);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    pointer-events: none;
   }
 
   .cinema-mobile-yt-external-btn {

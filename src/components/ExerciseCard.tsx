@@ -421,11 +421,6 @@ export function ExerciseCardComponent({
             {isAdmin && isExerciseIncomplete(ex.youtubeUrl) && (
               <span className="card-status-badge card-status-badge--warn">Incompleto</span>
             )}
-            {playlistSequence != null && !touchLayout && (
-              <span className="card-playlist-order" title={`${playlistSequence}º na sequência`}>
-                {playlistSequence}
-              </span>
-            )}
           </div>
 
           <div className={`card-action-strip ${showMobileActions ? 'card-action-strip--visible' : ''}`}>

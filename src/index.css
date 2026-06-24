@@ -5051,6 +5051,32 @@ html[data-theme="light"] .cinema-backdrop::before {
   transform: translateX(-50%);
 }
 
+/* Desktop lightbox — esconde splash do YouTube (Shorts) até o primeiro frame */
+.cinema-player-layer--awaiting-frame .dmx-yt-root {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.cinema-desktop-cover-poster {
+  overflow: hidden;
+  background: #050506;
+  pointer-events: auto;
+}
+
+.cinema-desktop-cover-poster__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.cinema-desktop-cover-poster__play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
 .cinema-lightbox-panel--single {
   width: fit-content;
   max-width: min(calc(100vw - 2rem), 100%);

@@ -1,5 +1,5 @@
 /** Janela curta após toque do usuário — tentativa de autoplay com som no mobile */
-const GESTURE_WINDOW_MS = 4000;
+const GESTURE_WINDOW_MS = 8000;
 
 let gestureAt = 0;
 let audioUnlocked = false;

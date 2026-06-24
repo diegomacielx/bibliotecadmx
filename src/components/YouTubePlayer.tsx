@@ -99,6 +99,8 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YT.Player | null>(null);
   const muteRef = useRef(mute);
+  const autoplayRef = useRef(autoplay);
+  const deferAutoplayRef = useRef(deferAutoplay);
   const onReadyRef = useRef(onReady);
   const onEndedRef = useRef(onEnded);
   const onPlayStateChangeRef = useRef(onPlayStateChange);
@@ -112,7 +114,9 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
     onPlayStateChangeRef.current = onPlayStateChange;
     onPlayerStateRef.current = onPlayerState;
     onFrameVisibleRef.current = onFrameVisible;
-  }, [onReady, onEnded, onPlayStateChange, onPlayerState, onFrameVisible]);
+    autoplayRef.current = autoplay;
+    deferAutoplayRef.current = deferAutoplay;
+  }, [onReady, onEnded, onPlayStateChange, onPlayerState, onFrameVisible, autoplay, deferAutoplay]);
 
   useImperativeHandle(ref, () => ({
     playVideo: () => {
@@ -263,15 +267,15 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
               const iframe = event.target.getIframe?.() as HTMLIFrameElement | undefined;
               if (iframe && !showControls) {
                 iframe.setAttribute(
-                  'sandbox',
-                  'allow-scripts allow-same-origin allow-presentation'
+                  'allow',
+                  'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share'
                 );
                 iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
               }
             } catch {
               /* ignore */
             }
-            if (autoplay && !deferAutoplay) event.target.playVideo();
+            if (autoplayRef.current && !deferAutoplayRef.current) event.target.playVideo();
             onReadyRef.current?.();
           },
           onStateChange: (event) => {

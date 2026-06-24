@@ -2328,10 +2328,28 @@ export default function App() {
   }, [isPlaylistActive, activePlaylistIndex, playlist, watchExercise]);
 
   /** Lista visível para navegação ← → no lightbox (busca, categoria ou treino) */
-  const lightboxNavList = useMemo(() => {
+  const baseLightboxNavList = useMemo(() => {
     if (isPlaylistActive && playlist.length > 1) return playlist;
     return filteredExercises.filter((ex) => hasValidYouTubeUrl(ex.youtubeUrl));
   }, [isPlaylistActive, playlist, filteredExercises]);
+
+  // Congela a lista de navegação enquanto o player está aberto. Sem isso,
+  // (des)favoritar o vídeo atual o remove de `filteredExercises`, encolhe a lista
+  // e o índice cai para 0 — fazendo o feed "pular" para um vídeo anterior.
+  const [frozenLightboxNavList, setFrozenLightboxNavList] = useState<Exercise[]>([]);
+  const lightboxWasOpenRef = useRef(false);
+  useEffect(() => {
+    const isOpen = !!activeVideo;
+    if (isOpen && !lightboxWasOpenRef.current) {
+      setFrozenLightboxNavList(baseLightboxNavList);
+    } else if (!isOpen && lightboxWasOpenRef.current) {
+      setFrozenLightboxNavList([]);
+    }
+    lightboxWasOpenRef.current = isOpen;
+  }, [activeVideo, baseLightboxNavList]);
+
+  const lightboxNavList =
+    activeVideo && frozenLightboxNavList.length > 0 ? frozenLightboxNavList : baseLightboxNavList;
 
   const lightboxNavIndex = useMemo(() => {
     if (!activeVideo || lightboxNavList.length === 0) return 0;
