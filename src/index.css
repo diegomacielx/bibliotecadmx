@@ -5142,6 +5142,15 @@ html[data-theme="light"] .cinema-backdrop::before {
   transform: scale(0.98);
 }
 
+/* Mantém o centro ao hover/active — transform sem translate desloca o botão */
+.cinema-desktop-cover-poster__play:hover {
+  transform: translate(-50%, -50%) scale(1.06);
+}
+
+.cinema-desktop-cover-poster__play:active {
+  transform: translate(-50%, -50%) scale(0.98);
+}
+
 /* Barra de progresso customizada — única UI sobre o vídeo */
 .cinema-seekbar {
   position: absolute;

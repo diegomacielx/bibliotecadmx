@@ -42,6 +42,8 @@ export interface YouTubePlayerHandle {
   playVideo: () => void;
   pauseVideo: () => void;
   togglePlay: () => void;
+  /** Carrega o vídeo pausado no frame inicial — sem overlay de play do Shorts */
+  cueVideoAt: (startSeconds: number) => void;
   seekTo: (seconds: number) => void;
   getCurrentTime: () => number;
   getDuration: () => number;
@@ -138,6 +140,13 @@ export const YouTubePlayer = forwardRef<YouTubePlayerHandle, YouTubePlayerProps>
         const state = playerRef.current?.getPlayerState();
         if (state === 1) playerRef.current?.pauseVideo();
         else playerRef.current?.playVideo();
+      } catch {
+        /* ignore */
+      }
+    },
+    cueVideoAt: (startSeconds: number) => {
+      try {
+        playerRef.current?.cueVideoById({ videoId, startSeconds });
       } catch {
         /* ignore */
       }
