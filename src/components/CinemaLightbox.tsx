@@ -289,6 +289,28 @@ function isPlayerActive(state: number): boolean {
   return state === 1 || state === 3;
 }
 
+const reelsUserPlayRequests = new Set<string>();
+
+function requestReelsUserPlay(exerciseId: string): void {
+  reelsUserPlayRequests.add(exerciseId);
+  window.setTimeout(() => reelsUserPlayRequests.delete(exerciseId), 5000);
+}
+
+function consumeReelsUserPlayRequest(exerciseId: string): boolean {
+  if (!reelsUserPlayRequests.has(exerciseId)) return false;
+  reelsUserPlayRequests.delete(exerciseId);
+  return true;
+}
+
+function cancelFirstFramePriming(
+  primingRef: React.MutableRefObject<boolean>,
+  timerRef: React.MutableRefObject<number>,
+): void {
+  window.clearTimeout(timerRef.current);
+  timerRef.current = 0;
+  primingRef.current = false;
+}
+
 /** Prepara o primeiro frame via cue — sem play/pause (evita overlay do YouTube Shorts). */
 function primeSlideFirstFrameIdle(player: YouTubePlayerHandle, seekAt: number): void {
   try {
@@ -686,6 +708,7 @@ function MobileCoverPlayer({
 
   const handlePlay = () => {
     userRequestedPlayRef.current = true;
+    requestReelsUserPlay(ex.firestoreId);
     signalMobilePlaybackGesture();
     primeVideoPlaybackIntent(ex, { force: true });
     setIsPlaying(true);
@@ -694,24 +717,41 @@ function MobileCoverPlayer({
 
   const handlePlayerState = useCallback(
     (state: number) => {
+      const userPlayPending =
+        userRequestedPlayRef.current || consumeReelsUserPlayRequest(ex.firestoreId);
+
       if (primingFirstFrameRef.current && state === 5) {
+        if (userPlayPending) {
+          cancelFirstFramePriming(primingFirstFrameRef, primingFallbackTimerRef);
+          schedulePlayRetries(playerRef.current, false, true);
+          return;
+        }
         completePrimingIdle();
         return;
       }
-      if (primingFirstFrameRef.current && state === 1) {
-        const player = playerRef.current;
-        if (player) {
-          const t = player.getCurrentTime();
-          player.mute();
-          player.cueVideoAt(t > 0.05 ? t : 0);
+      if (primingFirstFrameRef.current && (state === 1 || state === 3)) {
+        if (userPlayPending) {
+          cancelFirstFramePriming(primingFirstFrameRef, primingFallbackTimerRef);
+          notifyCurrentSlidePlaying(true);
+          if (state === 1) {
+            frameReadyRef.current = true;
+            setFrameReady(true);
+          }
+          return;
+        }
+        if (state === 1) {
+          const player = playerRef.current;
+          if (player) {
+            const t = player.getCurrentTime();
+            player.mute();
+            player.cueVideoAt(t > 0.05 ? t : 0);
+          }
         }
         return;
       }
       if (primingFirstFrameRef.current) return;
 
-      notifyCurrentSlidePlaying(
-        state === 1 || (videoAutoplayRef.current && state === 3)
-      );
+      notifyCurrentSlidePlaying(state === 1 || state === 3);
 
       if (state === 1) {
         frameReadyRef.current = true;
@@ -743,7 +783,7 @@ function MobileCoverPlayer({
         queueMicrotask(() => playerRef.current?.playVideo());
       }
     },
-    [inReelsFeed, notifyCurrentSlidePlaying, completePrimingIdle]
+    [inReelsFeed, ex.firestoreId, notifyCurrentSlidePlaying, completePrimingIdle]
   );
 
   const handleVideoEnded = useCallback(() => {
@@ -787,6 +827,7 @@ function MobileCoverPlayer({
     if (!player) return;
 
     userRequestedPlayRef.current = true;
+    requestReelsUserPlay(ex.firestoreId);
     signalMobilePlaybackGesture();
 
     if (allowSoundControl && !audioUnlocked) {
@@ -1156,7 +1197,10 @@ function MobileReelsFeed({
       freezePlayerAtCurrentFrame(player);
       onCurrentSlidePlayingChange?.(false);
     } else {
+      const currentEx = navListRef.current[navIndexRef.current];
+      if (currentEx) requestReelsUserPlay(currentEx.firestoreId);
       onPreferNativePlayControl?.(false);
+      onCurrentSlidePlayingChange?.(true);
       schedulePlayRetries(player, false, true);
     }
   }, [onCurrentSlidePlayingChange, onPreferNativePlayControl]);
@@ -1948,7 +1992,9 @@ function MobileExerciseSheet({
       freezePlayerAtCurrentFrame(player);
       setIsVideoPlaying(false);
     } else {
+      requestReelsUserPlay(displayEx.firestoreId);
       setPreferNativePlay(false);
+      setIsVideoPlaying(true);
       schedulePlayRetries(player, false, true);
     }
   }, []);

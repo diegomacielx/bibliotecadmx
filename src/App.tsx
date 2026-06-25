@@ -1772,13 +1772,20 @@ export default function App() {
     resetAdvancedFilters();
   }, [resetAdvancedFilters]);
 
+  const closeMobileOverlays = useCallback(() => {
+    setMobileSettingsOpen(false);
+    setMobileGuideOpen(false);
+    setShowRequestModal(false);
+  }, []);
+
   const handleGoHome = useCallback(() => {
+    closeMobileOverlays();
     setSearchTerm('');
     setActiveCategory('Todos');
     resetAdvancedFilters();
     setMobileTab('home');
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [resetAdvancedFilters]);
+  }, [closeMobileOverlays, resetAdvancedFilters]);
 
   const handleMobileBrandPress = useCallback(() => {
     if (activeVideo) {
@@ -1793,12 +1800,13 @@ export default function App() {
       window.scrollTo({ top: 0, behavior: 'auto' });
       return;
     }
+    closeMobileOverlays();
     setSearchTerm('');
     setActiveCategory('Todos');
     resetAdvancedFilters();
     setMobileTab('home');
     window.scrollTo({ top: 0, behavior: 'auto' });
-  }, [activeVideo, selectionMode, playlistOrder.length, resetAdvancedFilters]);
+  }, [activeVideo, selectionMode, playlistOrder.length, closeMobileOverlays, resetAdvancedFilters]);
 
   const handleMobileTabChange = useCallback(
     (tab: MobileTab) => {
@@ -1806,6 +1814,7 @@ export default function App() {
         setActiveVideo(null);
         setCompareEx(null);
       }
+      closeMobileOverlays();
       setMobileTab(tab);
       if (tab === 'favorites') {
         categoryBeforeFavoritesTabRef.current = activeCategory;
@@ -1826,7 +1835,7 @@ export default function App() {
       }
       window.scrollTo({ top: 0, behavior: 'auto' });
     },
-    [activeCategory, activeVideo]
+    [activeCategory, activeVideo, closeMobileOverlays]
   );
 
   const handleMobileAddToWorkout = useCallback(() => {

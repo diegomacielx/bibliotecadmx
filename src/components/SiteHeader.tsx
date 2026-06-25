@@ -225,6 +225,13 @@ export function SiteHeader({
   const showChips =
     searchFocused && !searchTerm.trim() && (searchHistory.length > 0 || searchRecents.length > 0);
 
+  const handleBrandHomeClick = () => {
+    setSettingsOpen(false);
+    setUsageGuideOpen(false);
+    setShowUserMenu(false);
+    onGoHome?.();
+  };
+
   const renderMobileShellSearch = () => (
     <div
       className={`mobile-shell-header__search search-bar-wrap w-full min-w-0 ${
@@ -513,7 +520,7 @@ export function SiteHeader({
         <div className={`flex items-center gap-4 lg:gap-8 ${mobileCompactHeader ? 'py-2' : 'py-3 lg:py-4'}`}>
           <button
             type="button"
-            onClick={onGoHome}
+            onClick={handleBrandHomeClick}
             className="header-brand shrink-0 text-left"
             aria-label="Voltar ao início — categoria Todos"
             title="Início"
