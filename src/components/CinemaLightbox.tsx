@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef, useCallback, useLayoutEffect, type CSSProperties, type MouseEvent, type PointerEvent, type WheelEvent } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback, useLayoutEffect, type CSSProperties, type MouseEvent, type WheelEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Exercise } from '../types';
@@ -1160,16 +1160,6 @@ function MobileReelsFeed({
       schedulePlayRetries(player, false, true);
     }
   }, [onCurrentSlidePlayingChange, onPreferNativePlayControl]);
-
-  const freezeSlideAtFrame = useCallback((exerciseId: string, seekAt = 0) => {
-    const player = slidePlayersRef.current.get(exerciseId);
-    if (!player) return;
-    try {
-      settleReelsSlideFrame(player, seekAt);
-    } catch {
-      /* ignore */
-    }
-  }, []);
 
   const freezeNonCurrentSlides = useCallback(() => {
     const currentEx = navListRef.current[navIndexRef.current];

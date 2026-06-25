@@ -46,6 +46,10 @@ declare namespace YT {
     destroy(): void;
     playVideo(): void;
     pauseVideo(): void;
+    cueVideoById(
+      videoIdOrOptions: string | { videoId: string; startSeconds?: number; endSeconds?: number },
+      startSeconds?: number,
+    ): void;
     mute(): void;
     unMute(): void;
     isMuted(): boolean;
